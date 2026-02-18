@@ -1,5 +1,3 @@
-export default function Home() { return
-
-AI Finance CRM Sync is running
-
-; }
+export default function Home() {
+  return <div>AI Finance CRM Sync is running</div>;
+}
