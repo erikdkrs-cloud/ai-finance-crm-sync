@@ -1,12 +1,17 @@
 import { neon } from "@neondatabase/serverless";
 
 export default async function handler(req, res) {
-  if (req.method !== "POST") return res.status(405).send("Method not allowed");
+  if (req.method !== "POST") {
+    return res.status(405).json({ ok:false, where:"sync", method:req.method });
+  }
 
   const sql = neon(process.env.DATABASE_URL);
   const { rows } = req.body || {};
   if (!Array.isArray(rows)) return res.status(400).json({ ok: false, error: "rows must be an array" });
 
+  if (rows.length === 0) {
+    return res.status(200).json({ ok:true, imported:0, note:"empty rows received" });
+  }
   try {
     let imported = 0;
 
