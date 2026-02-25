@@ -7,6 +7,12 @@ function fmt(n) {
 function pct(x) {
   return (Number(x || 0) * 100).toFixed(1) + "%";
 }
+function riskRu(r) {
+  if (r === "red") return "красный";
+  if (r === "yellow") return "жёлтый";
+  if (r === "green") return "зелёный";
+  return String(r || "");
+}
 function pillClass(risk){
   if (risk === "red") return { background: "#ffcccc", color: "#990000" };
   if (risk === "yellow") return { background: "#fff2cc", color: "#7f6000" };
@@ -23,16 +29,15 @@ export default function Dashboard() {
   const [genLoading, setGenLoading] = useState(false);
   const [genStatus, setGenStatus] = useState("");
 
-  const [onlyRisky, setOnlyRisky] = useState(false); // red+yellow
+  const [onlyRisky, setOnlyRisky] = useState(false);
   const [onlyRed, setOnlyRed] = useState(false);
 
-  // 1) months
   useEffect(() => {
     setErr("");
     fetch("/api/months")
       .then(r => r.json())
       .then(j => {
-        if (!j.ok) throw new Error(j.error || "months error");
+        if (!j.ok) throw new Error(j.error || "Ошибка /api/months");
         const list = j.months || [];
         setMonths(list);
         setMonth(list?.[0] || "");
@@ -40,7 +45,6 @@ export default function Dashboard() {
       .catch(e => setErr(String(e)));
   }, []);
 
-  // 2) dashboard data by month
   async function loadDashboard(m) {
     if (!m) return;
     setErr("");
@@ -64,7 +68,6 @@ export default function Dashboard() {
     loadDashboard(month);
   }, [month]);
 
-  // 3) Generate report via /api/report
   async function generateReport() {
     if (!month) return;
 
@@ -72,17 +75,11 @@ export default function Dashboard() {
     setGenStatus("Генерирую отчёт…");
 
     try {
-      // POST first
       let r = await fetch(`/api/report?month=${encodeURIComponent(month)}`, { method: "POST" });
-
-      // fallback to GET if method not allowed
-      if (r.status === 405) {
-        r = await fetch(`/api/report?month=${encodeURIComponent(month)}`);
-      }
+      if (r.status === 405) r = await fetch(`/api/report?month=${encodeURIComponent(month)}`);
 
       const j = await r.json().catch(() => ({}));
       if (!r.ok || j?.ok === false) {
-        // покажем более полезную ошибку
         const details = j?.error ? `\n${j.error}` : "";
         throw new Error(`HTTP ${r.status}${details}`);
       }
@@ -98,13 +95,10 @@ export default function Dashboard() {
 
   const filteredSorted = useMemo(() => {
     const arr = data?.projects ? [...data.projects] : [];
-
     let res = arr;
-    if (onlyRed) {
-      res = res.filter(p => p.risk === "red");
-    } else if (onlyRisky) {
-      res = res.filter(p => p.risk === "red" || p.risk === "yellow");
-    }
+
+    if (onlyRed) res = res.filter(p => p.risk === "red");
+    else if (onlyRisky) res = res.filter(p => p.risk === "red" || p.risk === "yellow");
 
     res.sort((a,b) => (a.margin ?? 0) - (b.margin ?? 0));
     return res;
@@ -123,9 +117,8 @@ export default function Dashboard() {
 
   return (
     <div style={{ fontFamily: "system-ui", padding: 24, maxWidth: 1100, margin: "0 auto" }}>
-      <h1 style={{ margin: 0 }}>Dashboard</h1>
+      <h1 style={{ margin: 0 }}>Дашборд</h1>
 
-      {/* Top bar */}
       <div style={{ marginTop: 12, display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
         <div>
           <div style={{ fontSize: 12, opacity: 0.7 }}>Месяц</div>
@@ -139,31 +132,21 @@ export default function Dashboard() {
           </select>
         </div>
 
-        {/* filters */}
         <div style={{ display: "flex", gap: 8, alignItems: "end" }}>
-          <button
-            onClick={() => { setOnlyRisky(false); setOnlyRed(false); }}
-            style={btnStyle(!onlyRisky && !onlyRed)}
-          >
-            All
+          <button onClick={() => { setOnlyRisky(false); setOnlyRed(false); }} style={btnStyle(!onlyRisky && !onlyRed)}>
+            Все
           </button>
-          <button
-            onClick={() => { setOnlyRisky(true); setOnlyRed(false); }}
-            style={btnStyle(onlyRisky && !onlyRed)}
-          >
-            Red+Yellow
+          <button onClick={() => { setOnlyRisky(true); setOnlyRed(false); }} style={btnStyle(onlyRisky && !onlyRed)}>
+            Жёлтые+красные
           </button>
-          <button
-            onClick={() => { setOnlyRed(true); setOnlyRisky(false); }}
-            style={btnStyle(onlyRed)}
-          >
-            Only Red
+          <button onClick={() => { setOnlyRed(true); setOnlyRisky(false); }} style={btnStyle(onlyRed)}>
+            Только красные
           </button>
         </div>
 
         <div style={{ marginLeft: "auto", display: "flex", gap: 12, alignItems: "center" }}>
           <div style={{ fontSize: 12, opacity: 0.7 }}>
-            {data ? `Green ${counts.green} • Yellow ${counts.yellow} • Red ${counts.red}` : ""}
+            {data ? `Зелёные ${counts.green} • Жёлтые ${counts.yellow} • Красные ${counts.red}` : ""}
           </div>
 
           <button
@@ -176,27 +159,19 @@ export default function Dashboard() {
               background: genLoading ? "#f5f5f5" : "white",
               cursor: genLoading ? "not-allowed" : "pointer"
             }}
-            title="Сгенерировать AI-отчёт за выбранный месяц"
           >
-            {genLoading ? "Generating…" : "Generate report"}
+            {genLoading ? "Генерирую…" : "Сгенерировать отчёт"}
           </button>
 
-          <a href="/reports">Reports →</a>
+          <a href="/reports">Отчёты →</a>
         </div>
       </div>
 
-      {/* gen status */}
-      {genStatus && (
-        <div style={{ marginTop: 10, fontSize: 13, whiteSpace: "pre-wrap" }}>
-          {genStatus}
-        </div>
-      )}
+      {genStatus && <div style={{ marginTop: 10, fontSize: 13, whiteSpace: "pre-wrap" }}>{genStatus}</div>}
 
-      {/* errors/loading */}
       {err && <div style={{ marginTop: 16, color: "#990000", whiteSpace: "pre-wrap" }}>{err}</div>}
       {loadingDashboard && !err && <div style={{ marginTop: 16 }}>Загрузка…</div>}
 
-      {/* content */}
       {data && !err && (
         <>
           <div style={{ display: "flex", gap: 12, marginTop: 18, flexWrap: "wrap" }}>
@@ -210,13 +185,13 @@ export default function Dashboard() {
           <div style={{ marginTop: 18 }}>
             <h3 style={{ marginBottom: 8 }}>
               Проекты (сначала самые низкие по марже)
-              {onlyRed ? " • фильтр: Only Red" : onlyRisky ? " • фильтр: Red+Yellow" : ""}
+              {onlyRed ? " • фильтр: только красные" : onlyRisky ? " • фильтр: жёлтые+красные" : ""}
             </h3>
 
             <table style={{ width: "100%", borderCollapse: "collapse" }}>
               <thead>
                 <tr>
-                  {["Risk","Project","Revenue","Costs","Profit","Margin","Penalties","Ads","Labor"].map(h => (
+                  {["Риск","Проект","Выручка","Расходы","Прибыль","Маржа","Штрафы","Реклама","ФОТ (рабочие)"].map(h => (
                     <th key={h} style={{ textAlign: "left", borderBottom: "1px solid #ddd", padding: "8px 6px" }}>
                       {h}
                     </th>
@@ -229,7 +204,7 @@ export default function Dashboard() {
                   <tr key={p.project}>
                     <td style={{ padding: "6px" }}>
                       <span style={{ padding: "4px 8px", borderRadius: 999, ...pillClass(p.risk) }}>
-                        {p.risk}
+                        {riskRu(p.risk)}
                       </span>
                     </td>
                     <td style={{ padding: "6px" }}>{p.project}</td>
