@@ -5,7 +5,6 @@ function round2(x) { return Math.round(num(x) * 100) / 100; }
 function round4(x) { return Math.round(num(x) * 10000) / 10000; }
 
 function computeRiskFromProjects(projects) {
-  // общий риск: если есть red → red, иначе если есть yellow → yellow, иначе green
   if (projects.some(p => p.risk === "red")) return "red";
   if (projects.some(p => p.risk === "yellow")) return "yellow";
   return "green";
@@ -14,19 +13,25 @@ function computeRiskFromProjects(projects) {
 function buildFallbackReport({ month, totals, projects }) {
   const issues = [];
 
-  // простые правила как в твоём анализе
-  if (totals.revenue > 0 && totals.margin < 0.10) issues.push({ severity: "high", title: "Низкая маржа", details: "Маржа < 10%" });
-  else if (totals.revenue > 0 && totals.margin < 0.20) issues.push({ severity: "medium", title: "Маржа ниже нормы", details: "Маржа < 20%" });
+  if (totals.revenue > 0 && totals.margin < 0.10) {
+    issues.push({ severity: "high", title: "Низкая маржа", details: "Маржа < 10%" });
+  } else if (totals.revenue > 0 && totals.margin < 0.20) {
+    issues.push({ severity: "medium", title: "Маржа ниже нормы", details: "Маржа < 20%" });
+  }
 
-  const withPenalties = projects.filter(p => p.penalties > 0);
-  if (withPenalties.length) issues.push({ severity: "medium", title: "Есть штрафы", details: `Проектов со штрафами: ${withPenalties.length}` });
+  const withPenalties = projects.filter(p => num(p.penalties) > 0);
+  if (withPenalties.length) {
+    issues.push({ severity: "medium", title: "Есть штрафы", details: `Проектов со штрафами: ${withPenalties.length}` });
+  }
 
   const worst = [...projects].sort((a,b)=> (a.margin ?? 0) - (b.margin ?? 0)).slice(0, 3);
-  if (worst.length) issues.push({
-    severity: "medium",
-    title: "Худшие по марже проекты",
-    details: worst.map(p => `${p.project}: ${(p.margin*100).toFixed(1)}%`).join(", ")
-  });
+  if (worst.length) {
+    issues.push({
+      severity: "medium",
+      title: "Худшие по марже проекты",
+      details: worst.map(p => `${p.project}: ${(p.margin*100).toFixed(1)}%`).join(", ")
+    });
+  }
 
   const risk_level = computeRiskFromProjects(projects);
 
@@ -52,68 +57,6 @@ function buildFallbackReport({ month, totals, projects }) {
   return { risk_level, summary_text, issues, metrics };
 }
 
-async function callOpenAI({ apiKey, month, totals, projects }) {
-  // Небольшой, стабильный вызов через fetch (без SDK)
-  const prompt = `
-Ты финансовый аналитик. Сгенерируй краткий отчёт за месяц ${month}.
-Дай:
-1) risk_level: "green" | "yellow" | "red"
-2) summary_text: текст (5-12 строк)
-3) issues: массив объектов {severity: "high"|"medium"|"low", title: string, details: string}
-4) metrics: объект (можно продублировать totals, топ-3 худших проектов)
-
-Данные totals:
-${JSON.stringify(totals)}
-
-Данные по проектам:
-${JSON.stringify(projects)}
-
-Правила риска:
-- если общая маржа < 10% → red
-- если общая маржа < 20% → yellow
-- если есть штрафы / сильные проблемы → минимум yellow
-Ответ верни СТРОГО в JSON, без markdown и без комментариев.
-`.trim();
-
-  const r = await fetch("https://api.openai.com/v1/chat/completions", {
-    method: "POST",
-    headers: {
-      "Authorization": `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      model: "gpt-4o-mini",
-      messages: [
-        { role: "system", content: "Ты аккуратно выдаёшь только валидный JSON без обёрток." },
-        { role: "user", content: prompt }
-      ],
-      temperature: 0.3,
-    }),
-  });
-
-  if (!r.ok) {
-    const txt = await r.text();
-    throw new Error(`OpenAI HTTP ${r.status}: ${txt.slice(0, 300)}`);
-  }
-
-  const j = await r.json();
-  const content = j?.choices?.[0]?.message?.content || "";
-  // пытаемся распарсить JSON
-  let parsed;
-  try {
-    parsed = JSON.parse(content);
-  } catch {
-    throw new Error("OpenAI вернул не-JSON: " + content.slice(0, 200));
-  }
-
-  // минимальная валидация
-  if (!parsed?.risk_level || !parsed?.summary_text) {
-    throw new Error("OpenAI JSON без risk_level/summary_text");
-  }
-
-  return parsed;
-}
-
 export default async function handler(req, res) {
   // allow GET and POST
   if (req.method !== "GET" && req.method !== "POST") {
@@ -122,9 +65,10 @@ export default async function handler(req, res) {
 
   const sql = neon(process.env.DATABASE_URL);
 
+  // важно: строгая проверка формата месяца
   const month = String(req.query?.month || "").trim();
-  if (!month) {
-    return res.status(400).json({ ok: false, error: "month query param required (YYYY-MM)" });
+  if (!/^\d{4}-\d{2}$/.test(month)) {
+    return res.status(400).json({ ok: false, error: `month must be YYYY-MM, got: "${month}"` });
   }
 
   try {
@@ -139,10 +83,9 @@ export default async function handler(req, res) {
     if (!period?.id) {
       return res.status(404).json({ ok: false, error: `period not found for month=${month}` });
     }
-
     const period_id = Number(period.id);
 
-    // 2) load financial rows for that month
+    // 2) load financial rows for that period_id
     const rows = await sql`
       SELECT
         pr.name AS project,
@@ -203,36 +146,26 @@ export default async function handler(req, res) {
       margin: round4(totalsRaw.revenue > 0 ? totalsRaw.profit / totalsRaw.revenue : 0),
     };
 
-    // 3) build report: try OpenAI, fallback if needed
-    const apiKey = process.env.OPENAI_API_KEY || "";
-    let report;
+    // 3) generate report (fallback — стабильно)
+    const report = buildFallbackReport({ month, totals, projects });
 
-    if (apiKey) {
-      try {
-        report = await callOpenAI({ apiKey, month, totals, projects });
-      } catch (e) {
-        // если OpenAI упал — делаем fallback, но не ломаем весь процесс
-        report = buildFallbackReport({ month, totals, projects });
-        report.summary_text =
-          report.summary_text +
-          `\n\n(Примечание: OpenAI не сработал, использован fallback. Причина: ${String(e).slice(0, 200)})`;
-      }
-    } else {
-      report = buildFallbackReport({ month, totals, projects });
-      report.summary_text =
-        report.summary_text +
-        `\n\n(Примечание: OPENAI_API_KEY не задан, использован fallback.)`;
-    }
-
-    // 4) save to ai_reports
     const risk_level = String(report.risk_level || computeRiskFromProjects(projects));
     const summary_text = String(report.summary_text || "");
     const issues = report.issues ?? [];
     const metrics = report.metrics ?? { month, totals };
 
+    // 4) save to ai_reports
+    // КЛЮЧЕВОЕ: jsonb поля пишем как строку JSON
     const inserted = await sql`
       INSERT INTO ai_reports (period_id, risk_level, summary_text, issues, metrics, created_at)
-      VALUES (${period_id}, ${risk_level}, ${summary_text}, ${issues}, ${metrics}, NOW())
+      VALUES (
+        ${period_id},
+        ${risk_level},
+        ${summary_text},
+        ${JSON.stringify(issues)},
+        ${JSON.stringify(metrics)},
+        NOW()
+      )
       RETURNING id
     `;
 
