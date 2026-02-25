@@ -56,6 +56,9 @@ export default function Reports() {
       <div style={{ marginTop: 16, display: "grid", gap: 12 }}>
         {items.map((r) => (
           <div key={r.id} style={{ border: "1px solid #eee", borderRadius: 12, padding: 14 }}>
+          <a href={`/reports/${r.id}`} style={{ textDecoration: "none", color: "inherit" }}>
+  ...твой текущий блок карточки...
+</a>
             <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
               <span style={{ padding: "4px 8px", borderRadius: 999, ...pillStyle(r.risk_level) }}>
                 {r.risk_level}
