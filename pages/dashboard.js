@@ -23,7 +23,10 @@ export default function Dashboard() {
   const [genLoading, setGenLoading] = useState(false);
   const [genStatus, setGenStatus] = useState("");
 
-  // 1) Загружаем список месяцев
+  const [onlyRisky, setOnlyRisky] = useState(false); // red+yellow
+  const [onlyRed, setOnlyRed] = useState(false);
+
+  // 1) months
   useEffect(() => {
     setErr("");
     fetch("/api/months")
@@ -37,24 +40,31 @@ export default function Dashboard() {
       .catch(e => setErr(String(e)));
   }, []);
 
-  // 2) Загружаем данные дашборда по месяцу
-  useEffect(() => {
-    if (!month) return;
+  // 2) dashboard data by month
+  async function loadDashboard(m) {
+    if (!m) return;
     setErr("");
     setData(null);
     setLoadingDashboard(true);
 
-    fetch(`/api/dashboard?month=${encodeURIComponent(month)}`)
-      .then(r => r.json())
-      .then(j => {
-        if (!j.ok) throw new Error(j.error || "dashboard error");
-        setData(j);
-      })
-      .catch(e => setErr(String(e)))
-      .finally(() => setLoadingDashboard(false));
+    try {
+      const r = await fetch(`/api/dashboard?month=${encodeURIComponent(m)}`);
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok || j?.ok === false) throw new Error(j?.error || `HTTP ${r.status}`);
+      setData(j);
+    } catch (e) {
+      setErr(String(e));
+    } finally {
+      setLoadingDashboard(false);
+    }
+  }
+
+  useEffect(() => {
+    if (!month) return;
+    loadDashboard(month);
   }, [month]);
 
-  // 3) Генерация отчёта (через /api/report)
+  // 3) Generate report via /api/report
   async function generateReport() {
     if (!month) return;
 
@@ -62,44 +72,61 @@ export default function Dashboard() {
     setGenStatus("Генерирую отчёт…");
 
     try {
-      // 1) пробуем POST
+      // POST first
       let r = await fetch(`/api/report?month=${encodeURIComponent(month)}`, { method: "POST" });
 
-      // если POST не поддерживается — пробуем GET
+      // fallback to GET if method not allowed
       if (r.status === 405) {
         r = await fetch(`/api/report?month=${encodeURIComponent(month)}`);
       }
 
       const j = await r.json().catch(() => ({}));
-      if (!r.ok || j?.ok === false) throw new Error(j?.error || `HTTP ${r.status}`);
+      if (!r.ok || j?.ok === false) {
+        // покажем более полезную ошибку
+        const details = j?.error ? `\n${j.error}` : "";
+        throw new Error(`HTTP ${r.status}${details}`);
+      }
 
       setGenStatus("Готово ✅ Отчёт создан.");
-
-      // обновим dashboard данные
-      setLoadingDashboard(true);
-      const d = await fetch(`/api/dashboard?month=${encodeURIComponent(month)}`).then(x => x.json());
-      if (d.ok) setData(d);
-
+      await loadDashboard(month);
     } catch (e) {
       setGenStatus("Ошибка: " + String(e));
     } finally {
       setGenLoading(false);
-      setLoadingDashboard(false);
     }
   }
 
-  const sorted = useMemo(() => {
+  const filteredSorted = useMemo(() => {
     const arr = data?.projects ? [...data.projects] : [];
-    arr.sort((a,b) => (a.margin ?? 0) - (b.margin ?? 0));
-    return arr;
+
+    let res = arr;
+    if (onlyRed) {
+      res = res.filter(p => p.risk === "red");
+    } else if (onlyRisky) {
+      res = res.filter(p => p.risk === "red" || p.risk === "yellow");
+    }
+
+    res.sort((a,b) => (a.margin ?? 0) - (b.margin ?? 0));
+    return res;
+  }, [data, onlyRisky, onlyRed]);
+
+  const counts = useMemo(() => {
+    const arr = data?.projects || [];
+    const c = { green: 0, yellow: 0, red: 0 };
+    for (const p of arr) {
+      if (p.risk === "red") c.red++;
+      else if (p.risk === "yellow") c.yellow++;
+      else c.green++;
+    }
+    return c;
   }, [data]);
 
   return (
     <div style={{ fontFamily: "system-ui", padding: 24, maxWidth: 1100, margin: "0 auto" }}>
       <h1 style={{ margin: 0 }}>Dashboard</h1>
 
-      {/* Верхняя панель */}
-      <div style={{ marginTop: 12, display: "flex", gap: 12, alignItems: "center" }}>
+      {/* Top bar */}
+      <div style={{ marginTop: 12, display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
         <div>
           <div style={{ fontSize: 12, opacity: 0.7 }}>Месяц</div>
           <select
@@ -112,7 +139,33 @@ export default function Dashboard() {
           </select>
         </div>
 
+        {/* filters */}
+        <div style={{ display: "flex", gap: 8, alignItems: "end" }}>
+          <button
+            onClick={() => { setOnlyRisky(false); setOnlyRed(false); }}
+            style={btnStyle(!onlyRisky && !onlyRed)}
+          >
+            All
+          </button>
+          <button
+            onClick={() => { setOnlyRisky(true); setOnlyRed(false); }}
+            style={btnStyle(onlyRisky && !onlyRed)}
+          >
+            Red+Yellow
+          </button>
+          <button
+            onClick={() => { setOnlyRed(true); setOnlyRisky(false); }}
+            style={btnStyle(onlyRed)}
+          >
+            Only Red
+          </button>
+        </div>
+
         <div style={{ marginLeft: "auto", display: "flex", gap: 12, alignItems: "center" }}>
+          <div style={{ fontSize: 12, opacity: 0.7 }}>
+            {data ? `Green ${counts.green} • Yellow ${counts.yellow} • Red ${counts.red}` : ""}
+          </div>
+
           <button
             onClick={generateReport}
             disabled={!month || genLoading}
@@ -132,34 +185,38 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* Статус генерации */}
+      {/* gen status */}
       {genStatus && (
         <div style={{ marginTop: 10, fontSize: 13, whiteSpace: "pre-wrap" }}>
           {genStatus}
         </div>
       )}
 
-      {/* Ошибки/загрузка */}
+      {/* errors/loading */}
       {err && <div style={{ marginTop: 16, color: "#990000", whiteSpace: "pre-wrap" }}>{err}</div>}
       {loadingDashboard && !err && <div style={{ marginTop: 16 }}>Загрузка…</div>}
 
-      {/* Контент */}
+      {/* content */}
       {data && !err && (
         <>
           <div style={{ display: "flex", gap: 12, marginTop: 18, flexWrap: "wrap" }}>
-            <KPI title="Выручка" value={fmt(data.totals.revenue)} />
-            <KPI title="Прибыль" value={fmt(data.totals.profit)} />
-            <KPI title="Маржа" value={pct(data.totals.margin)} />
-            <KPI title="Проектов" value={String(data.projects.length)} />
+            <KPI title="Выручка" value={fmt(data.totals?.revenue)} />
+            <KPI title="Расходы" value={fmt(data.totals?.costs)} />
+            <KPI title="Прибыль" value={fmt(data.totals?.profit)} />
+            <KPI title="Маржа" value={pct(data.totals?.margin)} />
+            <KPI title="Проектов" value={String(data.projects?.length || 0)} />
           </div>
 
           <div style={{ marginTop: 18 }}>
-            <h3 style={{ marginBottom: 8 }}>Проекты (сначала самые низкие по марже)</h3>
+            <h3 style={{ marginBottom: 8 }}>
+              Проекты (сначала самые низкие по марже)
+              {onlyRed ? " • фильтр: Only Red" : onlyRisky ? " • фильтр: Red+Yellow" : ""}
+            </h3>
 
             <table style={{ width: "100%", borderCollapse: "collapse" }}>
               <thead>
                 <tr>
-                  {["Risk","Project","Revenue","Profit","Margin","Penalties","Ads","Labor"].map(h => (
+                  {["Risk","Project","Revenue","Costs","Profit","Margin","Penalties","Ads","Labor"].map(h => (
                     <th key={h} style={{ textAlign: "left", borderBottom: "1px solid #ddd", padding: "8px 6px" }}>
                       {h}
                     </th>
@@ -168,7 +225,7 @@ export default function Dashboard() {
               </thead>
 
               <tbody>
-                {sorted.map((p) => (
+                {filteredSorted.map((p) => (
                   <tr key={p.project}>
                     <td style={{ padding: "6px" }}>
                       <span style={{ padding: "4px 8px", borderRadius: 999, ...pillClass(p.risk) }}>
@@ -177,6 +234,7 @@ export default function Dashboard() {
                     </td>
                     <td style={{ padding: "6px" }}>{p.project}</td>
                     <td style={{ padding: "6px" }}>{fmt(p.revenue)}</td>
+                    <td style={{ padding: "6px" }}>{fmt(p.costs)}</td>
                     <td style={{ padding: "6px" }}>{fmt(p.profit)}</td>
                     <td style={{ padding: "6px" }}>{pct(p.margin)}</td>
                     <td style={{ padding: "6px" }}>{fmt(p.penalties)}</td>
@@ -186,6 +244,12 @@ export default function Dashboard() {
                 ))}
               </tbody>
             </table>
+
+            {filteredSorted.length === 0 && (
+              <div style={{ marginTop: 10, opacity: 0.7 }}>
+                По текущему фильтру проектов нет.
+              </div>
+            )}
           </div>
         </>
       )}
@@ -200,4 +264,15 @@ function KPI({ title, value }) {
       <div style={{ fontSize: 22, fontWeight: 700 }}>{value}</div>
     </div>
   );
+}
+
+function btnStyle(active) {
+  return {
+    padding: "8px 10px",
+    borderRadius: 10,
+    border: "1px solid #ddd",
+    background: active ? "#111" : "white",
+    color: active ? "white" : "black",
+    cursor: "pointer"
+  };
 }
