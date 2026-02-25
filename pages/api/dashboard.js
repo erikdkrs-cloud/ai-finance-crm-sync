@@ -3,6 +3,12 @@ import { neon } from "@neondatabase/serverless";
 function num(x) {
   return Number(x || 0);
 }
+function round2(x) {
+  return Math.round(num(x) * 100) / 100;
+}
+function round4(x) {
+  return Math.round(num(x) * 10000) / 10000;
+}
 
 export default async function handler(req, res) {
   if (req.method !== "GET") {
@@ -17,7 +23,6 @@ export default async function handler(req, res) {
   }
 
   try {
-    // Берём строки расходов/выручки по проектам за выбранный месяц
     const rows = await sql`
       SELECT
         pr.name AS project,
@@ -36,7 +41,6 @@ export default async function handler(req, res) {
       ORDER BY pr.name
     `;
 
-    // Рассчитываем метрики на стороне API (чтобы фронт был простой)
     const projects = rows.map((r) => {
       const revenue = num(r.revenue_no_vat);
 
@@ -65,40 +69,39 @@ export default async function handler(req, res) {
       let risk = "green";
       if (revenue > 0 && margin < 0.1) risk = "red";
       else if (revenue > 0 && margin < 0.2) risk = "yellow";
-
-      // пример доп. правила: штрафы → минимум yellow
       if (penalties > 0 && risk === "green") risk = "yellow";
 
       return {
         project: r.project,
-        revenue,
-        profit,
-        margin,
+        revenue: round2(revenue),
+        costs: round2(costs),
+        profit: round2(profit),
+        margin: round4(margin),
         risk,
-        penalties,
-        ads,
-        labor: salaryWorkers,
+        penalties: round2(penalties),
+        ads: round2(ads),
+        labor: round2(salaryWorkers),
       };
     });
 
-    // Итоги по всем проектам
-    const totals = projects.reduce(
+    const totalsRaw = projects.reduce(
       (a, p) => {
         a.revenue += num(p.revenue);
+        a.costs += num(p.costs);
         a.profit += num(p.profit);
         return a;
       },
-      { revenue: 0, profit: 0 }
+      { revenue: 0, costs: 0, profit: 0 }
     );
 
-    totals.margin = totals.revenue > 0 ? totals.profit / totals.revenue : 0;
+    const totals = {
+      revenue: round2(totalsRaw.revenue),
+      costs: round2(totalsRaw.costs),
+      profit: round2(totalsRaw.profit),
+      margin: round4(totalsRaw.revenue > 0 ? totalsRaw.profit / totalsRaw.revenue : 0),
+    };
 
-    return res.status(200).json({
-      ok: true,
-      month,
-      totals,
-      projects,
-    });
+    return res.status(200).json({ ok: true, month, totals, projects });
   } catch (e) {
     return res.status(500).json({ ok: false, error: String(e) });
   }
