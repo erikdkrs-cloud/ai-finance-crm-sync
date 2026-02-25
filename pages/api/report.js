@@ -11,28 +11,36 @@ export default function Reports() {
   const [month, setMonth] = useState("");
   const [items, setItems] = useState([]);
   const [err, setErr] = useState("");
+  const [loading, setLoading] = useState(false);
 
+  // 1) Загружаем список месяцев
   useEffect(() => {
+    setErr("");
     fetch("/api/months")
       .then(r => r.json())
       .then(j => {
         if (!j.ok) throw new Error(j.error || "months error");
-        setMonths(j.months || []);
-        setMonth(j.months?.[0] || "");
+        const list = j.months || [];
+        setMonths(list);
+        setMonth(list?.[0] || "");
       })
       .catch(e => setErr(String(e)));
   }, []);
 
+  // 2) Загружаем отчёты за выбранный месяц
   useEffect(() => {
     if (!month) return;
     setErr("");
+    setLoading(true);
+
     fetch(`/api/reports_list?month=${encodeURIComponent(month)}`)
       .then(r => r.json())
       .then(j => {
         if (!j.ok) throw new Error(j.error || "reports error");
         setItems(j.items || []);
       })
-      .catch(e => setErr(String(e)));
+      .catch(e => setErr(String(e)))
+      .finally(() => setLoading(false));
   }, [month]);
 
   return (
@@ -42,35 +50,76 @@ export default function Reports() {
         <a href="/dashboard" style={{ marginLeft: "auto" }}>← Dashboard</a>
       </div>
 
+      {/* Фильтр по месяцу */}
       <div style={{ marginTop: 12, display: "flex", gap: 12, alignItems: "center" }}>
         <div>
           <div style={{ fontSize: 12, opacity: 0.7 }}>Месяц</div>
-          <select value={month} onChange={(e)=>setMonth(e.target.value)} style={{ padding: 8, minWidth: 140 }}>
+          <select
+            value={month}
+            onChange={(e)=>setMonth(e.target.value)}
+            style={{ padding: 8, minWidth: 160 }}
+            disabled={months.length === 0}
+          >
             {months.map(m => <option key={m} value={m}>{m}</option>)}
           </select>
         </div>
+
+        <div style={{ marginLeft: "auto", fontSize: 12, opacity: 0.7 }}>
+          {loading ? "Загрузка…" : (items?.length ? `Отчётов: ${items.length}` : "")}
+        </div>
       </div>
 
-      {err && <div style={{ marginTop: 16, color: "#990000" }}>{err}</div>}
-      {!items.length && !err && <div style={{ marginTop: 16 }}>Нет отчётов…</div>}
+      {/* Ошибка */}
+      {err && (
+        <div style={{ marginTop: 16, color: "#990000", whiteSpace: "pre-wrap" }}>
+          {err}
+        </div>
+      )}
 
+      {/* Список отчётов */}
       <div style={{ marginTop: 16, display: "grid", gap: 12 }}>
         {items.map((r) => (
-          <div key={r.id} style={{ border: "1px solid #eee", borderRadius: 12, padding: 14 }}>
-            <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-              <span style={{ padding: "4px 8px", borderRadius: 999, ...pillStyle(r.risk_level) }}>
-                {r.risk_level}
-              </span>
-              <b>{String(r.month || "")}</b>
-              <span style={{ marginLeft: "auto", fontSize: 12, opacity: 0.7 }}>
-                {new Date(r.created_at).toLocaleString()}
-              </span>
+          <a
+            key={r.id}
+            href={`/reports/${r.id}`}
+            style={{ textDecoration: "none", color: "inherit" }}
+          >
+            <div
+              style={{
+                border: "1px solid #eee",
+                borderRadius: 12,
+                padding: 14,
+                cursor: "pointer"
+              }}
+            >
+              <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+                <span style={{ padding: "4px 8px", borderRadius: 999, ...pillStyle(r.risk_level) }}>
+                  {r.risk_level}
+                </span>
+
+                <b>{String(r.month || "")}</b>
+
+                <span style={{ marginLeft: "auto", fontSize: 12, opacity: 0.7 }}>
+                  {r.created_at ? new Date(r.created_at).toLocaleString() : ""}
+                </span>
+              </div>
+
+              <pre style={{ whiteSpace: "pre-wrap", marginTop: 10, fontFamily: "inherit" }}>
+                {r.summary_text || ""}
+              </pre>
+
+              <div style={{ marginTop: 8, fontSize: 12, opacity: 0.7 }}>
+                Open → /reports/{r.id}
+              </div>
             </div>
-            <pre style={{ whiteSpace: "pre-wrap", marginTop: 10, fontFamily: "inherit" }}>
-              {r.summary_text}
-            </pre>
-          </div>
+          </a>
         ))}
+
+        {!loading && !err && items.length === 0 && (
+          <div style={{ marginTop: 6, opacity: 0.7 }}>
+            Нет отчётов за выбранный месяц.
+          </div>
+        )}
       </div>
     </div>
   );
