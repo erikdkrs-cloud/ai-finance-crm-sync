@@ -42,7 +42,6 @@ function useCountUp(value, { duration = 450, decimals = 0 } = {}) {
     const from = prevRef.current;
     const to = value;
 
-    // avoid weird animations on first render
     if (from === to) {
       setDisplay(to);
       return;
@@ -53,8 +52,7 @@ function useCountUp(value, { duration = 450, decimals = 0 } = {}) {
 
     const tick = (t) => {
       const p = Math.min(1, (t - start) / duration);
-      // easeOutCubic
-      const eased = 1 - Math.pow(1 - p, 3);
+      const eased = 1 - Math.pow(1 - p, 3); // easeOutCubic
       const cur = from + (to - from) * eased;
 
       const factor = Math.pow(10, decimals);
@@ -76,7 +74,7 @@ function useCountUp(value, { duration = 450, decimals = 0 } = {}) {
 
 function KpiCard({ title, value, hint, negative }) {
   return (
-    <div className={`card kpi ${negative ? "" : ""}`}>
+    <div className="card kpi">
       <div className="label">{title}</div>
       <div className={`value mono countup ${negative ? "neg" : ""}`}>{value}</div>
       <div className="hint">{hint}</div>
@@ -96,10 +94,7 @@ function TableSkeleton({ rows = 8, cols = 9 }) {
         <tr key={r} className="row-skel">
           {Array.from({ length: cols }).map((__, c) => (
             <td key={c}>
-              <div
-                className="shimmer cell-skel"
-                style={{ width: widths[c] || "70%", height: 14 }}
-              />
+              <div className="shimmer cell-skel" style={{ width: widths[c] || "70%", height: 14 }} />
             </td>
           ))}
         </tr>
@@ -116,8 +111,12 @@ export default function DashboardPage() {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(false);
 
-  // used to re-trigger fade animation on data refresh
+  // for re-triggering fade animation
   const [animKey, setAnimKey] = useState(0);
+
+  // report generation UI
+  const [reportLoading, setReportLoading] = useState(false);
+  const [reportError, setReportError] = useState("");
 
   useEffect(() => {
     (async () => {
@@ -137,13 +136,14 @@ export default function DashboardPage() {
         const r = await fetch(`/api/dashboard?month=${encodeURIComponent(month)}`);
         const j = await r.json();
         setData(j);
-        setAnimKey((k) => k + 1); // trigger fade animation after load
+        setAnimKey((k) => k + 1);
       } finally {
         setLoading(false);
       }
     })();
   }, [month]);
 
+  // totals: support different response shapes
   const totalsRaw =
     data?.totals ||
     data?.total ||
@@ -164,13 +164,14 @@ export default function DashboardPage() {
     return { revenue, costs, profit, margin, projectsCount };
   }, [totalsRaw, data]);
 
-  // Count-up values (only animate after first real data load)
+  // animations for KPI
   const revenueAnim = useCountUp(totals.revenue, { duration: 520, decimals: 0 });
   const costsAnim = useCountUp(totals.costs, { duration: 520, decimals: 0 });
   const profitAnim = useCountUp(totals.profit, { duration: 520, decimals: 0 });
-  const marginAnim = useCountUp(totals.margin, { duration: 520, decimals: 4 }); // smooth, then format %
+  const marginAnim = useCountUp(totals.margin, { duration: 520, decimals: 4 });
   const projectsAnim = useCountUp(n(totals.projectsCount ?? 0), { duration: 380, decimals: 0 });
 
+  // projects
   const projectsRaw = Array.isArray(data?.projects)
     ? data.projects
     : (Array.isArray(data?.items) ? data.items : []);
@@ -192,7 +193,7 @@ export default function DashboardPage() {
         margin,
         penalties: n(pick(p, ["penalties", "fine", "fines"], 0)),
         ads: n(pick(p, ["ads", "marketing", "ad_costs"], 0)),
-        salary_workers: n(pick(p, ["salary_workers", "salary", "fot_workers", "workers_salary"], 0)),
+        salary_workers: n(pick(p, ["salary_workers", "salary", "fot_workers", "workers_salary", "labor"], 0)),
       };
     });
   }, [projectsRaw]);
@@ -208,7 +209,41 @@ export default function DashboardPage() {
     return [...filteredProjects].sort((a, b) => (a.margin ?? 0) - (b.margin ?? 0));
   }, [filteredProjects]);
 
-  const isReady = !!data && !loading;
+  async function generateReport() {
+    if (!month || reportLoading) return;
+
+    setReportError("");
+    setReportLoading(true);
+
+    const url = `/api/report?month=${encodeURIComponent(month)}`;
+
+    try {
+      let resp = await fetch(url, { method: "POST" });
+      if (resp.status === 405) resp = await fetch(url);
+
+      const text = await resp.text();
+      let json = null;
+      try {
+        json = JSON.parse(text);
+      } catch {}
+
+      if (!resp.ok) {
+        setReportError(text.slice(0, 800));
+        return;
+      }
+
+      const id = json?.id;
+      if (id) {
+        window.location.href = `/reports/${id}`;
+      } else {
+        window.location.href = `/reports?ts=${Date.now()}`;
+      }
+    } catch (e) {
+      setReportError(String(e?.message || e));
+    } finally {
+      setReportLoading(false);
+    }
+  }
 
   return (
     <div className="crm-wrap">
@@ -223,13 +258,11 @@ export default function DashboardPage() {
         <div className="crm-controls">
           <div className="select">
             <label>Месяц</label>
-            <select
-              value={month}
-              onChange={(e) => setMonth(e.target.value)}
-              aria-label="Выбор месяца"
-            >
+            <select value={month} onChange={(e) => setMonth(e.target.value)} aria-label="Выбор месяца">
               {months.map((m) => (
-                <option key={m} value={m}>{m}</option>
+                <option key={m} value={m}>
+                  {m}
+                </option>
               ))}
             </select>
           </div>
@@ -253,15 +286,8 @@ export default function DashboardPage() {
           </div>
 
           <div className="actions" style={{ marginTop: 18 }}>
-            <button
-              className="btn primary"
-              onClick={async () => {
-                if (!month) return;
-                await fetch(`/api/report?month=${encodeURIComponent(month)}`, { method: "POST" });
-                window.location.href = "/reports";
-              }}
-            >
-              Сгенерировать отчёт
+            <button className="btn primary" disabled={reportLoading} onClick={generateReport}>
+              {reportLoading ? "Генерируем отчёт…" : "Сгенерировать отчёт"}
             </button>
 
             <Link href="/reports">
@@ -271,13 +297,15 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* Fade container: re-renders animation after each successful fetch */}
       <div key={animKey} className={`fade-wrap ${loading ? "is-loading" : ""}`}>
-        {/* KPI */}
         <div className="kpi-grid">
           {loading && !data ? (
             <>
-              <KpiSkeleton /><KpiSkeleton /><KpiSkeleton /><KpiSkeleton /><KpiSkeleton />
+              <KpiSkeleton />
+              <KpiSkeleton />
+              <KpiSkeleton />
+              <KpiSkeleton />
+              <KpiSkeleton />
             </>
           ) : (
             <>
@@ -285,7 +313,11 @@ export default function DashboardPage() {
               <KpiCard title="Расходы" value={fmtMoney(costsAnim)} hint="все затраты" />
               <KpiCard title="Прибыль" value={fmtMoney(profitAnim)} hint="выручка − расходы" negative={profitAnim < 0} />
               <KpiCard title="Маржа" value={fmtPct(marginAnim)} hint="прибыль / выручка" />
-              <KpiCard title="Проектов" value={String(Math.round(projectsAnim))} hint={loading ? "обновляем…" : "в выбранном месяце"} />
+              <KpiCard
+                title="Проектов"
+                value={String(Math.round(projectsAnim))}
+                hint={loading ? "обновляем…" : "в выбранном месяце"}
+              />
             </>
           )}
         </div>
@@ -350,6 +382,31 @@ export default function DashboardPage() {
           </div>
         </div>
       </div>
+
+      {/* Loading overlay while generating report */}
+      {reportLoading ? (
+        <div className="overlay">
+          <div className="toast">
+            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              <span className="spinner" />
+              <div className="toast-title">Генерируем AI-отчёт…</div>
+            </div>
+            <div className="toast-sub">
+              Обычно занимает 5–15 секунд. Мы считаем KPI, сравнение с прошлым месяцем и формируем рекомендации.
+            </div>
+
+            {reportError ? (
+              <div className="toast-sub" style={{ marginTop: 10, color: "rgba(239,68,68,.95)", fontWeight: 800 }}>
+                Ошибка: {reportError}
+              </div>
+            ) : null}
+
+            <div className="toast-sub" style={{ marginTop: 10, opacity: 0.85 }}>
+              Не закрывай вкладку — после завершения откроется отчёт автоматически.
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
