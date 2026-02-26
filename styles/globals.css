@@ -497,5 +497,79 @@ select {
 
 /* тёмная схема */
 select {
+/* ===============================
+   Animations: page transitions + shimmer
+================================= */
+
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes shimmer {
+  0%   { transform: translateX(-60%); }
+  100% { transform: translateX(160%); }
+}
+
+/* контейнер для плавного обновления */
+.fade-wrap {
+  animation: fadeUp .28s ease both;
+}
+
+/* мягкое “приглушение” во время загрузки */
+.is-loading {
+  opacity: .78;
+  filter: saturate(.95);
+}
+
+/* shimmer blocks */
+.shimmer {
+  position: relative;
+  overflow: hidden;
+  background: rgba(255,255,255,.03);
+  border: 1px solid rgba(255,255,255,.06);
+  border-radius: 14px;
+}
+
+.shimmer::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255,255,255,.10),
+    transparent
+  );
+  transform: translateX(-60%);
+  animation: shimmer 1.1s linear infinite;
+}
+
+/* KPI skeleton sizing */
+.kpi-skel {
+  height: 92px;
+}
+
+/* Table skeleton */
+.row-skel td {
+  padding: 12px;
+}
+.cell-skel {
+  height: 14px;
+  border-radius: 999px;
+}
+
+/* smooth table appearance */
+.table-animate {
+  animation: fadeUp .32s ease both;
+}
+
+/* optional: smooth pill press */
+.pill:active { transform: translateY(0px) scale(.99); }
+
+/* count-up highlight (very subtle) */
+.countup {
+  transition: color .2s ease;
+}
   color-scheme: dark;
 }
