@@ -132,17 +132,20 @@ export default function Dashboard() {
           </select>
         </div>
 
-        <div style={{ display: "flex", gap: 8, alignItems: "end" }}>
-          <button onClick={() => { setOnlyRisky(false); setOnlyRed(false); }} style={btnStyle(!onlyRisky && !onlyRed)}>
-            Все
-          </button>
-          <button onClick={() => { setOnlyRisky(true); setOnlyRed(false); }} style={btnStyle(onlyRisky && !onlyRed)}>
-            Жёлтые+красные
-          </button>
-          <button onClick={() => { setOnlyRed(true); setOnlyRisky(false); }} style={btnStyle(onlyRed)}>
-            Только красные
-          </button>
-        </div>
+       <div style={{ display: "flex", gap: 8, alignItems: "end" }}>
+  <button onClick={() => { setOnlyRisky(false); setOnlyRed(false); setOnlyGreen(false); }} style={btnStyle(!onlyRisky && !onlyRed && !onlyGreen)}>
+    Все
+  </button>
+  <button onClick={() => { setOnlyRisky(true); setOnlyRed(false); setOnlyGreen(false); }} style={btnStyle(onlyRisky && !onlyRed && !onlyGreen)}>
+    Жёлтые+красные
+  </button>
+  <button onClick={() => { setOnlyRed(true); setOnlyRisky(false); setOnlyGreen(false); }} style={btnStyle(onlyRed)}>
+    Только красные
+  </button>
+  <button onClick={() => { setOnlyGreen(true); setOnlyRisky(false); setOnlyRed(false); }} style={btnStyle(onlyGreen)}>
+    Только зелёные
+  </button>
+</div>
 
         <div style={{ marginLeft: "auto", display: "flex", gap: 12, alignItems: "center" }}>
           <div style={{ fontSize: 12, opacity: 0.7 }}>
