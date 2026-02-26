@@ -66,7 +66,13 @@ export default function ReportsPage() {
           setList([]);
           return;
         }
-        const arr = r.data?.reports || r.data || [];
+        const arr =
+  r.data?.items ||
+  r.data?.reports ||
+  r.data?.rows ||
+  r.data?.data ||
+  r.data ||
+  [];
         setList(Array.isArray(arr) ? arr : []);
       } catch (e) {
         setError(String(e?.message || e));
