@@ -29,8 +29,9 @@ export default function Dashboard() {
   const [genLoading, setGenLoading] = useState(false);
   const [genStatus, setGenStatus] = useState("");
 
-  const [onlyRisky, setOnlyRisky] = useState(false);
+  const [onlyRisky, setOnlyRisky] = useState(false); // red+yellow
   const [onlyRed, setOnlyRed] = useState(false);
+  const [onlyGreen, setOnlyGreen] = useState(false);
 
   useEffect(() => {
     setErr("");
@@ -99,10 +100,11 @@ export default function Dashboard() {
 
     if (onlyRed) res = res.filter(p => p.risk === "red");
     else if (onlyRisky) res = res.filter(p => p.risk === "red" || p.risk === "yellow");
+    else if (onlyGreen) res = res.filter(p => p.risk === "green");
 
     res.sort((a,b) => (a.margin ?? 0) - (b.margin ?? 0));
     return res;
-  }, [data, onlyRisky, onlyRed]);
+  }, [data, onlyRisky, onlyRed, onlyGreen]);
 
   const counts = useMemo(() => {
     const arr = data?.projects || [];
@@ -132,20 +134,20 @@ export default function Dashboard() {
           </select>
         </div>
 
-       <div style={{ display: "flex", gap: 8, alignItems: "end" }}>
-  <button onClick={() => { setOnlyRisky(false); setOnlyRed(false); setOnlyGreen(false); }} style={btnStyle(!onlyRisky && !onlyRed && !onlyGreen)}>
-    Все
-  </button>
-  <button onClick={() => { setOnlyRisky(true); setOnlyRed(false); setOnlyGreen(false); }} style={btnStyle(onlyRisky && !onlyRed && !onlyGreen)}>
-    Жёлтые+красные
-  </button>
-  <button onClick={() => { setOnlyRed(true); setOnlyRisky(false); setOnlyGreen(false); }} style={btnStyle(onlyRed)}>
-    Только красные
-  </button>
-  <button onClick={() => { setOnlyGreen(true); setOnlyRisky(false); setOnlyRed(false); }} style={btnStyle(onlyGreen)}>
-    Только зелёные
-  </button>
-</div>
+        <div style={{ display: "flex", gap: 8, alignItems: "end" }}>
+          <button onClick={() => { setOnlyRisky(false); setOnlyRed(false); setOnlyGreen(false); }} style={btnStyle(!onlyRisky && !onlyRed && !onlyGreen)}>
+            Все
+          </button>
+          <button onClick={() => { setOnlyRisky(true); setOnlyRed(false); setOnlyGreen(false); }} style={btnStyle(onlyRisky && !onlyRed && !onlyGreen)}>
+            Жёлтые+красные
+          </button>
+          <button onClick={() => { setOnlyRed(true); setOnlyRisky(false); setOnlyGreen(false); }} style={btnStyle(onlyRed)}>
+            Только красные
+          </button>
+          <button onClick={() => { setOnlyGreen(true); setOnlyRisky(false); setOnlyRed(false); }} style={btnStyle(onlyGreen)}>
+            Только зелёные
+          </button>
+        </div>
 
         <div style={{ marginLeft: "auto", display: "flex", gap: 12, alignItems: "center" }}>
           <div style={{ fontSize: 12, opacity: 0.7 }}>
@@ -186,10 +188,7 @@ export default function Dashboard() {
           </div>
 
           <div style={{ marginTop: 18 }}>
-            <h3 style={{ marginBottom: 8 }}>
-              Проекты (сначала самые низкие по марже)
-              {onlyRed ? " • фильтр: только красные" : onlyRisky ? " • фильтр: жёлтые+красные" : ""}
-            </h3>
+            <h3 style={{ marginBottom: 8 }}>Проекты (сначала самые низкие по марже)</h3>
 
             <table style={{ width: "100%", borderCollapse: "collapse" }}>
               <thead>
