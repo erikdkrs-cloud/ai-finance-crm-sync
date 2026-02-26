@@ -11,7 +11,6 @@ function fmtPct(n) {
 }
 
 function normalizeRisk(r) {
-  // поддержка разных вариантов
   if (!r) return "green";
   const s = String(r).toLowerCase();
   if (s.includes("red") || s.includes("крас")) return "red";
@@ -24,6 +23,17 @@ function riskRu(r) {
   return "зелёный";
 }
 
+async function fetchJsonSafe(url) {
+  const resp = await fetch(url);
+  const text = await resp.text(); // сначала текст
+  try {
+    return { ok: resp.ok, data: JSON.parse(text), raw: text };
+  } catch (e) {
+    // если вернулся HTML (ошибка), мы это покажем
+    return { ok: false, data: null, raw: text };
+  }
+}
+
 export default function ReportsPage() {
   const [months, setMonths] = useState([]);
   const [month, setMonth] = useState("all");
@@ -33,26 +43,34 @@ export default function ReportsPage() {
   const [list, setList] = useState([]);
   const [openId, setOpenId] = useState(null);
   const [detail, setDetail] = useState({}); // id -> detail
+
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
 
   useEffect(() => {
     (async () => {
-      const r = await fetch("/api/months");
-      const j = await r.json();
-      const m = j?.months || j || [];
-      setMonths(m);
+      const r = await fetchJsonSafe("/api/months");
+      const arr = r.data?.months || r.data || [];
+      if (Array.isArray(arr)) setMonths(arr);
     })();
   }, []);
 
   useEffect(() => {
     (async () => {
       setLoading(true);
+      setError("");
       try {
-        const r = await fetch("/api/reports_list");
-        const j = await r.json();
-        const arr = j?.reports || j || [];
-        // ожидаем: [{id, month, risk_level, summary_text, created_at}]
-        setList(arr);
+        const r = await fetchJsonSafe("/api/reports_list");
+        if (!r.ok || !r.data) {
+          setError(`Ошибка загрузки /api/reports_list:\n${(r.raw || "").slice(0, 400)}`);
+          setList([]);
+          return;
+        }
+        const arr = r.data?.reports || r.data || [];
+        setList(Array.isArray(arr) ? arr : []);
+      } catch (e) {
+        setError(String(e?.message || e));
+        setList([]);
       } finally {
         setLoading(false);
       }
@@ -62,9 +80,9 @@ export default function ReportsPage() {
   const filtered = useMemo(() => {
     const query = q.trim().toLowerCase();
     return (list || []).filter((x) => {
-      const r = normalizeRisk(x.risk_level);
+      const rr = normalizeRisk(x.risk_level);
       if (month !== "all" && String(x.month) !== month) return false;
-      if (risk !== "all" && r !== risk) return false;
+      if (risk !== "all" && rr !== risk) return false;
       if (query) {
         const hay = `${x.month || ""}\n${x.summary_text || ""}\n${x.risk_level || ""}`.toLowerCase();
         if (!hay.includes(query)) return false;
@@ -74,16 +92,20 @@ export default function ReportsPage() {
   }, [list, month, risk, q]);
 
   async function toggleDetails(id) {
-    if (openId === id) {
+    const key = String(id);
+    if (openId === key) {
       setOpenId(null);
       return;
     }
-    setOpenId(id);
+    setOpenId(key);
 
-    if (!detail[id]) {
-      const r = await fetch(`/api/report_get?id=${encodeURIComponent(id)}`);
-      const j = await r.json();
-      setDetail((prev) => ({ ...prev, [id]: j }));
+    if (!detail[key]) {
+      const r = await fetchJsonSafe(`/api/report_get?id=${encodeURIComponent(key)}`);
+      if (!r.ok || !r.data) {
+        setDetail((prev) => ({ ...prev, [key]: { error: (r.raw || "").slice(0, 400) } }));
+      } else {
+        setDetail((prev) => ({ ...prev, [key]: r.data }));
+      }
     }
   }
 
@@ -132,56 +154,55 @@ export default function ReportsPage() {
             <div className="small-muted">
               {loading ? "Загрузка…" : <>Показано: <b>{filtered.length}</b> из <b>{list.length}</b></>}
             </div>
-            <Link className="link" href="/dashboard">← Дашборд</Link>
+
+            {/* Совместимый Link для старых Next */}
+            <Link href="/dashboard"><a className="link">← Дашборд</a></Link>
           </div>
         </div>
       </div>
 
+      {error ? (
+        <div className="report-card" style={{ borderColor: "rgba(239,68,68,.35)" }}>
+          <div style={{ fontWeight: 900, marginBottom: 8 }}>Ошибка</div>
+          <pre style={{ whiteSpace: "pre-wrap", color: "rgba(234,240,255,.85)" }}>{error}</pre>
+        </div>
+      ) : null}
+
       <div className="report-grid">
         {filtered.map((r) => {
+          const id = String(r.id);
           const rr = normalizeRisk(r.risk_level);
-          const d = detail[r.id];
+          const d = detail[id];
 
-          // пробуем вытянуть KPI из metrics (если есть)
-          const totals =
-            d?.metrics?.totals ||
-            d?.metrics?.kpi ||
-            d?.metrics ||
-            null;
-
+          const totals = d?.metrics?.totals || d?.metrics?.kpi || d?.metrics || null;
           const revenue = totals?.revenue_no_vat ?? totals?.revenue ?? null;
           const costs = totals?.costs ?? null;
           const profit = totals?.profit ?? null;
           const margin = totals?.margin ?? null;
 
           return (
-            <div key={r.id} className="report-card">
+            <div key={id} className="report-card">
               <div className="report-head">
                 <div>
                   <div className="report-meta">
                     <span className={`badge ${rr}`}><span className="dot" />{riskRu(rr)}</span>
                     <span className="mono">{r.month}</span>
-                    {r.created_at ? <span className="mono">{String(r.created_at).replace("T", " ").slice(0, 19)}</span> : null}
                   </div>
 
-                  <div className="report-title">
-                    Отчёт за {r.month}
-                  </div>
+                  <div className="report-title">Отчёт за {r.month}</div>
                 </div>
 
                 <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-                  <Link className="btn" href={`/reports/${r.id}`}>Открыть</Link>
-                  <button className="btn primary" onClick={() => toggleDetails(r.id)}>
-                    {openId === r.id ? "Скрыть детали" : "Детали (issues/metrics)"}
+                  <Link href={`/reports/${id}`}><a className="btn">Открыть</a></Link>
+                  <button className="btn primary" onClick={() => toggleDetails(id)}>
+                    {openId === id ? "Скрыть детали" : "Детали (issues/metrics)"}
                   </button>
                 </div>
               </div>
 
-              <div className="report-body">
-                {r.summary_text || "—"}
-              </div>
+              <div className="report-body">{r.summary_text || "—"}</div>
 
-              {openId === r.id ? (
+              {openId === id ? (
                 <>
                   {(revenue !== null || costs !== null || profit !== null || margin !== null) ? (
                     <div className="report-kpi">
@@ -218,13 +239,19 @@ export default function ReportsPage() {
                       </pre>
                     </div>
                   </div>
+
+                  {d?.error ? (
+                    <div style={{ marginTop: 12, color: "rgba(239,68,68,.9)", fontWeight: 800 }}>
+                      Ошибка загрузки деталей: {d.error}
+                    </div>
+                  ) : null}
                 </>
               ) : null}
             </div>
           );
         })}
 
-        {(!filtered || filtered.length === 0) ? (
+        {(!loading && filtered.length === 0 && !error) ? (
           <div className="report-card" style={{ color: "rgba(234,240,255,.75)" }}>
             Нет отчётов под выбранные фильтры.
           </div>
