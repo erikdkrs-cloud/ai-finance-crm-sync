@@ -54,7 +54,7 @@ export default function Reports() {
       if (risk !== "all" && r.risk_level !== risk) return false;
       if (qq) {
         const text = (r.summary_text || "").toLowerCase();
-        if (!text.includes(qq) && !String(r.month || "").includes(qq)) return false;
+        if (!text.includes(qq) && !String(r.month || "").toLowerCase().includes(qq)) return false;
       }
       return true;
     });
@@ -64,6 +64,7 @@ export default function Reports() {
     const isOpen = !!openIds[id];
     setOpenIds(prev => ({ ...prev, [id]: !isOpen }));
 
+    // if opening and not loaded yet → load
     if (!isOpen && !details[id]) {
       setDetails(prev => ({ ...prev, [id]: { loading: true, data: null, error: "" } }));
       try {
@@ -143,7 +144,7 @@ export default function Reports() {
                 {r.summary_text}
               </div>
 
-              <div style={{ marginTop: 12, display: "flex", gap: 10, alignItems: "center" }}>
+              <div style={{ marginTop: 12, display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
                 <button
                   onClick={() => toggleDetails(id)}
                   style={{
@@ -157,20 +158,16 @@ export default function Reports() {
                   {isOpen ? "Скрыть детали" : "Детали (issues/metrics)"}
                 </button>
 
-                <span style={{ fontSize: 12, opacity: 0.7 }}>
-                  id: {id}
-                </span>
+                <span style={{ fontSize: 12, opacity: 0.7 }}>id: {id}</span>
+
+                {det?.loading && <span style={{ fontSize: 12, opacity: 0.7 }}>Загрузка…</span>}
               </div>
 
               {isOpen && (
                 <div style={{ marginTop: 12, borderTop: "1px solid #eee", paddingTop: 12 }}>
-                  {!det && <div>Загрузка…</div>}
-                  {det?.loading && <div>Загрузка…</div>}
                   {det?.error && <div style={{ color: "#990000", whiteSpace: "pre-wrap" }}>{det.error}</div>}
-
-                  {det?.data && (
-                    <DetailsBlock item={det.data} />
-                  )}
+                  {det?.data && <DetailsBlock item={det.data} />}
+                  {!det && <div>Загрузка…</div>}
                 </div>
               )}
             </div>
@@ -254,12 +251,4 @@ function KPI({ title, value }) {
       <div style={{ fontSize: 20, fontWeight: 700 }}>{value}</div>
     </div>
   );
-}
-
-function fmt(n){
-  const x = Number(n || 0);
-  return x.toLocaleString("ru-RU", { maximumFractionDigits: 0 });
-}
-function pct(x){
-  return (Number(x || 0) * 100).toFixed(1) + "%";
 }
