@@ -425,3 +425,77 @@ select {
   box-shadow: 0 0 0 1px rgba(56,189,248,.2),
               0 0 20px rgba(56,189,248,.15);
 }
+/* ===============================
+   Premium Select Animation
+================================= */
+
+/* обертка */
+.select {
+  position: relative;
+}
+
+/* сам select */
+.select select {
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+
+  background: rgba(15, 23, 42, 0.85);
+  border: 1px solid rgba(255,255,255,.15);
+  color: #ffffff;
+  font-weight: 700;
+  padding: 10px 42px 10px 14px;
+  border-radius: 14px;
+
+  transition: all .25s ease;
+  cursor: pointer;
+}
+
+/* hover */
+.select select:hover {
+  border-color: rgba(56,189,248,.6);
+  transform: translateY(-1px);
+}
+
+/* focus glow */
+.select select:focus {
+  border-color: rgba(56,189,248,.9);
+  box-shadow: 0 0 0 2px rgba(56,189,248,.25),
+              0 0 25px rgba(56,189,248,.25);
+  transform: translateY(-1px);
+}
+
+/* active press effect */
+.select select:active {
+  transform: translateY(0px) scale(.99);
+}
+
+/* стрелка */
+.select::after {
+  content: "▾";
+  position: absolute;
+  right: 14px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 14px;
+  color: rgba(255,255,255,.7);
+  pointer-events: none;
+  transition: transform .25s ease, color .25s ease;
+}
+
+/* анимация стрелки при фокусе */
+.select:focus-within::after {
+  transform: translateY(-50%) rotate(180deg);
+  color: rgba(56,189,248,1);
+}
+
+/* dropdown options */
+.select select option {
+  background: #0f172a;
+  color: #ffffff;
+}
+
+/* тёмная схема */
+select {
+  color-scheme: dark;
+}
