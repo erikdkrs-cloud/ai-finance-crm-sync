@@ -26,17 +26,21 @@ export default async function handler(req, res) {
     const r = rows?.[0];
     if (!r) return res.status(404).json({ ok: false, error: "not found" });
 
+    const item = {
+      id: Number(r.id),
+      month: r.month,
+      risk_level: r.risk_level,
+      summary_text: r.summary_text || "",
+      issues: r.issues ?? [],
+      metrics: r.metrics ?? {},
+      created_at: r.created_at,
+    };
+
+    // ВАЖНО: отдаём и в корне, и в item (совместимость со всеми страницами/старым кодом)
     return res.status(200).json({
       ok: true,
-      item: {
-        id: Number(r.id),
-        month: r.month,
-        risk_level: r.risk_level,
-        summary_text: r.summary_text || "",
-        issues: r.issues ?? [],
-        metrics: r.metrics ?? {},
-        created_at: r.created_at,
-      }
+      ...item,
+      item,
     });
   } catch (e) {
     return res.status(500).json({ ok: false, error: String(e) });
