@@ -67,12 +67,12 @@ export default function ReportsPage() {
           return;
         }
         const arr =
-  r.data?.items ||
-  r.data?.reports ||
-  r.data?.rows ||
-  r.data?.data ||
-  r.data ||
-  [];
+          r.data?.items ||
+          r.data?.reports ||
+          r.data?.rows ||
+          r.data?.data ||
+          r.data ||
+          [];
         setList(Array.isArray(arr) ? arr : []);
       } catch (e) {
         setError(String(e?.message || e));
@@ -110,6 +110,7 @@ export default function ReportsPage() {
       if (!r.ok || !r.data) {
         setDetail((prev) => ({ ...prev, [key]: { error: (r.raw || "").slice(0, 400) } }));
       } else {
+        // ВАЖНО: сохраняем как есть, но UI ниже умеет читать d.item ?? d
         setDetail((prev) => ({ ...prev, [key]: r.data }));
       }
     }
@@ -178,7 +179,10 @@ export default function ReportsPage() {
         {filtered.map((r) => {
           const id = String(r.id);
           const rr = normalizeRisk(r.risk_level);
-          const d = detail[id];
+
+          // ВАЖНО: поддерживаем оба формата ответа /api/report_get
+          const raw = detail[id];
+          const d = raw?.item ? raw.item : raw;
 
           const totals = d?.metrics?.totals || d?.metrics?.kpi || d?.metrics || null;
           const revenue = totals?.revenue_no_vat ?? totals?.revenue ?? null;
@@ -200,18 +204,20 @@ export default function ReportsPage() {
 
                 <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
                   <Link href={`/reports/${id}`}><a className="btn">Открыть</a></Link>
+
                   <button className="btn primary" onClick={() => toggleDetails(id)}>
                     {openId === id ? "Скрыть детали" : "Детали (issues/metrics)"}
                   </button>
-                    <button
-  className="btn"
-  onClick={async () => {
-    await fetch("/api/auth/logout");
-    window.location.href = "/login";
-  }}
->
-  Выйти
-</button>
+
+                  <button
+                    className="btn"
+                    onClick={async () => {
+                      await fetch("/api/auth/logout");
+                      window.location.href = "/login";
+                    }}
+                  >
+                    Выйти
+                  </button>
                 </div>
               </div>
 
@@ -255,9 +261,9 @@ export default function ReportsPage() {
                     </div>
                   </div>
 
-                  {d?.error ? (
+                  {raw?.error ? (
                     <div style={{ marginTop: 12, color: "rgba(239,68,68,.9)", fontWeight: 800 }}>
-                      Ошибка загрузки деталей: {d.error}
+                      Ошибка загрузки деталей: {raw.error}
                     </div>
                   ) : null}
                 </>
