@@ -315,7 +315,15 @@ export default function DashboardPage() {
               Только зелёные
             </button>
           </div>
-
+<button
+  className="btn"
+  onClick={async () => {
+    await fetch("/api/auth/logout");
+    window.location.href = "/login";
+  }}
+>
+  Выйти
+</button>
           <div className="actions" style={{ marginTop: 18 }}>
             <button className="btn primary" disabled={reportLoading} onClick={generateReport}>
               {reportLoading ? "Генерируем отчёт…" : "Сгенерировать отчёт"}
