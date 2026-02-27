@@ -52,7 +52,7 @@ function useCountUp(value, { duration = 450, decimals = 0 } = {}) {
 
     const tick = (t) => {
       const p = Math.min(1, (t - start) / duration);
-      const eased = 1 - Math.pow(1 - p, 3); // easeOutCubic
+      const eased = 1 - Math.pow(1 - p, 3);
       const cur = from + (to - from) * eased;
 
       const factor = Math.pow(10, decimals);
@@ -111,12 +111,16 @@ export default function DashboardPage() {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(false);
 
-  // for re-triggering fade animation
   const [animKey, setAnimKey] = useState(0);
 
   // report generation UI
   const [reportLoading, setReportLoading] = useState(false);
   const [reportError, setReportError] = useState("");
+
+  // table filters
+  const [projectQuery, setProjectQuery] = useState("");
+  const [sortKey, setSortKey] = useState("margin"); // default: margin like before
+  const [sortDir, setSortDir] = useState("asc");    // asc = from lowest to highest
 
   useEffect(() => {
     (async () => {
@@ -143,7 +147,6 @@ export default function DashboardPage() {
     })();
   }, [month]);
 
-  // totals: support different response shapes
   const totalsRaw =
     data?.totals ||
     data?.total ||
@@ -164,14 +167,12 @@ export default function DashboardPage() {
     return { revenue, costs, profit, margin, projectsCount };
   }, [totalsRaw, data]);
 
-  // animations for KPI
   const revenueAnim = useCountUp(totals.revenue, { duration: 520, decimals: 0 });
   const costsAnim = useCountUp(totals.costs, { duration: 520, decimals: 0 });
   const profitAnim = useCountUp(totals.profit, { duration: 520, decimals: 0 });
   const marginAnim = useCountUp(totals.margin, { duration: 520, decimals: 4 });
   const projectsAnim = useCountUp(n(totals.projectsCount ?? 0), { duration: 380, decimals: 0 });
 
-  // projects
   const projectsRaw = Array.isArray(data?.projects)
     ? data.projects
     : (Array.isArray(data?.items) ? data.items : []);
@@ -198,17 +199,6 @@ export default function DashboardPage() {
     });
   }, [projectsRaw]);
 
-  const filteredProjects = useMemo(() => {
-    if (riskFilter === "all") return projects;
-    if (riskFilter === "red") return projects.filter((x) => x.risk_level === "red");
-    if (riskFilter === "green") return projects.filter((x) => x.risk_level === "green");
-    return projects.filter((x) => x.risk_level === "yellow" || x.risk_level === "red");
-  }, [projects, riskFilter]);
-
-  const sortedProjects = useMemo(() => {
-    return [...filteredProjects].sort((a, b) => (a.margin ?? 0) - (b.margin ?? 0));
-  }, [filteredProjects]);
-
   async function generateReport() {
     if (!month || reportLoading) return;
 
@@ -223,9 +213,7 @@ export default function DashboardPage() {
 
       const text = await resp.text();
       let json = null;
-      try {
-        json = JSON.parse(text);
-      } catch {}
+      try { json = JSON.parse(text); } catch {}
 
       if (!resp.ok) {
         setReportError(text.slice(0, 800));
@@ -233,11 +221,8 @@ export default function DashboardPage() {
       }
 
       const id = json?.id;
-      if (id) {
-        window.location.href = `/reports/${id}`;
-      } else {
-        window.location.href = `/reports?ts=${Date.now()}`;
-      }
+      if (id) window.location.href = `/reports/${id}`;
+      else window.location.href = `/reports?ts=${Date.now()}`;
     } catch (e) {
       setReportError(String(e?.message || e));
     } finally {
@@ -245,14 +230,65 @@ export default function DashboardPage() {
     }
   }
 
+  // filters: risk + project name
+  const filteredProjects = useMemo(() => {
+    const q = projectQuery.trim().toLowerCase();
+
+    let list = projects;
+
+    if (riskFilter === "red") list = list.filter((x) => x.risk_level === "red");
+    else if (riskFilter === "green") list = list.filter((x) => x.risk_level === "green");
+    else if (riskFilter === "yellow_red") list = list.filter((x) => x.risk_level === "yellow" || x.risk_level === "red");
+
+    if (q) list = list.filter((x) => (x.project_name || "").toLowerCase().includes(q));
+
+    return list;
+  }, [projects, riskFilter, projectQuery]);
+
+  // sorting
+  const sortedProjects = useMemo(() => {
+    const dir = sortDir === "asc" ? 1 : -1;
+
+    const get = (p) => {
+      if (sortKey === "project_name") return String(p.project_name || "");
+      if (sortKey === "risk_level") return String(p.risk_level || "");
+      return n(p[sortKey]);
+    };
+
+    return [...filteredProjects].sort((a, b) => {
+      const av = get(a);
+      const bv = get(b);
+
+      // string sort
+      if (typeof av === "string" || typeof bv === "string") {
+        return String(av).localeCompare(String(bv), "ru") * dir;
+      }
+      // number sort
+      return (av - bv) * dir;
+    });
+  }, [filteredProjects, sortKey, sortDir]);
+
+  function toggleSort(key) {
+    if (sortKey === key) {
+      setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+    } else {
+      setSortKey(key);
+      // для чисел по умолчанию логично: от меньшего к большему
+      setSortDir("asc");
+    }
+  }
+
+  function SortIcon({ colKey }) {
+    if (sortKey !== colKey) return <span className="sort-icon dim">↕</span>;
+    return <span className="sort-icon">{sortDir === "asc" ? "↑" : "↓"}</span>;
+  }
+
   return (
     <div className="crm-wrap">
       <div className="crm-top">
         <div className="crm-title">
           <h1>Дашборд</h1>
-          <div className="sub">
-            AI Finance CRM • {month ? `Период: ${month}` : "загрузка периода…"}
-          </div>
+          <div className="sub">AI Finance CRM • {month ? `Период: ${month}` : "загрузка периода…"}</div>
         </div>
 
         <div className="crm-controls">
@@ -260,9 +296,7 @@ export default function DashboardPage() {
             <label>Месяц</label>
             <select value={month} onChange={(e) => setMonth(e.target.value)} aria-label="Выбор месяца">
               {months.map((m) => (
-                <option key={m} value={m}>
-                  {m}
-                </option>
+                <option key={m} value={m}>{m}</option>
               ))}
             </select>
           </div>
@@ -271,10 +305,7 @@ export default function DashboardPage() {
             <button className={`pill ${riskFilter === "all" ? "active" : ""}`} onClick={() => setRiskFilter("all")}>
               Все
             </button>
-            <button
-              className={`pill ${riskFilter === "yellow_red" ? "active" : ""}`}
-              onClick={() => setRiskFilter("yellow_red")}
-            >
+            <button className={`pill ${riskFilter === "yellow_red" ? "active" : ""}`} onClick={() => setRiskFilter("yellow_red")}>
               Жёлтые+красные
             </button>
             <button className={`pill ${riskFilter === "red" ? "active" : ""}`} onClick={() => setRiskFilter("red")}>
@@ -298,14 +329,11 @@ export default function DashboardPage() {
       </div>
 
       <div key={animKey} className={`fade-wrap ${loading ? "is-loading" : ""}`}>
+        {/* KPI */}
         <div className="kpi-grid">
           {loading && !data ? (
             <>
-              <KpiSkeleton />
-              <KpiSkeleton />
-              <KpiSkeleton />
-              <KpiSkeleton />
-              <KpiSkeleton />
+              <KpiSkeleton /><KpiSkeleton /><KpiSkeleton /><KpiSkeleton /><KpiSkeleton />
             </>
           ) : (
             <>
@@ -313,36 +341,72 @@ export default function DashboardPage() {
               <KpiCard title="Расходы" value={fmtMoney(costsAnim)} hint="все затраты" />
               <KpiCard title="Прибыль" value={fmtMoney(profitAnim)} hint="выручка − расходы" negative={profitAnim < 0} />
               <KpiCard title="Маржа" value={fmtPct(marginAnim)} hint="прибыль / выручка" />
-              <KpiCard
-                title="Проектов"
-                value={String(Math.round(projectsAnim))}
-                hint={loading ? "обновляем…" : "в выбранном месяце"}
-              />
+              <KpiCard title="Проектов" value={String(Math.round(projectsAnim))} hint={loading ? "обновляем…" : "в выбранном месяце"} />
             </>
           )}
         </div>
 
+        {/* Table header + tools */}
         <div className="section-title">
-          <h2>Проекты (сначала самые низкие по марже)</h2>
-          <div className="small">
-            Показано: <b>{sortedProjects.length}</b>
+          <div>
+            <h2>Проекты</h2>
+            <div className="small">
+              Сортировка: <b>{sortKey}</b> ({sortDir === "asc" ? "по возрастанию" : "по убыванию"}) • Показано: <b>{sortedProjects.length}</b>
+            </div>
           </div>
         </div>
 
+        <div className="table-tools" style={{ marginBottom: 10 }}>
+          <div className="tool">
+            <div className="small-muted" style={{ marginBottom: 6 }}>Поиск по проекту</div>
+            <input
+              className="input"
+              value={projectQuery}
+              onChange={(e) => setProjectQuery(e.target.value)}
+              placeholder="например: Верный, Ламода, М.Видео…"
+            />
+          </div>
+
+          <div style={{ display: "flex", gap: 10, alignItems: "end", flexWrap: "wrap" }}>
+            <button className="btn" onClick={() => { setSortKey("margin"); setSortDir("asc"); }}>
+              Сбросить сортировку
+            </button>
+          </div>
+        </div>
+
+        {/* Table */}
         <div className="table-wrap table-animate">
           <div style={{ overflowX: "auto" }}>
             <table>
               <thead>
                 <tr>
-                  <th>Риск</th>
-                  <th>Проект</th>
-                  <th>Выручка</th>
-                  <th>Расходы</th>
-                  <th>Прибыль</th>
-                  <th>Маржа</th>
-                  <th>Штрафы</th>
-                  <th>Реклама</th>
-                  <th>ФОТ (рабочие)</th>
+                  <th className="sortable" onClick={() => toggleSort("risk_level")}>
+                    Риск <SortIcon colKey="risk_level" />
+                  </th>
+                  <th className="sortable" onClick={() => toggleSort("project_name")}>
+                    Проект <SortIcon colKey="project_name" />
+                  </th>
+                  <th className="sortable" onClick={() => toggleSort("revenue")}>
+                    Выручка <SortIcon colKey="revenue" />
+                  </th>
+                  <th className="sortable" onClick={() => toggleSort("costs")}>
+                    Расходы <SortIcon colKey="costs" />
+                  </th>
+                  <th className="sortable" onClick={() => toggleSort("profit")}>
+                    Прибыль <SortIcon colKey="profit" />
+                  </th>
+                  <th className="sortable" onClick={() => toggleSort("margin")}>
+                    Маржа <SortIcon colKey="margin" />
+                  </th>
+                  <th className="sortable" onClick={() => toggleSort("penalties")}>
+                    Штрафы <SortIcon colKey="penalties" />
+                  </th>
+                  <th className="sortable" onClick={() => toggleSort("ads")}>
+                    Реклама <SortIcon colKey="ads" />
+                  </th>
+                  <th className="sortable" onClick={() => toggleSort("salary_workers")}>
+                    ФОТ (рабочие) <SortIcon colKey="salary_workers" />
+                  </th>
                 </tr>
               </thead>
 
@@ -372,7 +436,7 @@ export default function DashboardPage() {
                   {sortedProjects.length === 0 ? (
                     <tr>
                       <td colSpan={9} style={{ padding: 16, color: "rgba(234,240,255,.65)" }}>
-                        Нет данных (проверь месяц или фильтр).
+                        Нет данных (проверь фильтры/поиск).
                       </td>
                     </tr>
                   ) : null}
