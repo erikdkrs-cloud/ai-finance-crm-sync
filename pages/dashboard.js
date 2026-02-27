@@ -284,7 +284,22 @@ export default function DashboardPage() {
   }
 
   return (
-    <div className="crm-wrap">
+  <div className="crm-wrap" style={{ position: "relative" }}>
+  <div className="user-panel">
+  <div className="user-badge">
+    🔐 Авторизован
+  </div>
+
+  <button
+    className="logout-btn"
+    onClick={async () => {
+      await fetch("/api/auth/logout");
+      window.location.href = "/login";
+    }}
+  >
+    Выйти
+  </button>
+</div>
       <div className="crm-top">
         <div className="crm-title">
           <h1>Дашборд</h1>
