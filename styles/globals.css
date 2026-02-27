@@ -629,3 +629,30 @@ select {
   cursor: not-allowed;
   transform: none !important;
 }
+/* ===== Table sorting UI ===== */
+th.sortable {
+  cursor: pointer;
+  user-select: none;
+  white-space: nowrap;
+}
+th.sortable:hover {
+  color: rgba(56,189,248,1);
+}
+.sort-icon {
+  display: inline-block;
+  margin-left: 8px;
+  opacity: .8;
+  font-size: 11px;
+  transform: translateY(-1px);
+}
+.sort-icon.dim { opacity: .35; }
+.table-tools {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  align-items: end;
+}
+.table-tools .tool {
+  min-width: 260px;
+  flex: 1;
+}
