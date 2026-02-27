@@ -4,7 +4,7 @@ import { jwtVerify } from "jose";
 function roleRank(role) {
   if (role === "admin") return 3;
   if (role === "manager") return 2;
-  return 1;
+  return 1; // viewer
 }
 
 async function verify(token) {
@@ -33,6 +33,7 @@ function requiredRoleForApi(pathname) {
     "/api/reports_list",
     "/api/report_get",
     "/api/ping",
+    "/api/auth/debug", // если оставлял debug
   ];
   if (viewerAllowed.some((p) => pathname.startsWith(p))) return "viewer";
 
@@ -56,8 +57,19 @@ export async function middleware(req) {
   if (pathname === "/login") return NextResponse.next();
   if (pathname.startsWith("/api/auth/")) return NextResponse.next();
 
-  // public page (если хочешь закрыть вообще всё — скажи, я изменю)
+  // public home page
   if (pathname === "/") return NextResponse.next();
+
+  // ✅ Allow Apps Script server-to-server access for import/sync via header token
+  // (без куки, но только если правильный токен)
+  const envToken = process.env.CRM_SYNC_TOKEN || "";
+  const headerToken = req.headers.get("x-crm-sync-token") || "";
+
+  if (envToken && headerToken && headerToken === envToken) {
+    if (pathname.startsWith("/api/import") || pathname.startsWith("/api/sync")) {
+      return NextResponse.next();
+    }
+  }
 
   // check if this route needs auth
   const isProtectedPage =
@@ -69,8 +81,13 @@ export async function middleware(req) {
 
   if (!needsAuth) return NextResponse.next();
 
+  // If API request without auth -> return JSON 401 (instead of redirect), to avoid 405 confusion
+  const isApi = pathname.startsWith("/api/");
+
   const token = getCookie(req, "ai_finance_session");
   if (!token) {
+    if (isApi) return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
+
     const url = req.nextUrl.clone();
     url.pathname = "/login";
     url.search = `?next=${encodeURIComponent(pathname + (search || ""))}`;
@@ -86,12 +103,13 @@ export async function middleware(req) {
       if (!ok) return NextResponse.json({ ok: false, error: "Forbidden" }, { status: 403 });
     }
 
-    // optional: прокидываем роль в заголовке (удобно для отладки)
     const res = NextResponse.next();
     res.headers.set("x-user-role", role);
     res.headers.set("x-user-login", String(payload?.login || ""));
     return res;
   } catch {
+    if (isApi) return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
+
     const url = req.nextUrl.clone();
     url.pathname = "/login";
     url.search = `?next=${encodeURIComponent(pathname + (search || ""))}`;
