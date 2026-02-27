@@ -203,6 +203,15 @@ export default function ReportsPage() {
                   <button className="btn primary" onClick={() => toggleDetails(id)}>
                     {openId === id ? "Скрыть детали" : "Детали (issues/metrics)"}
                   </button>
+                    <button
+  className="btn"
+  onClick={async () => {
+    await fetch("/api/auth/logout");
+    window.location.href = "/login";
+  }}
+>
+  Выйти
+</button>
                 </div>
               </div>
 
