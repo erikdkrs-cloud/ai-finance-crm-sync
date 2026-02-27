@@ -656,3 +656,38 @@ th.sortable:hover {
   min-width: 260px;
   flex: 1;
 }
+/* ===== Top right user panel ===== */
+
+.user-panel {
+  position: absolute;
+  top: 18px;
+  right: 24px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.user-badge {
+  font-size: 13px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: rgba(255,255,255,.05);
+  border: 1px solid rgba(255,255,255,.12);
+  color: rgba(234,240,255,.85);
+}
+
+.logout-btn {
+  font-size: 13px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(255,255,255,.12);
+  background: rgba(239,68,68,.08);
+  color: rgba(239,68,68,.95);
+  cursor: pointer;
+  transition: all .2s ease;
+}
+
+.logout-btn:hover {
+  background: rgba(239,68,68,.15);
+  transform: translateY(-1px);
+}
