@@ -52,6 +52,116 @@ function normalizeIssues(issues) {
   return [];
 }
 
+function normalizeRecs(recs) {
+  if (!recs) return [];
+  if (Array.isArray(recs)) return recs;
+  if (typeof recs === "object") {
+    const arr = recs.items || recs.recommendations || recs.list;
+    if (Array.isArray(arr)) return arr;
+  }
+  if (typeof recs === "string") return [recs];
+  return [];
+}
+
+// Вытащить рекомендации из summary_text по заголовку "Рекомендации"
+function extractRecsFromSummary(summary) {
+  if (!summary) return [];
+
+  const lines = String(summary).split(/\r?\n/);
+  const lower = lines.map((l) => l.trim().toLowerCase());
+
+  const startIdx = lower.findIndex((l) =>
+    l.includes("рекомендац") // "Рекомендации", "Рекомендации (что делать)" и т.п.
+  );
+  if (startIdx === -1) return [];
+
+  // до следующего заголовка (примерно): пустая строка + слово с двоеточием/заглавными,
+  // либо "проблемы", "сигналы", "топ", "kpi" и т.п.
+  const out = [];
+  for (let i = startIdx + 1; i < lines.length; i++) {
+    const raw = lines[i];
+    const t = raw.trim();
+    const tl = t.toLowerCase();
+
+    if (!t) {
+      // пустые строки допускаем внутри рекомендаций — пропускаем
+      continue;
+    }
+
+    const looksLikeNewSection =
+      tl.startsWith("проблем") ||
+      tl.startsWith("сигнал") ||
+      tl.startsWith("топ ") ||
+      tl.startsWith("kpi") ||
+      tl.startsWith("сравнен") ||
+      tl.startsWith("итог") ||
+      tl.startsWith("вывод") ||
+      (t.length < 40 && t.endsWith(":")); // короткий заголовок
+
+    if (looksLikeNewSection) break;
+
+    // варианты маркеров
+    const cleaned = t
+      .replace(/^[-•]\s+/, "")
+      .replace(/^\d+\)\s+/, "")
+      .replace(/^\d+\.\s+/, "")
+      .trim();
+
+    if (cleaned) out.push(cleaned);
+  }
+
+  // иногда AI пишет не списком, а абзацами — тогда берём хотя бы 1-2 строки
+  return out.slice(0, 30);
+}
+
+function classifyPriority(text) {
+  const t = String(text || "").toLowerCase();
+
+  // явные метки
+  if (t.includes("[high]") || t.includes("high") || t.includes("срочно") || t.includes("критич")) return "high";
+  if (t.includes("[medium]") || t.includes("medium") || t.includes("вниман")) return "medium";
+  if (t.includes("[low]") || t.includes("low") || t.includes("оптимиз")) return "low";
+
+  // эмодзи
+  if (t.includes("🔴")) return "high";
+  if (t.includes("🟡")) return "medium";
+  if (t.includes("🟢")) return "low";
+
+  // по умолчанию
+  return "medium";
+}
+
+function Pill({ label, tone }) {
+  const ui =
+    tone === "high"
+      ? { bg: "rgba(239,68,68,.12)", border: "rgba(239,68,68,.35)", dot: "rgba(239,68,68,1)" }
+      : tone === "medium"
+      ? { bg: "rgba(250,173,20,.12)", border: "rgba(250,173,20,.35)", dot: "rgba(250,173,20,1)" }
+      : { bg: "rgba(34,197,94,.12)", border: "rgba(34,197,94,.35)", dot: "rgba(34,197,94,1)" };
+
+  return (
+    <span
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        gap: 8,
+        padding: "4px 10px",
+        borderRadius: 999,
+        background: ui.bg,
+        border: `1px solid ${ui.border}`,
+        color: "rgba(234,240,255,.92)",
+        fontWeight: 900,
+        letterSpacing: 0.4,
+        fontSize: 12,
+        textTransform: "uppercase",
+      }}
+    >
+      <span style={{ width: 8, height: 8, borderRadius: 999, background: ui.dot, display: "inline-block" }} />
+      {label}
+    </span>
+  );
+}
+
 function IssueCard({ issue }) {
   const level = String(issue?.level || issue?.severity || "low").toLowerCase();
   const text = issue?.text || issue?.message || issue?.title || JSON.stringify(issue);
@@ -100,6 +210,32 @@ function IssueCard({ issue }) {
   );
 }
 
+function RecCard({ text, priority }) {
+  return (
+    <div
+      className="card"
+      style={{
+        background: "rgba(255,255,255,.03)",
+        border: "1px solid rgba(255,255,255,.08)",
+        borderRadius: 14,
+        padding: 16,
+        display: "flex",
+        flexDirection: "column",
+        gap: 10,
+      }}
+    >
+      <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center" }}>
+        <div style={{ fontWeight: 900 }}>Рекомендация</div>
+        <Pill
+          tone={priority}
+          label={priority === "high" ? "HIGH" : priority === "medium" ? "MEDIUM" : "LOW"}
+        />
+      </div>
+      <div style={{ whiteSpace: "pre-line", lineHeight: 1.6, color: "rgba(234,240,255,.88)" }}>{text}</div>
+    </div>
+  );
+}
+
 function KPI({ title, value, hint }) {
   return (
     <div
@@ -132,7 +268,6 @@ async function fetchJsonSafe(url) {
 
 function extractItem(payload) {
   if (!payload) return null;
-  // варианты: {ok:true,item:{..}}, {ok:true,...fields}, или просто {..}
   if (payload.item) return payload.item;
   if (payload.ok && (payload.month || payload.risk_level || payload.summary_text)) return payload;
   if (payload.month || payload.risk_level || payload.summary_text) return payload;
@@ -157,20 +292,18 @@ export default function ReportDetailsPage() {
 
       const key = encodeURIComponent(String(id));
 
-      // 1) Сначала пробуем /api/report_get (у тебя он точно есть)
+      // 1) /api/report_get
       let r = await fetchJsonSafe(`/api/report_get?id=${key}`);
       let rep = r.ok ? extractItem(r.data) : null;
 
-      // 2) Если не вышло — пробуем /api/report_by_id (как было у тебя раньше)
+      // 2) fallback /api/report_by_id
       if (!rep) {
         const r2 = await fetchJsonSafe(`/api/report_by_id?id=${key}`);
         rep = r2.ok ? extractItem(r2.data) : null;
         if (!rep) {
           const raw = (r.raw || "").slice(0, 500);
           const raw2 = (r2.raw || "").slice(0, 500);
-          setError(
-            `Не удалось загрузить отчёт.\n\nreport_get:\n${raw}\n\nreport_by_id:\n${raw2}`
-          );
+          setError(`Не удалось загрузить отчёт.\n\nreport_get:\n${raw}\n\nreport_by_id:\n${raw2}`);
           setLoading(false);
           return;
         }
@@ -197,12 +330,30 @@ export default function ReportDetailsPage() {
 
   const issuesArr = useMemo(() => normalizeIssues(item?.issues), [item?.issues]);
 
+  // Рекомендации: сначала из явных полей, иначе парсим из summary_text
+  const recsRaw = useMemo(() => {
+    const fromMetrics = metrics?.recommendations || totals?.recommendations || null;
+    const fromRoot = item?.recommendations || null;
+    const arr = normalizeRecs(fromRoot || fromMetrics);
+    if (arr.length) return arr.map((x) => (typeof x === "string" ? x : (x.text || x.title || JSON.stringify(x))));
+    return extractRecsFromSummary(item?.summary_text || "");
+  }, [item, metrics, totals]);
+
+  const recsGrouped = useMemo(() => {
+    const g = { high: [], medium: [], low: [] };
+    for (const t of recsRaw) {
+      const p = classifyPriority(t);
+      g[p].push(t);
+    }
+    return g;
+  }, [recsRaw]);
+
   return (
     <div className="crm-wrap">
       <div className="crm-top">
         <div className="crm-title">
           <h1>AI Executive Report</h1>
-          <div className="sub">структурированный отчёт • KPI • сигналы</div>
+          <div className="sub">структурированный отчёт • KPI • сигналы • рекомендации</div>
         </div>
 
         <div className="crm-controls" style={{ width: "100%", justifyContent: "space-between" }}>
@@ -280,6 +431,67 @@ export default function ReportDetailsPage() {
             <div style={{ whiteSpace: "pre-line", lineHeight: 1.7, color: "rgba(234,240,255,.88)" }}>
               {item.summary_text || "—"}
             </div>
+          </div>
+
+          {/* Recommendations */}
+          <div style={{ marginTop: 12 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 12 }}>
+              <div style={{ fontWeight: 900, fontSize: 18 }}>Рекомендации (что делать)</div>
+              <div className="small-muted">Всего: <b>{recsRaw.length}</b></div>
+            </div>
+
+            {recsRaw.length ? (
+              <>
+                {/* HIGH */}
+                {recsGrouped.high.length ? (
+                  <div style={{ marginTop: 12 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
+                      <Pill tone="high" label="HIGH PRIORITY" />
+                      <div className="small-muted">Срочно / критично</div>
+                    </div>
+                    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))", gap: 12 }}>
+                      {recsGrouped.high.map((t, idx) => (
+                        <RecCard key={`h-${idx}`} text={t} priority="high" />
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
+
+                {/* MEDIUM */}
+                {recsGrouped.medium.length ? (
+                  <div style={{ marginTop: 12 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
+                      <Pill tone="medium" label="MEDIUM PRIORITY" />
+                      <div className="small-muted">Важно, но не пожар</div>
+                    </div>
+                    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))", gap: 12 }}>
+                      {recsGrouped.medium.map((t, idx) => (
+                        <RecCard key={`m-${idx}`} text={t} priority="medium" />
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
+
+                {/* LOW */}
+                {recsGrouped.low.length ? (
+                  <div style={{ marginTop: 12 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
+                      <Pill tone="low" label="LOW / OPTIMIZE" />
+                      <div className="small-muted">Оптимизация / улучшения</div>
+                    </div>
+                    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))", gap: 12 }}>
+                      {recsGrouped.low.map((t, idx) => (
+                        <RecCard key={`l-${idx}`} text={t} priority="low" />
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
+              </>
+            ) : (
+              <div className="report-card" style={{ marginTop: 12, opacity: 0.85 }}>
+                Рекомендации не найдены в структуре данных. Если они есть в тексте — проверь, что в summary есть заголовок “Рекомендации”.
+              </div>
+            )}
           </div>
 
           {/* Issues */}
