@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
+import OwnerSummaryCard from "../components/OwnerSummaryCard";
 
 function n(x) {
   const v = Number(x);
@@ -351,6 +352,9 @@ export default function DashboardPage() {
           </div>
         </div>
       </div>
+
+      {/* ✅ Owner Summary (NEW) */}
+      {month ? <OwnerSummaryCard month={month} /> : null}
 
       <div key={animKey} className={`fade-wrap ${loading ? "is-loading" : ""}`}>
         {/* KPI */}
