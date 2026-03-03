@@ -26,8 +26,7 @@ export default function AiAssistantWidget({ month }) {
         body: JSON.stringify({
           month,
           question,
-          // отдаём модели короткую историю (без tool сообщений)
-          messages: next.slice(-8),
+          messages: next.slice(-8), // короткая история
         }),
       });
 
@@ -50,44 +49,29 @@ export default function AiAssistantWidget({ month }) {
   }
 
   return (
-    <div
-      className="card"
-      style={{
-        background: "rgba(255,255,255,.03)",
-        border: "1px solid rgba(255,255,255,.08)",
-        borderRadius: 14,
-        padding: 14,
-        marginBottom: 12,
-      }}
-    >
-      <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 12 }}>
+    <div className="ai-widget">
+      <div className="ai-title">
         <div style={{ fontWeight: 900, fontSize: 16 }}>AI помощник</div>
-        <div className="mono" style={{ opacity: 0.65, fontSize: 12 }}>{month || ""}</div>
+        <span className="ai-badge">
+          <span className="ai-dot" />
+          LIVE • <span className="mono">{month || ""}</span>
+        </span>
       </div>
 
-      <div style={{ marginTop: 10, opacity: 0.75, fontSize: 12 }}>
+      <div style={{ marginTop: 8, opacity: 0.8, fontSize: 12 }}>
         Примеры: “Сравни {month} с прошлым месяцем”, “Итоги за квартал”, “Почему маржа низкая?”, “Какие проекты убыточные?”
       </div>
 
       <div style={{ marginTop: 12, display: "grid", gap: 10 }}>
-        <div
-          style={{
-            maxHeight: 260,
-            overflow: "auto",
-            borderRadius: 12,
-            border: "1px solid rgba(255,255,255,.06)",
-            padding: 10,
-            background: "rgba(0,0,0,.12)",
-          }}
-        >
+        <div className="ai-chat" style={{ maxHeight: 260, overflow: "auto" }}>
           {items.length === 0 ? (
-            <div style={{ opacity: 0.7 }}>Задай вопрос — я отвечу по данным из базы.</div>
+            <div style={{ opacity: 0.75 }}>
+              Задай вопрос — я отвечу по данным из базы.
+            </div>
           ) : (
             items.map((m, i) => (
-              <div key={i} style={{ marginBottom: 10 }}>
-                <div style={{ opacity: 0.6, fontSize: 12, marginBottom: 4 }}>
-                  {m.role === "user" ? "Ты" : "AI"}
-                </div>
+              <div key={i} className={`ai-msg ${m.role === "user" ? "user" : "assistant"}`}>
+                <div className="ai-meta">{m.role === "user" ? "Ты" : "AI"}</div>
                 <div style={{ whiteSpace: "pre-wrap", lineHeight: 1.35 }}>
                   {m.content}
                 </div>
@@ -104,8 +88,8 @@ export default function AiAssistantWidget({ month }) {
           placeholder="Напиши вопрос по финансам, проектам, рискам, кварталу…"
         />
 
-        <div style={{ display: "flex", gap: 10, alignItems: "center", justifyContent: "space-between" }}>
-          <button className="btn primary" disabled={!canSend} onClick={send}>
+        <div className="ai-actions">
+          <button className="btn ai-primary" disabled={!canSend} onClick={send}>
             {loading ? "Думаю…" : "Спросить"}
           </button>
 
@@ -113,7 +97,11 @@ export default function AiAssistantWidget({ month }) {
             <div style={{ color: "rgba(239,68,68,.95)", fontWeight: 800, fontSize: 12, maxWidth: 520, textAlign: "right" }}>
               {err}
             </div>
-          ) : null}
+          ) : (
+            <div style={{ opacity: 0.6, fontSize: 12 }}>
+              Советы: укажи период (“квартал 2025-Q4”) или проект (“Верный”).
+            </div>
+          )}
         </div>
       </div>
     </div>
