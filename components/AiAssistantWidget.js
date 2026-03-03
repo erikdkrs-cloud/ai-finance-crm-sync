@@ -80,26 +80,29 @@ export default function AiAssistantWidget({ month }) {
           )}
         </div>
 
-        <textarea
-          className="input"
-          rows={3}
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          placeholder="Напиши вопрос по финансам, проектам, рискам, кварталу…"
-        />
+       <div className="ai-compose">
+  <textarea
+    className="input"
+    rows={3}
+    value={input}
+    onChange={(e) => setInput(e.target.value)}
+    placeholder="Напиши вопрос по финансам, проектам, рискам, кварталу…"
+  />
 
-        <div className="ai-actions">
-          <button className="btn ai-primary" disabled={!canSend} onClick={send}>
-            {loading ? "Думаю…" : "Спросить"}
-          </button>
+  <button className="btn ai-primary" disabled={!canSend} onClick={send}>
+    {loading ? "Думаю…" : "Спросить"}
+  </button>
+</div>
 
-          {err ? (
-            <div style={{ color: "rgba(239,68,68,.95)", fontWeight: 800, fontSize: 12, maxWidth: 520, textAlign: "right" }}>
-              {err}
-            </div>
-          ) : (
-            <div style={{ opacity: 0.6, fontSize: 12 }}>
-              Советы: укажи период (“квартал 2025-Q4”) или проект (“Верный”).
+{err ? (
+  <div style={{ marginTop: 8, color: "rgba(239,68,68,.95)", fontWeight: 800, fontSize: 12 }}>
+    {err}
+  </div>
+) : (
+  <div style={{ marginTop: 8, opacity: 0.6, fontSize: 12 }}>
+    Советы: укажи период (“квартал 2025-Q4”) или проект (“Верный”).
+  </div>
+)}
             </div>
           )}
         </div>
