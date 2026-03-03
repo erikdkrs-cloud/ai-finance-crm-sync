@@ -2,42 +2,37 @@
 
 /* ===== DKRS Premium Dark Theme ===== */
 :root {
-  /* Base */
   --bg: #07090c;
   --bg2: #0b0f15;
+
   --panel: rgba(14, 18, 26, 0.72);
   --panel2: rgba(10, 14, 20, 0.75);
+
   --stroke: rgba(255, 255, 255, 0.08);
   --stroke2: rgba(255, 255, 255, 0.12);
 
-  /* Text */
   --text: rgba(255, 255, 255, 0.92);
   --muted: rgba(255, 255, 255, 0.62);
   --muted2: rgba(255, 255, 255, 0.45);
 
-  /* Accent (DKRS lime) */
   --lime: #b9ff2e;
   --lime2: #96ff1a;
-  --lime-dim: rgba(185, 255, 46, 0.18);
 
-  /* Status */
   --red: #ff3b3b;
   --yellow: #ffd447;
   --green: #2cff84;
 
-  /* Effects */
   --shadow: 0 24px 60px rgba(0, 0, 0, 0.55);
   --shadow2: 0 10px 30px rgba(0, 0, 0, 0.45);
-  --blur: blur(18px);
+
   --r-lg: 18px;
   --r-md: 14px;
   --r-sm: 12px;
 
-  /* Layout */
   --container: 1180px;
 }
 
-/* Background “premium” */
+/* Background “premium” (applied globally via dkrs-bg on _app) */
 .dkrs-bg {
   min-height: 100vh;
   background:
@@ -47,290 +42,98 @@
   color: var(--text);
 }
 
-/* Container */
-.dkrs-container {
-  max-width: var(--container);
-  margin: 0 auto;
-  padding: 22px 18px 40px;
+/* ===== Compatibility layer: make current pages look premium even without new classes ===== */
+
+/* Headings */
+.dkrs-root h1, .dkrs-root h2, .dkrs-root h3 {
+  letter-spacing: -0.02em;
+  margin: 0 0 10px;
 }
 
-/* Top bar */
-.dkrs-topbar {
-  position: sticky;
-  top: 0;
-  z-index: 30;
-  backdrop-filter: blur(18px);
-  -webkit-backdrop-filter: blur(18px);
-  background: linear-gradient(90deg, rgba(185,255,46,0.10), rgba(0,0,0,0.0) 45%),
-              rgba(10, 12, 16, 0.55);
-  border-bottom: 1px solid var(--stroke);
+.dkrs-root h1 {
+  font-size: 36px;
+  line-height: 1.06;
 }
 
-.dkrs-topbar-inner {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  max-width: var(--container);
-  margin: 0 auto;
-  padding: 14px 18px;
-}
-
-.dkrs-brand {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-.dkrs-logo {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  height: 34px;
-  padding: 0 12px;
-  border-radius: 10px;
-  background: linear-gradient(90deg, rgba(185,255,46,0.20), rgba(185,255,46,0.06));
-  border: 1px solid rgba(185,255,46,0.22);
-  box-shadow: 0 14px 30px rgba(185,255,46,0.08);
-  font-weight: 700;
-  letter-spacing: 0.02em;
-}
-.dkrs-nav {
-  display: flex;
-  gap: 16px;
-  align-items: center;
+.dkrs-root p {
   color: var(--muted);
-  font-size: 13px;
-}
-.dkrs-nav a {
-  text-decoration: none;
-  color: inherit;
-  padding: 8px 10px;
-  border-radius: 10px;
-  transition: 160ms ease;
-}
-.dkrs-nav a:hover {
-  color: var(--text);
-  background: rgba(255,255,255,0.04);
 }
 
-/* Buttons */
-.dkrs-btn {
+/* Links in nav-like areas */
+.dkrs-root a:hover {
+  color: rgba(255,255,255,0.96);
+}
+
+/* Tables (your dashboard table becomes readable & premium instantly) */
+.dkrs-root table {
+  width: 100%;
+  border-collapse: collapse;
   border: 1px solid var(--stroke);
-  background: rgba(255,255,255,0.03);
-  color: var(--text);
-  border-radius: 12px;
-  padding: 10px 14px;
-  font-weight: 600;
-  font-size: 13px;
-  cursor: pointer;
-  transition: 160ms ease;
-  box-shadow: var(--shadow2);
-}
-.dkrs-btn:hover {
-  transform: translateY(-1px);
-  border-color: var(--stroke2);
-}
-.dkrs-btn:active {
-  transform: translateY(0px);
-}
-.dkrs-btn-primary {
-  border-color: rgba(185,255,46,0.35);
-  background: linear-gradient(180deg, rgba(185,255,46,0.95), rgba(150,255,26,0.75));
-  color: rgba(0,0,0,0.86);
-  box-shadow: 0 20px 50px rgba(185,255,46,0.18);
-}
-.dkrs-btn-primary:hover {
-  filter: brightness(1.03);
-}
-.dkrs-btn-ghost {
+  border-radius: var(--r-lg);
+  overflow: hidden;
   background: rgba(255,255,255,0.02);
 }
 
-/* Pills / filters */
-.dkrs-pill {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 10px;
-  border-radius: 999px;
-  border: 1px solid var(--stroke);
-  background: rgba(255,255,255,0.03);
-  color: var(--muted);
+.dkrs-root thead th {
   font-size: 12px;
-  cursor: pointer;
-  transition: 160ms ease;
-}
-.dkrs-pill:hover {
-  color: var(--text);
-  border-color: var(--stroke2);
-}
-.dkrs-pill-active {
-  color: rgba(0,0,0,0.85);
-  border-color: rgba(185,255,46,0.35);
-  background: linear-gradient(180deg, rgba(185,255,46,0.95), rgba(150,255,26,0.70));
+  color: var(--muted);
+  font-weight: 600;
+  text-align: left;
+  padding: 10px 12px;
+  border-bottom: 1px solid rgba(255,255,255,0.08);
+  background: rgba(255,255,255,0.03);
 }
 
-/* Cards */
+.dkrs-root tbody td {
+  font-size: 12px;
+  padding: 10px 12px;
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+}
+
+.dkrs-root tbody tr:hover {
+  background: rgba(185,255,46,0.05);
+}
+
+/* Make pages breathe (your screenshot shows everything stuck to the top-left) */
+.dkrs-root .page,
+.dkrs-root main {
+  max-width: var(--container);
+  margin: 0 auto;
+  padding: 18px 18px 40px;
+}
+
+/* Inputs/Selects slightly more premium */
+.dkrs-root input, .dkrs-root select, .dkrs-root textarea {
+  border-color: var(--stroke);
+  background: rgba(255,255,255,0.03);
+}
+
+/* Buttons: lime accent on “primary-like” buttons (works with many existing buttons) */
+.dkrs-root button {
+  border-color: var(--stroke);
+  background: rgba(255,255,255,0.03);
+  box-shadow: var(--shadow2);
+}
+
+.dkrs-root button:hover {
+  border-color: var(--stroke2);
+}
+
+/* If you have some “generate report” buttons etc. we can later tag them as dkrs-btn-primary.
+   For now, add an optional class you can apply gradually. */
+.dkrs-btn-primary {
+  border-color: rgba(185,255,46,0.35) !important;
+  background: linear-gradient(180deg, rgba(185,255,46,0.95), rgba(150,255,26,0.75)) !important;
+  color: rgba(0,0,0,0.86) !important;
+  box-shadow: 0 20px 50px rgba(185,255,46,0.18) !important;
+}
+
+/* Cards utility (you can start wrapping existing blocks with this class gradually) */
 .dkrs-card {
   border: 1px solid var(--stroke);
   background: linear-gradient(180deg, var(--panel), var(--panel2));
   border-radius: var(--r-lg);
   box-shadow: var(--shadow);
-  backdrop-filter: var(--blur);
-  -webkit-backdrop-filter: var(--blur);
-}
-.dkrs-card-header {
-  padding: 14px 16px;
-  border-bottom: 1px solid var(--stroke);
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-}
-.dkrs-card-title {
-  font-size: 13px;
-  color: var(--muted);
-  letter-spacing: 0.02em;
-}
-.dkrs-card-body {
-  padding: 14px 16px;
-}
-
-/* Headings */
-.dkrs-h1 {
-  font-size: 40px;
-  line-height: 1.05;
-  letter-spacing: -0.02em;
-  margin: 12px 0 10px;
-}
-.dkrs-sub {
-  color: var(--muted);
-  font-size: 14px;
-  margin: 0 0 18px;
-}
-
-/* Grid */
-.dkrs-grid {
-  display: grid;
-  gap: 14px;
-}
-.dkrs-grid-2 {
-  grid-template-columns: 1fr 1fr;
-}
-.dkrs-grid-3 {
-  grid-template-columns: 1fr 1fr 1fr;
-}
-@media (max-width: 980px) {
-  .dkrs-grid-2, .dkrs-grid-3 { grid-template-columns: 1fr; }
-  .dkrs-h1 { font-size: 32px; }
-}
-
-/* Stat tiles */
-.dkrs-stat {
-  padding: 14px 16px;
-  border-radius: var(--r-lg);
-  border: 1px solid var(--stroke);
-  background: rgba(255,255,255,0.03);
-}
-.dkrs-stat-kpi {
-  font-size: 20px;
-  font-weight: 700;
-  letter-spacing: -0.01em;
-}
-.dkrs-stat-label {
-  font-size: 12px;
-  color: var(--muted);
-  margin-top: 4px;
-}
-.dkrs-delta-pos { color: rgba(44,255,132,0.9); }
-.dkrs-delta-neg { color: rgba(255,59,59,0.9); }
-
-/* Table */
-.dkrs-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 12px;
-  color: var(--text);
-}
-.dkrs-table th, .dkrs-table td {
-  padding: 10px 12px;
-  border-bottom: 1px solid rgba(255,255,255,0.06);
-  text-align: left;
-}
-.dkrs-table th {
-  color: var(--muted);
-  font-weight: 600;
-}
-.dkrs-row:hover {
-  background: rgba(185,255,46,0.05);
-}
-
-/* Badge */
-.dkrs-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  padding: 6px 10px;
-  border-radius: 999px;
-  border: 1px solid var(--stroke);
-  background: rgba(255,255,255,0.03);
-  font-size: 12px;
-  color: var(--muted);
-}
-.dkrs-dot {
-  width: 8px; height: 8px; border-radius: 999px;
-  background: rgba(255,255,255,0.25);
-}
-.dkrs-dot-green { background: var(--green); }
-.dkrs-dot-yellow { background: var(--yellow); }
-.dkrs-dot-red { background: var(--red); }
-
-/* Input */
-.dkrs-input, .dkrs-select {
-  width: 100%;
-  padding: 10px 12px;
-  border-radius: 12px;
-  border: 1px solid var(--stroke);
-  background: rgba(255,255,255,0.03);
-  color: var(--text);
-  outline: none;
-  transition: 160ms ease;
-}
-.dkrs-input:focus, .dkrs-select:focus {
-  border-color: rgba(185,255,46,0.35);
-  box-shadow: 0 0 0 3px rgba(185,255,46,0.14);
-}
-
-/* AI widget “glow” */
-.dkrs-ai {
-  position: relative;
-  overflow: hidden;
-}
-.dkrs-ai::before {
-  content: "";
-  position: absolute;
-  inset: -2px;
-  background: radial-gradient(600px 240px at 70% 10%, rgba(185,255,46,0.20), transparent 60%);
-  pointer-events: none;
-}
-.dkrs-ai-inner {
-  position: relative;
-  padding: 14px 16px;
-}
-.dkrs-ai-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 10px;
-}
-.dkrs-live {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 12px;
-  color: var(--muted);
-}
-.dkrs-live i {
-  width: 8px; height: 8px; border-radius: 999px;
-  background: var(--lime);
-  box-shadow: 0 0 0 6px rgba(185,255,46,0.12);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
 }
