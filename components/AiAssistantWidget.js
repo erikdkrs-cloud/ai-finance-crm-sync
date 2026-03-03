@@ -6,10 +6,18 @@ export default function AiAssistantWidget({ month }) {
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState("");
 
-  // voice
+  // voice record
   const [recording, setRecording] = useState(false);
   const mediaRecRef = useRef(null);
   const chunksRef = useRef([]);
+  const streamRef = useRef(null);
+
+  // conversation mode
+  const [convOn, setConvOn] = useState(false);
+  const convOnRef = useRef(false);
+
+  // audio playback
+  const audioRef = useRef(null);
 
   const canSend = useMemo(() => !!month && input.trim().length > 0 && !loading, [month, input, loading]);
 
@@ -17,12 +25,32 @@ export default function AiAssistantWidget({ month }) {
     setItems((prev) => [...prev, { role, content }]);
   }
 
-  function playMp3Base64(b64) {
-    if (!b64) return;
+  function stopPlayback() {
+    try {
+      if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current.currentTime = 0;
+      }
+    } catch {}
+  }
+
+  function playMp3Base64(b64, { onEnded } = {}) {
+    if (!b64) {
+      onEnded && onEnded();
+      return;
+    }
     try {
       const audio = new Audio(`data:audio/mpeg;base64,${b64}`);
-      audio.play().catch(() => {});
-    } catch {}
+      audioRef.current = audio;
+      audio.onended = () => {
+        onEnded && onEnded();
+      };
+      audio.play().catch(() => {
+        onEnded && onEnded();
+      });
+    } catch {
+      onEnded && onEnded();
+    }
   }
 
   async function sendText() {
@@ -76,6 +104,7 @@ export default function AiAssistantWidget({ month }) {
 
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      streamRef.current = stream;
 
       const opts = {};
       if (window.MediaRecorder && MediaRecorder.isTypeSupported("audio/webm;codecs=opus")) {
@@ -93,10 +122,19 @@ export default function AiAssistantWidget({ month }) {
       };
 
       mr.onstop = async () => {
-        try { stream.getTracks().forEach((t) => t.stop()); } catch {}
+        // stop mic tracks
+        try {
+          const s = streamRef.current;
+          if (s) s.getTracks().forEach((t) => t.stop());
+        } catch {}
+        streamRef.current = null;
 
         const blob = new Blob(chunksRef.current, { type: mr.mimeType || "audio/webm" });
         chunksRef.current = [];
+
+        // IMPORTANT: if conversation OFF meanwhile -> do nothing
+        if (!convOnRef.current) return;
+
         await sendVoiceBlob(blob, mr.mimeType || blob.type || "audio/webm");
       };
 
@@ -113,6 +151,23 @@ export default function AiAssistantWidget({ month }) {
     try { mediaRecRef.current && mediaRecRef.current.stop(); } catch {}
   }
 
+  function stopAll() {
+    // stop conversation, record, and playback
+    convOnRef.current = false;
+    setConvOn(false);
+
+    setRecording(false);
+    try { mediaRecRef.current && mediaRecRef.current.stop(); } catch {}
+
+    try {
+      const s = streamRef.current;
+      if (s) s.getTracks().forEach((t) => t.stop());
+    } catch {}
+    streamRef.current = null;
+
+    stopPlayback();
+  }
+
   async function sendVoiceBlob(blob, mimeType) {
     if (!month) {
       setErr("Сначала выбери месяц.");
@@ -125,7 +180,6 @@ export default function AiAssistantWidget({ month }) {
     try {
       const arrayBuf = await blob.arrayBuffer();
       const bytes = new Uint8Array(arrayBuf);
-
       let binary = "";
       for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
       const audioBase64 = btoa(binary);
@@ -158,12 +212,41 @@ export default function AiAssistantWidget({ month }) {
       if (transcript) pushMessage("user", transcript);
       if (answer) pushMessage("assistant", answer);
 
-      if (json.audioMp3Base64) playMp3Base64(json.audioMp3Base64);
+      // play TTS, then auto-start recording again if conversation still ON
+      playMp3Base64(json.audioMp3Base64, {
+        onEnded: async () => {
+          if (!convOnRef.current) return;
+          // small pause so it feels natural
+          setTimeout(() => {
+            if (convOnRef.current) startRecording();
+          }, 300);
+        },
+      });
     } catch (e) {
       setErr(String(e?.message || e));
     } finally {
       setLoading(false);
+      setRecording(false);
     }
+  }
+
+  async function toggleConversation() {
+    if (!convOn) {
+      // turn ON
+      if (!month) {
+        setErr("Сначала выбери месяц.");
+        return;
+      }
+      setErr("");
+      convOnRef.current = true;
+      setConvOn(true);
+      stopPlayback(); // just in case
+      await startRecording();
+      return;
+    }
+
+    // turn OFF
+    stopAll();
   }
 
   return (
@@ -194,13 +277,13 @@ export default function AiAssistantWidget({ month }) {
       </div>
 
       <div style={{ marginTop: 8, opacity: 0.8, fontSize: 12 }}>
-        Примеры: “Сравни {month} с прошлым месяцем”, “Итоги за квартал”, “Почему маржа низкая?”, “Какие проекты убыточные?”
+        Conversation Mode: включи и говори — после ответа AI снова начнёт слушать автоматически.
       </div>
 
       <div style={{ marginTop: 12, display: "grid", gap: 10 }}>
         <div className="ai-chat" style={{ maxHeight: 260, overflow: "auto" }}>
           {items.length === 0 ? (
-            <div style={{ opacity: 0.75 }}>Напиши или скажи вопрос — я отвечу по данным из базы.</div>
+            <div style={{ opacity: 0.75 }}>Нажми “Conversation ON” и говори.</div>
           ) : (
             items.map((m, i) => (
               <div key={i} className={`ai-msg ${m.role === "user" ? "user" : "assistant"}`}>
@@ -211,38 +294,48 @@ export default function AiAssistantWidget({ month }) {
           )}
         </div>
 
+        {/* Controls */}
         <div className="ai-compose">
           <textarea
             className="input"
             rows={3}
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            placeholder="Напиши вопрос… (или нажми 🎤 и скажи)"
+            placeholder="Можно и текстом: напиши вопрос…"
+            disabled={convOn || loading}
           />
 
           <button
-            className={`btn ${recording ? "primary" : "ai-ghost"}`}
-            onClick={recording ? stopRecording : startRecording}
-            disabled={loading}
-            title="Голосовой вопрос через OpenAI STT"
+            className={`btn ${convOn ? "primary" : "ai-ghost"}`}
+            onClick={toggleConversation}
+            disabled={loading && !convOn}
+            title="Один клик: голосовой диалог циклом"
           >
-            {recording ? "⏹️ Стоп" : "🎤 Голос"}
+            {convOn ? "🛑 Conversation OFF" : "🎧 Conversation ON"}
           </button>
 
-          <button className="btn ai-primary" disabled={!canSend} onClick={sendText}>
+          <button className="btn ai-primary" disabled={!canSend || convOn} onClick={sendText}>
             {loading ? "Думаю…" : "Спросить"}
           </button>
         </div>
+
+        {convOn ? (
+          <div style={{ display: "flex", gap: 10, justifyContent: "space-between", alignItems: "center" }}>
+            <div style={{ opacity: 0.7, fontSize: 12 }}>
+              Подсказка: когда ты закончил говорить — нажми “Stop” (или выключи режим).
+            </div>
+
+            <button className="btn ai-ghost" onClick={recording ? stopRecording : startRecording} disabled={loading}>
+              {recording ? "⏹️ Stop (завершить фразу)" : "🎤 Start (говорить)"}
+            </button>
+          </div>
+        ) : null}
 
         {err ? (
           <div style={{ color: "rgba(239,68,68,.95)", fontWeight: 800, fontSize: 12 }}>
             {err}
           </div>
-        ) : (
-          <div style={{ opacity: 0.6, fontSize: 12 }}>
-            Голос работает через OpenAI: распознавание + озвучка ответа.
-          </div>
-        )}
+        ) : null}
       </div>
     </div>
   );
