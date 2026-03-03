@@ -595,3 +595,72 @@
   font-size: 12px;
   line-height: 1.35;
 }
+/* ===== Reports ===== */
+.dkrs-reports-toolbar {
+  display: grid;
+  grid-template-columns: 1fr 1.4fr auto;
+  gap: 14px;
+  align-items: end;
+}
+
+@media (max-width: 980px) {
+  .dkrs-reports-toolbar {
+    grid-template-columns: 1fr;
+    align-items: stretch;
+  }
+}
+
+.dkrs-reports-ellipsis {
+  display: inline-block;
+  max-width: 680px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: bottom;
+}
+
+@media (max-width: 980px) {
+  .dkrs-reports-ellipsis { max-width: 360px; }
+}
+
+.dkrs-report-meta {
+  display: grid;
+  gap: 10px;
+}
+
+.dkrs-report-meta-row {
+  display: grid;
+  grid-template-columns: 120px 1fr;
+  gap: 12px;
+  align-items: center;
+}
+
+.dkrs-report-k {
+  color: rgba(255,255,255,0.62);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.dkrs-report-v {
+  color: rgba(255,255,255,0.92);
+}
+
+.dkrs-report-text {
+  white-space: pre-wrap;
+  line-height: 1.45;
+  font-size: 13px;
+  color: rgba(255,255,255,0.86);
+}
+
+.dkrs-json {
+  margin: 0;
+  padding: 12px;
+  border-radius: 14px;
+  border: 1px solid rgba(255,255,255,0.08);
+  background: rgba(255,255,255,0.02);
+  overflow: auto;
+  max-height: 520px;
+  font-size: 12px;
+  line-height: 1.4;
+  color: rgba(255,255,255,0.86);
+}
