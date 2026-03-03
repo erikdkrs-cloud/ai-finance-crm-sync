@@ -11,7 +11,7 @@ const inter = Inter({
 
 export default function App({ Component, pageProps }) {
   return (
-    <div className={inter.className}>
+    <div className={`${inter.className} dkrs-root dkrs-bg`}>
       <Component {...pageProps} />
     </div>
   );
