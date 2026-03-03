@@ -1,17 +1,17 @@
 // pages/_app.js
-import "@/styles/globals.css";
-import "@/styles/dkrs-theme.css";
-import { Sora } from "next/font/google";
+import "../styles/globals.css";
+import "../styles/dkrs-theme.css";
+import { Inter } from "next/font/google";
 
-const sora = Sora({
+const inter = Inter({
   subsets: ["latin", "cyrillic"],
-  weight: ["300", "400", "500", "600", "700"],
+  weight: ["400", "500", "600", "700"],
   display: "swap",
 });
 
 export default function App({ Component, pageProps }) {
   return (
-    <div className={sora.className}>
+    <div className={inter.className}>
       <Component {...pageProps} />
     </div>
   );
