@@ -1,25 +1,8 @@
+// pages/reports/[id].js
 import React, { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/router";
-
-function toNumber(v) {
-  if (v === null || v === undefined) return 0;
-  if (typeof v === "number") return Number.isFinite(v) ? v : 0;
-  const s = String(v).replace(/\s/g, "").replace(",", ".");
-  const n = Number(s);
-  return Number.isFinite(n) ? n : 0;
-}
-
-function fmtMoney(n) {
-  return toNumber(n).toLocaleString("ru-RU", { maximumFractionDigits: 2 });
-}
-
-function fmtPct(n) {
-  // поддержим и 0..1, и 0..100
-  const x = toNumber(n);
-  if (x <= 1.5) return `${(x * 100).toFixed(1)}%`;
-  return `${x.toFixed(1)}%`;
-}
+import DkrsShell from "../../components/DkrsShell";
 
 function normalizeRisk(r) {
   if (!r) return "green";
@@ -28,519 +11,249 @@ function normalizeRisk(r) {
   if (s.includes("yellow") || s.includes("жел")) return "yellow";
   return "green";
 }
-
 function riskRu(r) {
   if (r === "red") return "красный";
   if (r === "yellow") return "жёлтый";
   return "зелёный";
 }
-
-function riskStyle(r) {
-  if (r === "red") return { color: "rgba(239,68,68,1)", bg: "rgba(239,68,68,.12)", border: "rgba(239,68,68,.35)" };
-  if (r === "yellow") return { color: "rgba(250,173,20,1)", bg: "rgba(250,173,20,.12)", border: "rgba(250,173,20,.35)" };
-  return { color: "rgba(34,197,94,1)", bg: "rgba(34,197,94,.12)", border: "rgba(34,197,94,.35)" };
+function riskDot(r) {
+  if (r === "red") return "dkrs-dot-red";
+  if (r === "yellow") return "dkrs-dot-yellow";
+  return "dkrs-dot-green";
 }
 
-function normalizeIssues(issues) {
-  if (!issues) return [];
-  if (Array.isArray(issues)) return issues;
-  if (typeof issues === "object") {
-    const arr = issues.items || issues.issues || issues.list;
-    if (Array.isArray(arr)) return arr;
-  }
-  if (typeof issues === "string") return [{ level: "low", text: issues }];
-  return [];
-}
-
-function normalizeRecs(recs) {
-  if (!recs) return [];
-  if (Array.isArray(recs)) return recs;
-  if (typeof recs === "object") {
-    const arr = recs.items || recs.recommendations || recs.list;
-    if (Array.isArray(arr)) return arr;
-  }
-  if (typeof recs === "string") return [recs];
-  return [];
-}
-
-// Вытащить рекомендации из summary_text по заголовку "Рекомендации"
-function extractRecsFromSummary(summary) {
-  if (!summary) return [];
-
-  const lines = String(summary).split(/\r?\n/);
-  const lower = lines.map((l) => l.trim().toLowerCase());
-
-  const startIdx = lower.findIndex((l) =>
-    l.includes("рекомендац") // "Рекомендации", "Рекомендации (что делать)" и т.п.
-  );
-  if (startIdx === -1) return [];
-
-  // до следующего заголовка (примерно): пустая строка + слово с двоеточием/заглавными,
-  // либо "проблемы", "сигналы", "топ", "kpi" и т.п.
-  const out = [];
-  for (let i = startIdx + 1; i < lines.length; i++) {
-    const raw = lines[i];
-    const t = raw.trim();
-    const tl = t.toLowerCase();
-
-    if (!t) {
-      // пустые строки допускаем внутри рекомендаций — пропускаем
-      continue;
-    }
-
-    const looksLikeNewSection =
-      tl.startsWith("проблем") ||
-      tl.startsWith("сигнал") ||
-      tl.startsWith("топ ") ||
-      tl.startsWith("kpi") ||
-      tl.startsWith("сравнен") ||
-      tl.startsWith("итог") ||
-      tl.startsWith("вывод") ||
-      (t.length < 40 && t.endsWith(":")); // короткий заголовок
-
-    if (looksLikeNewSection) break;
-
-    // варианты маркеров
-    const cleaned = t
-      .replace(/^[-•]\s+/, "")
-      .replace(/^\d+\)\s+/, "")
-      .replace(/^\d+\.\s+/, "")
-      .trim();
-
-    if (cleaned) out.push(cleaned);
-  }
-
-  // иногда AI пишет не списком, а абзацами — тогда берём хотя бы 1-2 строки
-  return out.slice(0, 30);
-}
-
-function classifyPriority(text) {
-  const t = String(text || "").toLowerCase();
-
-  // явные метки
-  if (t.includes("[high]") || t.includes("high") || t.includes("срочно") || t.includes("критич")) return "high";
-  if (t.includes("[medium]") || t.includes("medium") || t.includes("вниман")) return "medium";
-  if (t.includes("[low]") || t.includes("low") || t.includes("оптимиз")) return "low";
-
-  // эмодзи
-  if (t.includes("🔴")) return "high";
-  if (t.includes("🟡")) return "medium";
-  if (t.includes("🟢")) return "low";
-
-  // по умолчанию
-  return "medium";
-}
-
-function Pill({ label, tone }) {
-  const ui =
-    tone === "high"
-      ? { bg: "rgba(239,68,68,.12)", border: "rgba(239,68,68,.35)", dot: "rgba(239,68,68,1)" }
-      : tone === "medium"
-      ? { bg: "rgba(250,173,20,.12)", border: "rgba(250,173,20,.35)", dot: "rgba(250,173,20,1)" }
-      : { bg: "rgba(34,197,94,.12)", border: "rgba(34,197,94,.35)", dot: "rgba(34,197,94,1)" };
-
-  return (
-    <span
-      style={{
-        display: "inline-flex",
-        alignItems: "center",
-        gap: 8,
-        padding: "4px 10px",
-        borderRadius: 999,
-        background: ui.bg,
-        border: `1px solid ${ui.border}`,
-        color: "rgba(234,240,255,.92)",
-        fontWeight: 900,
-        letterSpacing: 0.4,
-        fontSize: 12,
-        textTransform: "uppercase",
-      }}
-    >
-      <span style={{ width: 8, height: 8, borderRadius: 999, background: ui.dot, display: "inline-block" }} />
-      {label}
-    </span>
-  );
-}
-
-function IssueCard({ issue }) {
-  const level = String(issue?.level || issue?.severity || "low").toLowerCase();
-  const text = issue?.text || issue?.message || issue?.title || JSON.stringify(issue);
-
-  const ui =
-    level === "high"
-      ? { name: "high", border: "rgba(239,68,68,.45)", dot: "rgba(239,68,68,1)", bg: "rgba(239,68,68,.08)" }
-      : level === "medium"
-      ? { name: "medium", border: "rgba(250,173,20,.45)", dot: "rgba(250,173,20,1)", bg: "rgba(250,173,20,.08)" }
-      : { name: "low", border: "rgba(34,197,94,.45)", dot: "rgba(34,197,94,1)", bg: "rgba(34,197,94,.08)" };
-
-  return (
-    <div
-      className="card"
-      style={{
-        background: "rgba(255,255,255,.03)",
-        border: `1px solid ${ui.border}`,
-        borderRadius: 14,
-        padding: 16,
-      }}
-    >
-      <div style={{ display: "flex", justifyContent: "space-between", gap: 12, marginBottom: 10 }}>
-        <div style={{ fontWeight: 900 }}>Сигнал</div>
-        <span
-          style={{
-            fontSize: 12,
-            padding: "4px 10px",
-            borderRadius: 999,
-            background: ui.bg,
-            border: `1px solid ${ui.border}`,
-            color: "rgba(234,240,255,.92)",
-            textTransform: "uppercase",
-            fontWeight: 900,
-            letterSpacing: 0.6,
-            display: "inline-flex",
-            alignItems: "center",
-            gap: 8,
-          }}
-        >
-          <span style={{ width: 8, height: 8, borderRadius: 999, background: ui.dot, display: "inline-block" }} />
-          {ui.name}
-        </span>
-      </div>
-      <div style={{ whiteSpace: "pre-line", lineHeight: 1.6, color: "rgba(234,240,255,.88)" }}>{text}</div>
-    </div>
-  );
-}
-
-function RecCard({ text, priority }) {
-  return (
-    <div
-      className="card"
-      style={{
-        background: "rgba(255,255,255,.03)",
-        border: "1px solid rgba(255,255,255,.08)",
-        borderRadius: 14,
-        padding: 16,
-        display: "flex",
-        flexDirection: "column",
-        gap: 10,
-      }}
-    >
-      <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center" }}>
-        <div style={{ fontWeight: 900 }}>Рекомендация</div>
-        <Pill
-          tone={priority}
-          label={priority === "high" ? "HIGH" : priority === "medium" ? "MEDIUM" : "LOW"}
-        />
-      </div>
-      <div style={{ whiteSpace: "pre-line", lineHeight: 1.6, color: "rgba(234,240,255,.88)" }}>{text}</div>
-    </div>
-  );
-}
-
-function KPI({ title, value, hint }) {
-  return (
-    <div
-      className="card"
-      style={{
-        background: "rgba(255,255,255,.03)",
-        border: "1px solid rgba(255,255,255,.08)",
-        borderRadius: 14,
-        padding: 16,
-      }}
-    >
-      <div style={{ opacity: 0.65, marginBottom: 8, fontSize: 13 }}>{title}</div>
-      <div style={{ fontSize: 26, fontWeight: 900, letterSpacing: 0.2 }} className="mono">
-        {value}
-      </div>
-      {hint ? <div style={{ opacity: 0.55, marginTop: 8, fontSize: 12 }}>{hint}</div> : null}
-    </div>
-  );
-}
-
-async function fetchJsonSafe(url) {
-  const resp = await fetch(url);
-  const text = await resp.text();
+function fmtDateTime(x) {
   try {
-    return { ok: resp.ok, data: JSON.parse(text), raw: text };
-  } catch (e) {
-    return { ok: false, data: null, raw: text };
+    const d = new Date(x);
+    if (Number.isNaN(d.getTime())) return String(x || "");
+    return d.toLocaleString("ru-RU");
+  } catch {
+    return String(x || "");
   }
 }
 
-function extractItem(payload) {
-  if (!payload) return null;
-  if (payload.item) return payload.item;
-  if (payload.ok && (payload.month || payload.risk_level || payload.summary_text)) return payload;
-  if (payload.month || payload.risk_level || payload.summary_text) return payload;
-  return null;
+async function fetchJsonAny(urls) {
+  let lastText = "";
+  for (const url of urls) {
+    try {
+      const r = await fetch(url);
+      const t = await r.text();
+      lastText = t;
+      let j = null;
+      try { j = JSON.parse(t); } catch {}
+      if (r.ok && j) return { ok: true, json: j, url };
+    } catch {}
+  }
+  return { ok: false, error: lastText || "Не удалось загрузить отчёт." };
 }
 
-export default function ReportDetailsPage() {
+function normalizeReport(payload) {
+  // Accept shapes:
+  // {ok:true, report:{...}} or {ok:true, data:{...}} or direct report object
+  const p = payload?.ok ? (payload.report || payload.data || payload.item || payload) : payload;
+  const rep = p?.report || p?.data || p?.item || p;
+  return rep || {};
+}
+
+export default function ReportByIdPage() {
   const router = useRouter();
   const { id } = router.query;
 
+  const [rep, setRep] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
-  const [item, setItem] = useState(null);
+  const [err, setErr] = useState("");
 
   useEffect(() => {
     if (!id) return;
-
     (async () => {
       setLoading(true);
-      setError("");
-      setItem(null);
+      setErr("");
 
-      const key = encodeURIComponent(String(id));
+      const rid = encodeURIComponent(String(id));
+      const res = await fetchJsonAny([
+        `/api/report_by_id?id=${rid}`,
+        `/api/report_get?id=${rid}`,
+        `/api/report?id=${rid}`,
+      ]);
 
-      // 1) /api/report_get
-      let r = await fetchJsonSafe(`/api/report_get?id=${key}`);
-      let rep = r.ok ? extractItem(r.data) : null;
-
-      // 2) fallback /api/report_by_id
-      if (!rep) {
-        const r2 = await fetchJsonSafe(`/api/report_by_id?id=${key}`);
-        rep = r2.ok ? extractItem(r2.data) : null;
-        if (!rep) {
-          const raw = (r.raw || "").slice(0, 500);
-          const raw2 = (r2.raw || "").slice(0, 500);
-          setError(`Не удалось загрузить отчёт.\n\nreport_get:\n${raw}\n\nreport_by_id:\n${raw2}`);
-          setLoading(false);
-          return;
-        }
+      if (!res.ok) {
+        setErr(String(res.error || "Ошибка").slice(0, 900));
+        setRep(null);
+        setLoading(false);
+        return;
       }
 
-      setItem(rep);
+      const report = normalizeReport(res.json);
+      setRep(report);
       setLoading(false);
     })();
   }, [id]);
 
-  const rr = useMemo(() => normalizeRisk(item?.risk_level), [item?.risk_level]);
-  const rs = useMemo(() => riskStyle(rr), [rr]);
+  const view = useMemo(() => {
+    const r = rep || {};
+    const month = String(r.month ?? r.period ?? r.period_month ?? r.periodMonth ?? r.period_id ?? r.periodId ?? "");
+    const risk_level = normalizeRisk(r.risk_level ?? r.riskLevel ?? r.risk ?? r.severity);
+    const created_at = r.created_at ?? r.createdAt ?? r.ts ?? r.time ?? "";
+    const summary_text = String(r.summary_text ?? r.summary ?? r.text ?? "");
+    const issues = r.issues ?? r.findings ?? r.problems ?? null;
+    const metrics = r.metrics ?? r.kpi ?? r.totals ?? null;
+    return { month, risk_level, created_at, summary_text, issues, metrics };
+  }, [rep]);
 
-  const metrics = item?.metrics || {};
-  const totals = metrics?.totals || metrics?.kpi || metrics || {};
-
-  const revenue = totals?.revenue_no_vat ?? totals?.revenue ?? totals?.total_revenue ?? null;
-  const costs = totals?.costs ?? totals?.expenses ?? totals?.total_expenses ?? null;
-  const profit =
-    totals?.profit ??
-    totals?.total_profit ??
-    (revenue !== null && costs !== null ? toNumber(revenue) - toNumber(costs) : null);
-  const margin = totals?.margin ?? null;
-
-  const issuesArr = useMemo(() => normalizeIssues(item?.issues), [item?.issues]);
-
-  // Рекомендации: сначала из явных полей, иначе парсим из summary_text
-  const recsRaw = useMemo(() => {
-    const fromMetrics = metrics?.recommendations || totals?.recommendations || null;
-    const fromRoot = item?.recommendations || null;
-    const arr = normalizeRecs(fromRoot || fromMetrics);
-    if (arr.length) return arr.map((x) => (typeof x === "string" ? x : (x.text || x.title || JSON.stringify(x))));
-    return extractRecsFromSummary(item?.summary_text || "");
-  }, [item, metrics, totals]);
-
-  const recsGrouped = useMemo(() => {
-    const g = { high: [], medium: [], low: [] };
-    for (const t of recsRaw) {
-      const p = classifyPriority(t);
-      g[p].push(t);
-    }
-    return g;
-  }, [recsRaw]);
+  const right = (
+    <>
+      <Link href="/reports" legacyBehavior>
+        <a className="dkrs-link">← Back to reports</a>
+      </Link>
+      <Link href="/dashboard" legacyBehavior>
+        <a className="dkrs-link">Dashboard →</a>
+      </Link>
+    </>
+  );
 
   return (
-    <div className="crm-wrap">
-      <div className="crm-top">
-        <div className="crm-title">
-          <h1>AI Executive Report</h1>
-          <div className="sub">структурированный отчёт • KPI • сигналы • рекомендации</div>
-        </div>
+    <DkrsShell
+      title="Report"
+      subtitle={view.month ? `Период: ${view.month}` : "Детали отчёта"}
+      right={right}
+    >
+      <div className="dkrs-grid dkrs-grid-2" style={{ marginBottom: 14 }}>
+        <div className="dkrs-card">
+          <div className="dkrs-card-header">
+            <div>
+              <div className="dkrs-card-title">Статус</div>
+              <div className="dkrs-small">Ключевые поля отчёта</div>
+            </div>
 
-        <div className="crm-controls" style={{ width: "100%", justifyContent: "space-between" }}>
-          <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center", flex: 1 }}>
-            {item ? (
-              <>
-                <span
-                  style={{
-                    display: "inline-flex",
-                    alignItems: "center",
-                    gap: 10,
-                    padding: "6px 12px",
-                    borderRadius: 999,
-                    background: rs.bg,
-                    border: `1px solid ${rs.border}`,
-                    color: "rgba(234,240,255,.95)",
-                    fontWeight: 900,
-                  }}
-                >
-                  <span style={{ width: 8, height: 8, borderRadius: 999, background: rs.color, display: "inline-block" }} />
-                  Риск: {riskRu(rr)}
-                </span>
-
-                <span className="mono" style={{ opacity: 0.9 }}>
-                  Месяц: <b>{item.month}</b>
-                </span>
-
-                <span style={{ opacity: 0.55 }}>
-                  Сгенерирован: {item.created_at ? new Date(item.created_at).toLocaleString("ru-RU") : "—"}
-                </span>
-              </>
-            ) : null}
+            <span className="dkrs-badge">
+              <span className={`dkrs-dot ${riskDot(view.risk_level)}`} />
+              {riskRu(view.risk_level)}
+            </span>
           </div>
 
-          <div style={{ display: "flex", gap: 14, alignItems: "center", marginTop: 18 }}>
-            <Link href="/reports"><a className="link">← Отчёты</a></Link>
-            {item?.month ? (
-              <Link href={`/dashboard?month=${encodeURIComponent(item.month)}`}>
-                <a className="link">Дашборд →</a>
-              </Link>
-            ) : null}
+          <div className="dkrs-card-body">
+            {loading ? (
+              <>
+                <div className="dkrs-skel dkrs-skel-line" style={{ width: 260 }} />
+                <div className="dkrs-skel dkrs-skel-line" style={{ width: 320, marginTop: 12 }} />
+                <div className="dkrs-skel dkrs-skel-line" style={{ width: 220, marginTop: 12 }} />
+              </>
+            ) : err ? (
+              <div className="dkrs-ai-error">{err}</div>
+            ) : (
+              <div className="dkrs-report-meta">
+                <div className="dkrs-report-meta-row">
+                  <div className="dkrs-report-k">Период</div>
+                  <div className="dkrs-report-v dkrs-mono">{view.month || "—"}</div>
+                </div>
+                <div className="dkrs-report-meta-row">
+                  <div className="dkrs-report-k">Риск</div>
+                  <div className="dkrs-report-v">
+                    <span className="dkrs-badge">
+                      <span className={`dkrs-dot ${riskDot(view.risk_level)}`} />
+                      {riskRu(view.risk_level)}
+                    </span>
+                  </div>
+                </div>
+                <div className="dkrs-report-meta-row">
+                  <div className="dkrs-report-k">Создан</div>
+                  <div className="dkrs-report-v dkrs-mono">{view.created_at ? fmtDateTime(view.created_at) : "—"}</div>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div className="dkrs-card">
+          <div className="dkrs-card-header">
+            <div>
+              <div className="dkrs-card-title">Summary</div>
+              <div className="dkrs-small">Короткое резюме от AI</div>
+            </div>
+
+            <span className="dkrs-badge">
+              <span className={`dkrs-dot ${loading ? "dkrs-dot-yellow" : "dkrs-dot-green"}`} />
+              {loading ? "Loading" : "Ready"}
+            </span>
+          </div>
+
+          <div className="dkrs-card-body">
+            {loading ? (
+              <>
+                <div className="dkrs-skel dkrs-skel-line" style={{ width: "92%" }} />
+                <div className="dkrs-skel dkrs-skel-line" style={{ width: "84%", marginTop: 10 }} />
+                <div className="dkrs-skel dkrs-skel-line" style={{ width: "88%", marginTop: 10 }} />
+              </>
+            ) : err ? (
+              <div className="dkrs-ai-error">{err}</div>
+            ) : (
+              <div className="dkrs-report-text">
+                {view.summary_text ? view.summary_text : "—"}
+              </div>
+            )}
           </div>
         </div>
       </div>
 
-      {loading ? (
-        <div className="report-card">Загрузка…</div>
-      ) : error ? (
-        <div className="report-card" style={{ borderColor: "rgba(239,68,68,.35)" }}>
-          <div style={{ fontWeight: 900, marginBottom: 8 }}>Ошибка</div>
-          <pre style={{ whiteSpace: "pre-wrap", color: "rgba(234,240,255,.85)" }}>{error}</pre>
-        </div>
-      ) : !item ? (
-        <div className="report-card">Отчёт не найден</div>
-      ) : (
-        <>
-          {/* KPI */}
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
-              gap: 12,
-              marginBottom: 12,
-            }}
-          >
-            <KPI title="Выручка" value={revenue !== null ? fmtMoney(revenue) : "—"} hint="без НДС (если так настроено)" />
-            <KPI title="Расходы" value={costs !== null ? fmtMoney(costs) : "—"} hint="все затраты" />
-            <KPI title="Прибыль" value={profit !== null ? fmtMoney(profit) : "—"} hint="выручка − расходы" />
-            <KPI title="Маржа" value={margin !== null ? fmtPct(margin) : "—"} hint="прибыль / выручка" />
+      <div className="dkrs-grid dkrs-grid-2">
+        <div className="dkrs-card">
+          <div className="dkrs-card-header">
+            <div>
+              <div className="dkrs-card-title">Issues</div>
+              <div className="dkrs-small">Проблемы/аномалии (JSON)</div>
+            </div>
+            <span className="dkrs-badge">
+              <span className="dkrs-dot dkrs-dot-yellow" />
+              Details
+            </span>
           </div>
 
-          {/* Summary */}
-          <div className="report-card" style={{ marginTop: 12 }}>
-            <div style={{ fontWeight: 900, marginBottom: 10 }}>Executive Summary</div>
-            <div style={{ whiteSpace: "pre-line", lineHeight: 1.7, color: "rgba(234,240,255,.88)" }}>
-              {item.summary_text || "—"}
-            </div>
-          </div>
-
-          {/* Recommendations */}
-          <div style={{ marginTop: 12 }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 12 }}>
-              <div style={{ fontWeight: 900, fontSize: 18 }}>Рекомендации (что делать)</div>
-              <div className="small-muted">Всего: <b>{recsRaw.length}</b></div>
-            </div>
-
-            {recsRaw.length ? (
+          <div className="dkrs-card-body">
+            {loading ? (
               <>
-                {/* HIGH */}
-                {recsGrouped.high.length ? (
-                  <div style={{ marginTop: 12 }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
-                      <Pill tone="high" label="HIGH PRIORITY" />
-                      <div className="small-muted">Срочно / критично</div>
-                    </div>
-                    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))", gap: 12 }}>
-                      {recsGrouped.high.map((t, idx) => (
-                        <RecCard key={`h-${idx}`} text={t} priority="high" />
-                      ))}
-                    </div>
-                  </div>
-                ) : null}
-
-                {/* MEDIUM */}
-                {recsGrouped.medium.length ? (
-                  <div style={{ marginTop: 12 }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
-                      <Pill tone="medium" label="MEDIUM PRIORITY" />
-                      <div className="small-muted">Важно, но не пожар</div>
-                    </div>
-                    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))", gap: 12 }}>
-                      {recsGrouped.medium.map((t, idx) => (
-                        <RecCard key={`m-${idx}`} text={t} priority="medium" />
-                      ))}
-                    </div>
-                  </div>
-                ) : null}
-
-                {/* LOW */}
-                {recsGrouped.low.length ? (
-                  <div style={{ marginTop: 12 }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
-                      <Pill tone="low" label="LOW / OPTIMIZE" />
-                      <div className="small-muted">Оптимизация / улучшения</div>
-                    </div>
-                    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))", gap: 12 }}>
-                      {recsGrouped.low.map((t, idx) => (
-                        <RecCard key={`l-${idx}`} text={t} priority="low" />
-                      ))}
-                    </div>
-                  </div>
-                ) : null}
+                <div className="dkrs-skel dkrs-skel-line" style={{ width: "90%" }} />
+                <div className="dkrs-skel dkrs-skel-line" style={{ width: "86%", marginTop: 10 }} />
+                <div className="dkrs-skel dkrs-skel-line" style={{ width: "70%", marginTop: 10 }} />
               </>
+            ) : err ? (
+              <div className="dkrs-ai-error">{err}</div>
             ) : (
-              <div className="report-card" style={{ marginTop: 12, opacity: 0.85 }}>
-                Рекомендации не найдены в структуре данных. Если они есть в тексте — проверь, что в summary есть заголовок “Рекомендации”.
-              </div>
+              <pre className="dkrs-json">
+                {view.issues ? JSON.stringify(view.issues, null, 2) : "—"}
+              </pre>
             )}
           </div>
+        </div>
 
-          {/* Issues */}
-          <div style={{ marginTop: 12 }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 12 }}>
-              <div style={{ fontWeight: 900, fontSize: 18 }}>Ключевые проблемы и сигналы</div>
-              <div className="small-muted">Всего: <b>{issuesArr.length}</b></div>
+        <div className="dkrs-card">
+          <div className="dkrs-card-header">
+            <div>
+              <div className="dkrs-card-title">Metrics</div>
+              <div className="dkrs-small">Ключевые метрики (JSON)</div>
             </div>
-
-            {issuesArr.length ? (
-              <div
-                style={{
-                  marginTop: 12,
-                  display: "grid",
-                  gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))",
-                  gap: 12,
-                }}
-              >
-                {issuesArr.map((it, idx) => (
-                  <IssueCard key={idx} issue={it} />
-                ))}
-              </div>
-            ) : (
-              <div className="report-card" style={{ marginTop: 12, opacity: 0.85 }}>
-                Issues пустые — это нормально, если AI не нашёл проблем для этого месяца.
-              </div>
-            )}
+            <span className="dkrs-badge">
+              <span className="dkrs-dot dkrs-dot-green" />
+              KPIs
+            </span>
           </div>
 
-          {/* Debug */}
-          <details style={{ marginTop: 14, opacity: 0.9 }}>
-            <summary style={{ cursor: "pointer", userSelect: "none" }}>Показать raw (для проверки)</summary>
-            <div style={{ marginTop: 10, display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-              <div className="card" style={{ background: "rgba(255,255,255,.03)" }}>
-                <div style={{ fontWeight: 900 }}>Issues</div>
-                <pre style={{ marginTop: 10, whiteSpace: "pre-wrap", color: "rgba(234,240,255,.82)" }}>
-                  {JSON.stringify(item.issues ?? [], null, 2)}
-                </pre>
-              </div>
-              <div className="card" style={{ background: "rgba(255,255,255,.03)" }}>
-                <div style={{ fontWeight: 900 }}>Metrics</div>
-                <pre style={{ marginTop: 10, whiteSpace: "pre-wrap", color: "rgba(234,240,255,.82)" }}>
-                  {JSON.stringify(item.metrics ?? {}, null, 2)}
-                </pre>
-              </div>
-            </div>
-          </details>
-        </>
-      )}
-    </div>
+          <div className="dkrs-card-body">
+            {loading ? (
+              <>
+                <div className="dkrs-skel dkrs-skel-line" style={{ width: "88%" }} />
+                <div className="dkrs-skel dkrs-skel-line" style={{ width: "78%", marginTop: 10 }} />
+                <div className="dkrs-skel dkrs-skel-line" style={{ width: "83%", marginTop: 10 }} />
+              </>
+            ) : err ? (
+              <div className="dkrs-ai-error">{err}</div>
+            ) : (
+              <pre className="dkrs-json">
+                {view.metrics ? JSON.stringify(view.metrics, null, 2) : "—"}
+              </pre>
+            )}
+          </div>
+        </div>
+      </div>
+    </DkrsShell>
   );
 }
