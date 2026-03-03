@@ -21,6 +21,17 @@ function fmtMoney(x) {
 function fmtPct(x) {
   return `${(n(x) * 100).toFixed(1)}%`;
 }
+function fmtDeltaMoney(d) {
+  const v = n(d);
+  const sign = v > 0 ? "+" : v < 0 ? "−" : "±";
+  return `${sign}${fmtMoney(Math.abs(v))}`;
+}
+function fmtDeltaPp(d) {
+  // d — разница маржи (в долях), показываем в п.п.
+  const v = n(d) * 100;
+  const sign = v > 0 ? "+" : v < 0 ? "−" : "±";
+  return `${sign}${Math.abs(v).toFixed(1)} п.п.`;
+}
 
 function normalizeRisk(r) {
   if (!r) return "green";
@@ -75,12 +86,27 @@ function useCountUp(value, { duration = 450, decimals = 0 } = {}) {
   return display;
 }
 
-function KpiCard({ title, value, hint, negative }) {
+function KpiCard({ title, value, hint, negative, deltaText, deltaTone }) {
+  const deltaColor =
+    deltaTone === "pos"
+      ? "rgba(34,197,94,.95)"
+      : deltaTone === "neg"
+      ? "rgba(239,68,68,.95)"
+      : "rgba(234,240,255,.65)";
+
   return (
     <div className="card kpi">
       <div className="label">{title}</div>
       <div className={`value mono countup ${negative ? "neg" : ""}`}>{value}</div>
-      <div className="hint">{hint}</div>
+
+      <div className="hint" style={{ display: "flex", justifyContent: "space-between", gap: 10 }}>
+        <span>{hint}</span>
+        {deltaText ? (
+          <span className="mono" style={{ color: deltaColor, fontWeight: 900, whiteSpace: "nowrap" }}>
+            {deltaText}
+          </span>
+        ) : null}
+      </div>
     </div>
   );
 }
@@ -106,6 +132,26 @@ function TableSkeleton({ rows = 8, cols = 11 }) {
   );
 }
 
+function extractTotals(data) {
+  const totalsRaw =
+    data?.totals ||
+    data?.total ||
+    data?.summary ||
+    data?.kpi ||
+    data?.metrics ||
+    {};
+
+  const revenue = n(pick(totalsRaw, ["revenue_no_vat", "revenue", "revenueNoVat", "total_revenue"], 0));
+  const costs = n(pick(totalsRaw, ["costs", "expenses", "total_costs", "total_expenses"], 0));
+  const profit = n(pick(totalsRaw, ["profit", "net_profit"], revenue - costs));
+  const margin = revenue > 0 ? profit / revenue : n(pick(totalsRaw, ["margin"], 0));
+  const projectsCount =
+    pick(totalsRaw, ["projects_count", "projectsCount"], null) ??
+    (Array.isArray(data?.projects) ? data.projects.length : null);
+
+  return { revenue, costs, profit, margin, projectsCount };
+}
+
 export default function DashboardPage() {
   const [months, setMonths] = useState([]);
   const [month, setMonth] = useState("");
@@ -113,6 +159,11 @@ export default function DashboardPage() {
   const [riskFilter, setRiskFilter] = useState("all"); // all | yellow_red | red | green
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(false);
+
+  // предыдущий месяц
+  const [prevMonth, setPrevMonth] = useState("");
+  const [prevData, setPrevData] = useState(null);
+  const [prevLoading, setPrevLoading] = useState(false);
 
   const [animKey, setAnimKey] = useState(0);
 
@@ -135,6 +186,17 @@ export default function DashboardPage() {
     })();
   }, []);
 
+  // определяем prevMonth из списка months
+  useEffect(() => {
+    if (!month || !months?.length) {
+      setPrevMonth("");
+      return;
+    }
+    const idx = months.findIndex((m) => String(m) === String(month));
+    const pm = idx >= 0 ? (months[idx + 1] || "") : "";
+    setPrevMonth(pm);
+  }, [month, months]);
+
   useEffect(() => {
     if (!month) return;
     (async () => {
@@ -150,30 +212,40 @@ export default function DashboardPage() {
     })();
   }, [month]);
 
+  // грузим предыдущий месяц (для дельт)
+  useEffect(() => {
+    if (!prevMonth) {
+      setPrevData(null);
+      return;
+    }
+    (async () => {
+      setPrevLoading(true);
+      try {
+        const r = await fetch(`/api/dashboard?month=${encodeURIComponent(prevMonth)}`);
+        const j = await r.json();
+        setPrevData(j);
+      } catch {
+        setPrevData(null);
+      } finally {
+        setPrevLoading(false);
+      }
+    })();
+  }, [prevMonth]);
+
   // totals
-  const totalsRaw =
-    data?.totals ||
-    data?.total ||
-    data?.summary ||
-    data?.kpi ||
-    data?.metrics ||
-    {};
+  const totals = useMemo(() => extractTotals(data), [data]);
+  const prevTotals = useMemo(() => (prevData ? extractTotals(prevData) : null), [prevData]);
 
-  const totals = useMemo(() => {
-    const revenue = n(pick(totalsRaw, ["revenue_no_vat", "revenue", "revenueNoVat", "total_revenue"], 0));
-    const costs = n(pick(totalsRaw, ["costs", "expenses", "total_costs", "total_expenses"], 0));
-    const profit = n(pick(totalsRaw, ["profit", "net_profit"], revenue - costs));
-    const margin = revenue > 0 ? profit / revenue : n(pick(totalsRaw, ["margin"], 0));
-    const projectsCount =
-      pick(totalsRaw, ["projects_count", "projectsCount"], null) ??
-      (Array.isArray(data?.projects) ? data.projects.length : null);
-
-    // optional extra totals (если API отдаёт)
-    const transport = n(pick(totalsRaw, ["transport"], 0));
-    const team_payroll = n(pick(totalsRaw, ["team_payroll"], 0));
-
-    return { revenue, costs, profit, margin, projectsCount, transport, team_payroll };
-  }, [totalsRaw, data]);
+  const deltas = useMemo(() => {
+    if (!prevTotals) return null;
+    return {
+      revenue: totals.revenue - prevTotals.revenue,
+      costs: totals.costs - prevTotals.costs,
+      profit: totals.profit - prevTotals.profit,
+      margin: totals.margin - prevTotals.margin,
+      projectsCount: n(totals.projectsCount ?? 0) - n(prevTotals.projectsCount ?? 0),
+    };
+  }, [totals, prevTotals]);
 
   // KPI animations
   const revenueAnim = useCountUp(totals.revenue, { duration: 520, decimals: 0 });
@@ -208,7 +280,6 @@ export default function DashboardPage() {
         ads: n(pick(p, ["ads", "marketing", "ad_costs"], 0)),
         salary_workers: n(pick(p, ["salary_workers", "salary", "fot_workers", "workers_salary", "labor"], 0)),
 
-        // NEW columns (from updated /api/dashboard):
         transport: n(pick(p, ["transport"], 0)),
         team_payroll: n(pick(p, ["team_payroll"], 0)),
       };
@@ -296,6 +367,17 @@ export default function DashboardPage() {
     return <span className="sort-icon">{sortDir === "asc" ? "↑" : "↓"}</span>;
   }
 
+  // дельты для KPI (тон: pos/neg/neutral)
+  const deltaRevenue = deltas ? fmtDeltaMoney(deltas.revenue) : null;
+  const deltaCosts = deltas ? fmtDeltaMoney(deltas.costs) : null;
+  const deltaProfit = deltas ? fmtDeltaMoney(deltas.profit) : null;
+  const deltaMargin = deltas ? fmtDeltaPp(deltas.margin) : null;
+  const deltaProjects = deltas ? `${deltas.projectsCount > 0 ? "+" : deltas.projectsCount < 0 ? "−" : "±"}${Math.abs(deltas.projectsCount)}` : null;
+
+  // Для расходов “плохой рост”, поэтому тон наоборот
+  const toneMoney = (v) => (v > 0 ? "pos" : v < 0 ? "neg" : "neutral");
+  const toneCosts = (v) => (v > 0 ? "neg" : v < 0 ? "pos" : "neutral");
+
   return (
     <div className="crm-wrap" style={{ position: "relative" }}>
       {/* User panel (top-right) */}
@@ -315,7 +397,10 @@ export default function DashboardPage() {
       <div className="crm-top">
         <div className="crm-title">
           <h1>Дашборд</h1>
-          <div className="sub">AI Finance CRM • {month ? `Период: ${month}` : "загрузка периода…"}</div>
+          <div className="sub">
+            AI Finance CRM • {month ? `Период: ${month}` : "загрузка периода…"}
+            {prevMonth ? <span style={{ opacity: 0.65 }}> • сравнение с {prevMonth}</span> : null}
+          </div>
         </div>
 
         <div className="crm-controls">
@@ -355,10 +440,10 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* ✅ Owner Summary (NEW) */}
+      {/* ✅ Owner Summary */}
       {month ? <OwnerSummaryCard month={month} /> : null}
 
-      {/* ✅ Top-3 Projects (NEW) */}
+      {/* ✅ Top-3 Projects */}
       {!loading && data ? <TopProjectsCards projects={projects} month={month} /> : null}
 
       <div key={animKey} className={`fade-wrap ${loading ? "is-loading" : ""}`}>
@@ -370,11 +455,42 @@ export default function DashboardPage() {
             </>
           ) : (
             <>
-              <KpiCard title="Выручка" value={fmtMoney(revenueAnim)} hint="без НДС" />
-              <KpiCard title="Расходы" value={fmtMoney(costsAnim)} hint="все затраты" />
-              <KpiCard title="Прибыль" value={fmtMoney(profitAnim)} hint="выручка − расходы" negative={profitAnim < 0} />
-              <KpiCard title="Маржа" value={fmtPct(marginAnim)} hint="прибыль / выручка" />
-              <KpiCard title="Проектов" value={String(Math.round(projectsAnim))} hint={loading ? "обновляем…" : "в выбранном месяце"} />
+              <KpiCard
+                title="Выручка"
+                value={fmtMoney(revenueAnim)}
+                hint="без НДС"
+                deltaText={prevLoading ? "…" : (prevMonth ? deltaRevenue : null)}
+                deltaTone={deltas ? toneMoney(deltas.revenue) : "neutral"}
+              />
+              <KpiCard
+                title="Расходы"
+                value={fmtMoney(costsAnim)}
+                hint="все затраты"
+                deltaText={prevLoading ? "…" : (prevMonth ? deltaCosts : null)}
+                deltaTone={deltas ? toneCosts(deltas.costs) : "neutral"}
+              />
+              <KpiCard
+                title="Прибыль"
+                value={fmtMoney(profitAnim)}
+                hint="выручка − расходы"
+                negative={profitAnim < 0}
+                deltaText={prevLoading ? "…" : (prevMonth ? deltaProfit : null)}
+                deltaTone={deltas ? toneMoney(deltas.profit) : "neutral"}
+              />
+              <KpiCard
+                title="Маржа"
+                value={fmtPct(marginAnim)}
+                hint="прибыль / выручка"
+                deltaText={prevLoading ? "…" : (prevMonth ? deltaMargin : null)}
+                deltaTone={deltas ? toneMoney(deltas.margin) : "neutral"}
+              />
+              <KpiCard
+                title="Проектов"
+                value={String(Math.round(projectsAnim))}
+                hint={loading ? "обновляем…" : "в выбранном месяце"}
+                deltaText={prevLoading ? "…" : (prevMonth ? deltaProjects : null)}
+                deltaTone="neutral"
+              />
             </>
           )}
         </div>
