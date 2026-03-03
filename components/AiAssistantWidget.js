@@ -70,14 +70,13 @@ export default function AiAssistantWidget({ month }) {
     if (recording) return;
 
     if (!navigator?.mediaDevices?.getUserMedia) {
-      setErr("Запись недоступна: браузер не поддерживает getUserMedia.");
+      setErr("Запись недоступна: браузер не поддерживает микрофон (getUserMedia).");
       return;
     }
 
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
 
-      // попробуем webm/opus (обычно поддерживается)
       const opts = {};
       if (window.MediaRecorder && MediaRecorder.isTypeSupported("audio/webm;codecs=opus")) {
         opts.mimeType = "audio/webm;codecs=opus";
@@ -94,13 +93,10 @@ export default function AiAssistantWidget({ month }) {
       };
 
       mr.onstop = async () => {
-        // остановим микрофон
         try { stream.getTracks().forEach((t) => t.stop()); } catch {}
 
         const blob = new Blob(chunksRef.current, { type: mr.mimeType || "audio/webm" });
         chunksRef.current = [];
-
-        // отправим в OpenAI voice endpoint
         await sendVoiceBlob(blob, mr.mimeType || blob.type || "audio/webm");
       };
 
@@ -114,9 +110,7 @@ export default function AiAssistantWidget({ month }) {
   function stopRecording() {
     if (!recording) return;
     setRecording(false);
-    try {
-      mediaRecRef.current && mediaRecRef.current.stop();
-    } catch {}
+    try { mediaRecRef.current && mediaRecRef.current.stop(); } catch {}
   }
 
   async function sendVoiceBlob(blob, mimeType) {
@@ -129,15 +123,14 @@ export default function AiAssistantWidget({ month }) {
     setErr("");
 
     try {
-      // blob -> base64
       const arrayBuf = await blob.arrayBuffer();
       const bytes = new Uint8Array(arrayBuf);
+
       let binary = "";
       for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
       const audioBase64 = btoa(binary);
 
-      const next = items.slice(-8); // историю отдадим серверу
-      // добавим "пользователь сказал" после распознавания (сервер вернёт transcript)
+      const next = items.slice(-8);
 
       const resp = await fetch("/api/assistant_voice", {
         method: "POST",
@@ -165,7 +158,6 @@ export default function AiAssistantWidget({ month }) {
       if (transcript) pushMessage("user", transcript);
       if (answer) pushMessage("assistant", answer);
 
-      // play audio
       if (json.audioMp3Base64) playMp3Base64(json.audioMp3Base64);
     } catch (e) {
       setErr(String(e?.message || e));
@@ -180,25 +172,26 @@ export default function AiAssistantWidget({ month }) {
         <div style={{ fontWeight: 900, fontSize: 16 }}>AI помощник</div>
 
         <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
-  <span className="ai-badge">
-    <span className="ai-dot" />
-    LIVE • <span className="mono">{month || ""}</span>
-  </span>
+          <span className="ai-badge">
+            <span className="ai-dot" />
+            LIVE • <span className="mono">{month || ""}</span>
+          </span>
 
-  {recording && (
-    <span className="voice-indicator">
-      <span className="voice-dot" />
-      Запись...
-    </span>
-  )}
+          {recording ? (
+            <span className="voice-indicator">
+              <span className="voice-dot" />
+              Запись...
+            </span>
+          ) : null}
 
-  {!recording && loading && (
-    <span className="ai-processing">
-      <span className="ai-spinner" />
-      AI думает...
-    </span>
-  )}
-</div>
+          {!recording && loading ? (
+            <span className="ai-processing">
+              <span className="ai-spinner" />
+              AI думает...
+            </span>
+          ) : null}
+        </div>
+      </div>
 
       <div style={{ marginTop: 8, opacity: 0.8, fontSize: 12 }}>
         Примеры: “Сравни {month} с прошлым месяцем”, “Итоги за квартал”, “Почему маржа низкая?”, “Какие проекты убыточные?”
@@ -218,7 +211,6 @@ export default function AiAssistantWidget({ month }) {
           )}
         </div>
 
-        {/* Composer */}
         <div className="ai-compose">
           <textarea
             className="input"
