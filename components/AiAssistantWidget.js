@@ -179,11 +179,26 @@ export default function AiAssistantWidget({ month }) {
       <div className="ai-title">
         <div style={{ fontWeight: 900, fontSize: 16 }}>AI помощник</div>
 
-        <span className="ai-badge">
-          <span className="ai-dot" />
-          LIVE • <span className="mono">{month || ""}</span>
-        </span>
-      </div>
+        <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
+  <span className="ai-badge">
+    <span className="ai-dot" />
+    LIVE • <span className="mono">{month || ""}</span>
+  </span>
+
+  {recording && (
+    <span className="voice-indicator">
+      <span className="voice-dot" />
+      Запись...
+    </span>
+  )}
+
+  {!recording && loading && (
+    <span className="ai-processing">
+      <span className="ai-spinner" />
+      AI думает...
+    </span>
+  )}
+</div>
 
       <div style={{ marginTop: 8, opacity: 0.8, fontSize: 12 }}>
         Примеры: “Сравни {month} с прошлым месяцем”, “Итоги за квартал”, “Почему маржа низкая?”, “Какие проекты убыточные?”
