@@ -12,6 +12,8 @@ export default function AiAssistantWidget({ month }) {
 
   // recording
   const [recording, setRecording] = useState(false);
+  const recordingRef = useRef(false);
+
   const mediaRecRef = useRef(null);
   const chunksRef = useRef([]);
   const streamRef = useRef(null);
@@ -24,23 +26,37 @@ export default function AiAssistantWidget({ month }) {
   const analyserRef = useRef(null);
   const sourceRef = useRef(null);
   const vadRafRef = useRef(null);
+
   const silenceMsRef = useRef(0);
   const speechMsRef = useRef(0);
+  const totalMsRef = useRef(0);
   const lastTickRef = useRef(0);
 
-  // Tuning (feel free to adjust later)
+  // adaptive noise floor calibration
+  const noiseFloorRef = useRef(0.0);
+  const vadThresholdRef = useRef(0.02);
+  const calibMsRef = useRef(0);
+
+  // Tuning
   const VAD = {
-    // smaller = more sensitive; 0.012–0.02 typical
-    rmsThreshold: 0.014,
+    // collect background noise for this long after start
+    calibMs: 550,
+    // multiplier above noise floor to treat as "speech"
+    thresholdMult: 2.6,
+    // minimal absolute threshold (prevents too low threshold)
+    thresholdMin: 0.012,
     // require some speech before we allow auto-stop
-    minSpeechMs: 450,
+    minSpeechMs: 350,
     // stop after this much silence
     stopAfterSilenceMs: 900,
-    // record hard limit
-    maxRecordMs: 12000,
+    // hard max record duration
+    maxRecordMs: 14000,
   };
 
-  const canSend = useMemo(() => !!month && input.trim().length > 0 && !loading && !convOn, [month, input, loading, convOn]);
+  const canSend = useMemo(
+    () => !!month && input.trim().length > 0 && !loading && !convOn,
+    [month, input, loading, convOn]
+  );
 
   function pushMessage(role, content) {
     setItems((prev) => [...prev, { role, content }]);
@@ -76,7 +92,12 @@ export default function AiAssistantWidget({ month }) {
 
     silenceMsRef.current = 0;
     speechMsRef.current = 0;
+    totalMsRef.current = 0;
     lastTickRef.current = 0;
+
+    noiseFloorRef.current = 0.0;
+    vadThresholdRef.current = 0.02;
+    calibMsRef.current = 0;
 
     try { if (sourceRef.current) sourceRef.current.disconnect(); } catch {}
     try { if (analyserRef.current) analyserRef.current.disconnect(); } catch {}
@@ -99,7 +120,9 @@ export default function AiAssistantWidget({ month }) {
   }
 
   function hardStopRecording() {
+    recordingRef.current = false;
     setRecording(false);
+
     try { mediaRecRef.current && mediaRecRef.current.stop(); } catch {}
     cleanupVad();
     stopStreamTracks();
@@ -120,11 +143,7 @@ export default function AiAssistantWidget({ month }) {
       const resp = await fetch("/api/assistant", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          month,
-          question,
-          messages: next.slice(-8),
-        }),
+        body: JSON.stringify({ month, question, messages: next.slice(-8) }),
       });
 
       const text = await resp.text();
@@ -145,6 +164,18 @@ export default function AiAssistantWidget({ month }) {
     }
   }
 
+  function stopRecording() {
+    if (!recordingRef.current) return;
+
+    recordingRef.current = false;
+    setRecording(false);
+
+    try { mediaRecRef.current && mediaRecRef.current.stop(); } catch {
+      // если stop не сработал — подчистим
+      hardStopRecording();
+    }
+  }
+
   function startVadLoop() {
     const analyser = analyserRef.current;
     if (!analyser) return;
@@ -152,16 +183,15 @@ export default function AiAssistantWidget({ month }) {
     const data = new Uint8Array(analyser.fftSize);
 
     const tick = (t) => {
-      if (!recording) return;
+      if (!recordingRef.current) return;
 
       if (!lastTickRef.current) lastTickRef.current = t;
       const dt = t - lastTickRef.current;
       lastTickRef.current = t;
 
-      // read waveform
       analyser.getByteTimeDomainData(data);
 
-      // compute RMS in [-1..1]
+      // RMS
       let sum = 0;
       for (let i = 0; i < data.length; i++) {
         const v = (data[i] - 128) / 128;
@@ -169,25 +199,49 @@ export default function AiAssistantWidget({ month }) {
       }
       const rms = Math.sqrt(sum / data.length);
 
-      // update speech/silence counters
-      if (rms > VAD.rmsThreshold) {
+      // calibration phase: measure noise floor
+      if (calibMsRef.current < VAD.calibMs) {
+        calibMsRef.current += dt;
+
+        // EMA noise floor
+        const alpha = 0.08;
+        noiseFloorRef.current = noiseFloorRef.current
+          ? noiseFloorRef.current * (1 - alpha) + rms * alpha
+          : rms;
+
+        const thr = Math.max(
+          VAD.thresholdMin,
+          noiseFloorRef.current * VAD.thresholdMult
+        );
+        vadThresholdRef.current = thr;
+
+        totalMsRef.current += dt;
+
+        // Hard max
+        if (totalMsRef.current >= VAD.maxRecordMs) stopRecording();
+        else vadRafRef.current = requestAnimationFrame(tick);
+        return;
+      }
+
+      const thr = vadThresholdRef.current;
+
+      // speech/silence counters
+      if (rms > thr) {
         speechMsRef.current += dt;
         silenceMsRef.current = 0;
       } else {
         silenceMsRef.current += dt;
       }
+      totalMsRef.current += dt;
 
-      const totalMs = speechMsRef.current + silenceMsRef.current;
-
-      // stop conditions:
-      // 1) spoken something and then silence long enough
+      // stop after speech + silence
       if (speechMsRef.current >= VAD.minSpeechMs && silenceMsRef.current >= VAD.stopAfterSilenceMs) {
         stopRecording();
         return;
       }
 
-      // 2) hard max duration
-      if (totalMs >= VAD.maxRecordMs) {
+      // hard max duration
+      if (totalMsRef.current >= VAD.maxRecordMs) {
         stopRecording();
         return;
       }
@@ -200,12 +254,13 @@ export default function AiAssistantWidget({ month }) {
 
   async function startRecording() {
     setErr("");
-    if (recording) return;
 
     if (!month) {
       setErr("Сначала выбери месяц.");
       return;
     }
+
+    if (recordingRef.current) return;
 
     if (!navigator?.mediaDevices?.getUserMedia) {
       setErr("Запись недоступна: браузер не поддерживает микрофон (getUserMedia).");
@@ -213,7 +268,7 @@ export default function AiAssistantWidget({ month }) {
     }
 
     try {
-      // If assistant is speaking — stop it before listening (more natural)
+      // stop assistant speaking before listening
       stopPlayback();
 
       const stream = await navigator.mediaDevices.getUserMedia({
@@ -225,7 +280,7 @@ export default function AiAssistantWidget({ month }) {
       });
       streamRef.current = stream;
 
-      // Build VAD analyser
+      // audio ctx + analyser for VAD
       const AudioCtx = window.AudioContext || window.webkitAudioContext;
       const ctx = new AudioCtx();
       audioCtxRef.current = ctx;
@@ -256,14 +311,14 @@ export default function AiAssistantWidget({ month }) {
       };
 
       mr.onstop = async () => {
-        // stop mic tracks
+        // stop mic & cleanup VAD
         stopStreamTracks();
         cleanupVad();
 
         const blob = new Blob(chunksRef.current, { type: mr.mimeType || "audio/webm" });
         chunksRef.current = [];
 
-        // if conversation already OFF, do nothing
+        // if conversation OFF, ignore
         if (!convOnRef.current) return;
 
         await sendVoiceBlob(blob, mr.mimeType || blob.type || "audio/webm");
@@ -272,12 +327,18 @@ export default function AiAssistantWidget({ month }) {
       // reset VAD counters
       silenceMsRef.current = 0;
       speechMsRef.current = 0;
+      totalMsRef.current = 0;
       lastTickRef.current = 0;
 
+      noiseFloorRef.current = 0.0;
+      vadThresholdRef.current = 0.02;
+      calibMsRef.current = 0;
+
       mr.start();
+
+      recordingRef.current = true;
       setRecording(true);
 
-      // Start VAD loop
       startVadLoop();
     } catch (e) {
       setErr("Не удалось включить микрофон: " + String(e?.message || e));
@@ -285,31 +346,14 @@ export default function AiAssistantWidget({ month }) {
     }
   }
 
-  function stopRecording() {
-    if (!recording) return;
-    setRecording(false);
-    try { mediaRecRef.current && mediaRecRef.current.stop(); } catch {}
-    // IMPORTANT: do NOT stop stream/audioctx here, because onstop handler will do cleanup
-    // But if stop fails, ensure cleanup:
-    setTimeout(() => {
-      if (recording) return;
-      // if still have ctx/stream left hanging, cleanup safe
-      cleanupVad();
-      stopStreamTracks();
-    }, 50);
-  }
-
   function stopAll() {
     convOnRef.current = false;
     setConvOn(false);
 
-    // stop record + vad + mic
-    try { if (recording) stopRecording(); } catch {}
+    try { stopRecording(); } catch {}
     hardStopRecording();
 
-    // stop playback
     stopPlayback();
-
     setLoading(false);
   }
 
@@ -358,7 +402,7 @@ export default function AiAssistantWidget({ month }) {
       if (transcript) pushMessage("user", transcript);
       if (answer) pushMessage("assistant", answer);
 
-      // Speak then listen again (conversation loop)
+      // speak then listen again
       playMp3Base64(json.audioMp3Base64, {
         onEnded: () => {
           if (!convOnRef.current) return;
@@ -386,7 +430,6 @@ export default function AiAssistantWidget({ month }) {
       await startRecording();
       return;
     }
-
     stopAll();
   }
 
