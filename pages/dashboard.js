@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 
 import TopProjectsCards from "../components/TopProjectsCards";
+import AnomaliesCard from "../components/AnomaliesCard";
 
 function n(x) {
   const v = Number(x);
@@ -26,7 +27,6 @@ function fmtDeltaMoney(d) {
   return `${sign}${fmtMoney(Math.abs(v))}`;
 }
 function fmtDeltaPp(d) {
-  // d — разница маржи (в долях), показываем в п.п.
   const v = n(d) * 100;
   const sign = v > 0 ? "+" : v < 0 ? "−" : "±";
   return `${sign}${Math.abs(v).toFixed(1)} п.п.`;
@@ -65,7 +65,7 @@ function useCountUp(value, { duration = 450, decimals = 0 } = {}) {
 
     const tick = (t) => {
       const p = Math.min(1, (t - start) / duration);
-      const eased = 1 - Math.pow(1 - p, 3); // easeOutCubic
+      const eased = 1 - Math.pow(1 - p, 3);
       const cur = from + (to - from) * eased;
 
       const factor = Math.pow(10, decimals);
@@ -439,6 +439,9 @@ export default function DashboardPage() {
 
       {/* ✅ Top-3 Projects */}
       {!loading && data ? <TopProjectsCards projects={projects} month={month} /> : null}
+
+      {/* ✅ Anomalies (NEW) */}
+      {!loading && data ? <AnomaliesCard projects={projects} month={month} /> : null}
 
       <div key={animKey} className={`fade-wrap ${loading ? "is-loading" : ""}`}>
         {/* KPI */}
