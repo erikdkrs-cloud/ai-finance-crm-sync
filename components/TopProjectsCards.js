@@ -57,7 +57,7 @@ function Row({ p, kind }) {
   );
 }
 
-export default function TopProjectsCards({ projects, month }) {
+export default function TopProjectsCards({ projects }) {
   const list = Array.isArray(projects) ? projects : [];
 
   const topProfit = useMemo(() => {
@@ -72,52 +72,34 @@ export default function TopProjectsCards({ projects, month }) {
 
   return (
     <div className="dkrs-grid dkrs-grid-2" style={{ margin: 0 }}>
-      <div className="dkrs-card">
-        <div className="dkrs-card-header">
-          <div className="dkrs-card-title">Топ-3 прибыльных</div>
-          <span className="dkrs-badge">
-            <span className="dkrs-dot dkrs-dot-green" />
-            <span className="dkrs-mono">{month || ""}</span>
-          </span>
-        </div>
-
-        <div className="dkrs-card-body" style={{ paddingTop: 10 }}>
-          {!hasAny ? (
-            <div className="dkrs-empty">Нет данных по проектам.</div>
-          ) : topProfit.length ? (
-            <div className="dkrs-list">
-              {topProfit.map((p, i) => (
-                <Row key={`tp-${p.project_name}-${i}`} p={p} kind="profit" />
-              ))}
-            </div>
-          ) : (
-            <div className="dkrs-empty">Нет прибыльных проектов.</div>
-          )}
-        </div>
+      {/* LEFT: profitable */}
+      <div>
+        {!hasAny ? (
+          <div className="dkrs-empty">Нет данных по проектам.</div>
+        ) : topProfit.length ? (
+          <div className="dkrs-list">
+            {topProfit.map((p, i) => (
+              <Row key={`tp-${p.project_name}-${i}`} p={p} kind="profit" />
+            ))}
+          </div>
+        ) : (
+          <div className="dkrs-empty">Нет прибыльных проектов.</div>
+        )}
       </div>
 
-      <div className="dkrs-card">
-        <div className="dkrs-card-header">
-          <div className="dkrs-card-title">Топ-3 убыточных</div>
-          <span className="dkrs-badge">
-            <span className="dkrs-dot dkrs-dot-red" />
-            <span className="dkrs-mono">{month || ""}</span>
-          </span>
-        </div>
-
-        <div className="dkrs-card-body" style={{ paddingTop: 10 }}>
-          {!hasAny ? (
-            <div className="dkrs-empty">Нет данных по проектам.</div>
-          ) : topLoss.length ? (
-            <div className="dkrs-list">
-              {topLoss.map((p, i) => (
-                <Row key={`tl-${p.project_name}-${i}`} p={p} kind="loss" />
-              ))}
-            </div>
-          ) : (
-            <div className="dkrs-empty">Нет убыточных проектов.</div>
-          )}
-        </div>
+      {/* RIGHT: loss-making */}
+      <div>
+        {!hasAny ? (
+          <div className="dkrs-empty">Нет данных по проектам.</div>
+        ) : topLoss.length ? (
+          <div className="dkrs-list">
+            {topLoss.map((p, i) => (
+              <Row key={`tl-${p.project_name}-${i}`} p={p} kind="loss" />
+            ))}
+          </div>
+        ) : (
+          <div className="dkrs-empty">Нет убыточных проектов.</div>
+        )}
       </div>
     </div>
   );
