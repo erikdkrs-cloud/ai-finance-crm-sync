@@ -553,3 +553,45 @@
 }
 
 .dkrs-anom-item-main { min-width: 0; }
+/* ===== Login page ===== */
+.dkrs-auth-page {
+  display: grid;
+  place-items: center;
+  padding: 24px 0 40px;
+}
+
+.dkrs-auth-card {
+  width: min(520px, 100%);
+}
+
+.dkrs-auth-form {
+  display: grid;
+  gap: 14px;
+}
+
+.dkrs-auth-actions {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  align-items: center;
+  flex-wrap: wrap;
+  margin-top: 6px;
+}
+
+.dkrs-auth-error {
+  margin-top: 6px;
+  padding: 10px 12px;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 90, 90, 0.28);
+  background: rgba(255, 90, 90, 0.10);
+  color: rgba(255, 140, 140, 0.95);
+  font-weight: 900;
+  font-size: 12px;
+}
+
+.dkrs-auth-foot {
+  margin-top: 6px;
+  color: rgba(255,255,255,0.55);
+  font-size: 12px;
+  line-height: 1.35;
+}
