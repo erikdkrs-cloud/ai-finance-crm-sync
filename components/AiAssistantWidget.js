@@ -6,7 +6,9 @@ export default function AiAssistantWidget({ month }) {
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState("");
 
-  const canSend = useMemo(() => !!month && input.trim().length > 0 && !loading, [month, input, loading]);
+  const canSend = useMemo(() => {
+    return !!month && input.trim().length > 0 && !loading;
+  }, [month, input, loading]);
 
   async function send() {
     if (!canSend) return;
@@ -32,11 +34,17 @@ export default function AiAssistantWidget({ month }) {
 
       const text = await resp.text();
       let json = null;
-      try { json = JSON.parse(text); } catch {}
+      try {
+        json = JSON.parse(text);
+      } catch {}
 
       if (!resp.ok || !json?.ok) {
-        setErr((json?.error || text || "Ошибка").slice(0, 800));
-        setItems((prev) => [...prev, { role: "assistant", content: "Не получилось получить ответ. Попробуй задать вопрос иначе." }]);
+        const msg = (json?.error || text || "Ошибка").slice(0, 800);
+        setErr(msg);
+        setItems((prev) => [
+          ...prev,
+          { role: "assistant", content: "Не получилось получить ответ. Попробуй задать вопрос иначе." },
+        ]);
         return;
       }
 
@@ -52,6 +60,7 @@ export default function AiAssistantWidget({ month }) {
     <div className="ai-widget">
       <div className="ai-title">
         <div style={{ fontWeight: 900, fontSize: 16 }}>AI помощник</div>
+
         <span className="ai-badge">
           <span className="ai-dot" />
           LIVE • <span className="mono">{month || ""}</span>
@@ -65,47 +74,40 @@ export default function AiAssistantWidget({ month }) {
       <div style={{ marginTop: 12, display: "grid", gap: 10 }}>
         <div className="ai-chat" style={{ maxHeight: 260, overflow: "auto" }}>
           {items.length === 0 ? (
-            <div style={{ opacity: 0.75 }}>
-              Задай вопрос — я отвечу по данным из базы.
-            </div>
+            <div style={{ opacity: 0.75 }}>Задай вопрос — я отвечу по данным из базы.</div>
           ) : (
             items.map((m, i) => (
               <div key={i} className={`ai-msg ${m.role === "user" ? "user" : "assistant"}`}>
                 <div className="ai-meta">{m.role === "user" ? "Ты" : "AI"}</div>
-                <div style={{ whiteSpace: "pre-wrap", lineHeight: 1.35 }}>
-                  {m.content}
-                </div>
+                <div style={{ whiteSpace: "pre-wrap", lineHeight: 1.35 }}>{m.content}</div>
               </div>
             ))
           )}
         </div>
 
-       <div className="ai-compose">
-  <textarea
-    className="input"
-    rows={3}
-    value={input}
-    onChange={(e) => setInput(e.target.value)}
-    placeholder="Напиши вопрос по финансам, проектам, рискам, кварталу…"
-  />
+        <div className="ai-compose">
+          <textarea
+            className="input"
+            rows={3}
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            placeholder="Напиши вопрос по финансам, проектам, рискам, кварталу…"
+          />
 
-  <button className="btn ai-primary" disabled={!canSend} onClick={send}>
-    {loading ? "Думаю…" : "Спросить"}
-  </button>
-</div>
-
-{err ? (
-  <div style={{ marginTop: 8, color: "rgba(239,68,68,.95)", fontWeight: 800, fontSize: 12 }}>
-    {err}
-  </div>
-) : (
-  <div style={{ marginTop: 8, opacity: 0.6, fontSize: 12 }}>
-    Советы: укажи период (“квартал 2025-Q4”) или проект (“Верный”).
-  </div>
-)}
-            </div>
-          )}
+          <button className="btn ai-primary" disabled={!canSend} onClick={send}>
+            {loading ? "Думаю…" : "Спросить"}
+          </button>
         </div>
+
+        {err ? (
+          <div style={{ marginTop: 2, color: "rgba(239,68,68,.95)", fontWeight: 800, fontSize: 12 }}>
+            {err}
+          </div>
+        ) : (
+          <div style={{ marginTop: 2, opacity: 0.6, fontSize: 12 }}>
+            Советы: укажи период (“квартал 2025-Q4”) или проект (“Верный”).
+          </div>
+        )}
       </div>
     </div>
   );
