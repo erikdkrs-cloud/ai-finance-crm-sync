@@ -21,7 +21,7 @@ export default function AiAssistantWidget({ month }) {
   // playback
   const audioRef = useRef(null);
 
-  // VAD (silence detection)
+  // VAD
   const audioCtxRef = useRef(null);
   const analyserRef = useRef(null);
   const sourceRef = useRef(null);
@@ -34,23 +34,34 @@ export default function AiAssistantWidget({ month }) {
 
   // adaptive noise floor calibration
   const noiseFloorRef = useRef(0.0);
-  const vadThresholdRef = useRef(0.02);
+  const vadThresholdRef = useRef(0.03);
   const calibMsRef = useRef(0);
 
-  // Tuning
+  // Debug (optional UI)
+  const [vadDebug, setVadDebug] = useState({ rms: 0, thr: 0, noise: 0, state: "idle" });
+
+  // Tuning — более “жёстко”, чтобы точно стопалось на ноутбуках
   const VAD = {
-    // collect background noise for this long after start
-    calibMs: 550,
-    // multiplier above noise floor to treat as "speech"
-    thresholdMult: 2.6,
-    // minimal absolute threshold (prevents too low threshold)
-    thresholdMin: 0.012,
-    // require some speech before we allow auto-stop
+    // calibrate noise floor at start
+    calibMs: 700,
+
+    // threshold above noise floor (bigger => less sensitive)
+    thresholdMult: 3.4,
+
+    // minimal absolute threshold (bigger => less sensitive)
+    thresholdMin: 0.018,
+
+    // require at least some speech before auto-stop
     minSpeechMs: 350,
-    // stop after this much silence
-    stopAfterSilenceMs: 900,
-    // hard max record duration
+
+    // stop after silence this long
+    stopAfterSilenceMs: 750,
+
+    // hard max recording duration
     maxRecordMs: 14000,
+
+    // HARD fallback: after we detect speech, stop no later than this
+    hardStopAfterSpeechMs: 6500,
   };
 
   const canSend = useMemo(
@@ -96,8 +107,10 @@ export default function AiAssistantWidget({ month }) {
     lastTickRef.current = 0;
 
     noiseFloorRef.current = 0.0;
-    vadThresholdRef.current = 0.02;
+    vadThresholdRef.current = 0.03;
     calibMsRef.current = 0;
+
+    setVadDebug({ rms: 0, thr: 0, noise: 0, state: "idle" });
 
     try { if (sourceRef.current) sourceRef.current.disconnect(); } catch {}
     try { if (analyserRef.current) analyserRef.current.disconnect(); } catch {}
@@ -128,50 +141,15 @@ export default function AiAssistantWidget({ month }) {
     stopStreamTracks();
   }
 
-  async function sendText() {
-    if (!canSend) return;
-
-    const question = input.trim();
-    setInput("");
-    setErr("");
-
-    const next = [...items, { role: "user", content: question }];
-    setItems(next);
-    setLoading(true);
-
-    try {
-      const resp = await fetch("/api/assistant", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ month, question, messages: next.slice(-8) }),
-      });
-
-      const text = await resp.text();
-      let json = null;
-      try { json = JSON.parse(text); } catch {}
-
-      if (!resp.ok || !json?.ok) {
-        setErr((json?.error || text || "Ошибка").slice(0, 800));
-        pushMessage("assistant", "Не получилось получить ответ. Попробуй задать вопрос иначе.");
-        return;
-      }
-
-      pushMessage("assistant", String(json.answer || ""));
-    } catch (e) {
-      setErr(String(e?.message || e));
-    } finally {
-      setLoading(false);
-    }
-  }
-
   function stopRecording() {
     if (!recordingRef.current) return;
 
     recordingRef.current = false;
     setRecording(false);
 
-    try { mediaRecRef.current && mediaRecRef.current.stop(); } catch {
-      // если stop не сработал — подчистим
+    try {
+      mediaRecRef.current && mediaRecRef.current.stop();
+    } catch {
       hardStopRecording();
     }
   }
@@ -199,25 +177,26 @@ export default function AiAssistantWidget({ month }) {
       }
       const rms = Math.sqrt(sum / data.length);
 
-      // calibration phase: measure noise floor
+      // Calibration: learn noise floor
       if (calibMsRef.current < VAD.calibMs) {
         calibMsRef.current += dt;
+        totalMsRef.current += dt;
 
-        // EMA noise floor
-        const alpha = 0.08;
+        const alpha = 0.10;
         noiseFloorRef.current = noiseFloorRef.current
           ? noiseFloorRef.current * (1 - alpha) + rms * alpha
           : rms;
 
-        const thr = Math.max(
-          VAD.thresholdMin,
-          noiseFloorRef.current * VAD.thresholdMult
-        );
+        const thr = Math.max(VAD.thresholdMin, noiseFloorRef.current * VAD.thresholdMult);
         vadThresholdRef.current = thr;
 
-        totalMsRef.current += dt;
+        setVadDebug({
+          rms: Number(rms.toFixed(4)),
+          thr: Number(thr.toFixed(4)),
+          noise: Number(noiseFloorRef.current.toFixed(4)),
+          state: "calibrating",
+        });
 
-        // Hard max
         if (totalMsRef.current >= VAD.maxRecordMs) stopRecording();
         else vadRafRef.current = requestAnimationFrame(tick);
         return;
@@ -225,7 +204,7 @@ export default function AiAssistantWidget({ month }) {
 
       const thr = vadThresholdRef.current;
 
-      // speech/silence counters
+      // speech/silence
       if (rms > thr) {
         speechMsRef.current += dt;
         silenceMsRef.current = 0;
@@ -234,13 +213,28 @@ export default function AiAssistantWidget({ month }) {
       }
       totalMsRef.current += dt;
 
-      // stop after speech + silence
-      if (speechMsRef.current >= VAD.minSpeechMs && silenceMsRef.current >= VAD.stopAfterSilenceMs) {
+      const hasSpeech = speechMsRef.current >= VAD.minSpeechMs;
+
+      setVadDebug({
+        rms: Number(rms.toFixed(4)),
+        thr: Number(thr.toFixed(4)),
+        noise: Number(noiseFloorRef.current.toFixed(4)),
+        state: hasSpeech ? (silenceMsRef.current > 200 ? "waiting_silence" : "speaking") : "listening",
+      });
+
+      // HARD fallback: if we already have speech, stop after a few seconds anyway
+      if (hasSpeech && speechMsRef.current >= VAD.hardStopAfterSpeechMs) {
         stopRecording();
         return;
       }
 
-      // hard max duration
+      // Normal auto-stop after silence
+      if (hasSpeech && silenceMsRef.current >= VAD.stopAfterSilenceMs) {
+        stopRecording();
+        return;
+      }
+
+      // Hard max duration
       if (totalMsRef.current >= VAD.maxRecordMs) {
         stopRecording();
         return;
@@ -259,7 +253,6 @@ export default function AiAssistantWidget({ month }) {
       setErr("Сначала выбери месяц.");
       return;
     }
-
     if (recordingRef.current) return;
 
     if (!navigator?.mediaDevices?.getUserMedia) {
@@ -268,7 +261,7 @@ export default function AiAssistantWidget({ month }) {
     }
 
     try {
-      // stop assistant speaking before listening
+      // stop speaking before listening
       stopPlayback();
 
       const stream = await navigator.mediaDevices.getUserMedia({
@@ -280,7 +273,7 @@ export default function AiAssistantWidget({ month }) {
       });
       streamRef.current = stream;
 
-      // audio ctx + analyser for VAD
+      // audio ctx + analyser
       const AudioCtx = window.AudioContext || window.webkitAudioContext;
       const ctx = new AudioCtx();
       audioCtxRef.current = ctx;
@@ -311,27 +304,23 @@ export default function AiAssistantWidget({ month }) {
       };
 
       mr.onstop = async () => {
-        // stop mic & cleanup VAD
         stopStreamTracks();
         cleanupVad();
 
         const blob = new Blob(chunksRef.current, { type: mr.mimeType || "audio/webm" });
         chunksRef.current = [];
 
-        // if conversation OFF, ignore
         if (!convOnRef.current) return;
-
         await sendVoiceBlob(blob, mr.mimeType || blob.type || "audio/webm");
       };
 
-      // reset VAD counters
+      // reset counters
       silenceMsRef.current = 0;
       speechMsRef.current = 0;
       totalMsRef.current = 0;
       lastTickRef.current = 0;
-
       noiseFloorRef.current = 0.0;
-      vadThresholdRef.current = 0.02;
+      vadThresholdRef.current = 0.03;
       calibMsRef.current = 0;
 
       mr.start();
@@ -379,12 +368,7 @@ export default function AiAssistantWidget({ month }) {
       const resp = await fetch("/api/assistant_voice", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          month,
-          audioBase64,
-          mimeType,
-          messages: next,
-        }),
+        body: JSON.stringify({ month, audioBase64, mimeType, messages: next }),
       });
 
       const text = await resp.text();
@@ -402,7 +386,6 @@ export default function AiAssistantWidget({ month }) {
       if (transcript) pushMessage("user", transcript);
       if (answer) pushMessage("assistant", answer);
 
-      // speak then listen again
       playMp3Base64(json.audioMp3Base64, {
         onEnded: () => {
           if (!convOnRef.current) return;
@@ -461,8 +444,18 @@ export default function AiAssistantWidget({ month }) {
       </div>
 
       <div style={{ marginTop: 8, opacity: 0.82, fontSize: 12 }}>
-        Conversation Mode: включи — говори — замолчи. Я сам остановлю запись по тишине, отвечу голосом и снова начну слушать.
+        Conversation Mode: включи — говори — замолчи. Запись остановится автоматически.
       </div>
+
+      {/* Debug line (can remove later) */}
+      {convOn ? (
+        <div style={{ marginTop: 8, fontSize: 12, opacity: 0.75 }}>
+          VAD: <span className="mono">rms {vadDebug.rms}</span> •{" "}
+          <span className="mono">thr {vadDebug.thr}</span> •{" "}
+          <span className="mono">noise {vadDebug.noise}</span> •{" "}
+          <b>{vadDebug.state}</b>
+        </div>
+      ) : null}
 
       <div style={{ marginTop: 12, display: "grid", gap: 10 }}>
         <div className="ai-chat" style={{ maxHeight: 260, overflow: "auto" }}>
@@ -505,7 +498,7 @@ export default function AiAssistantWidget({ month }) {
         {convOn ? (
           <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center" }}>
             <div style={{ opacity: 0.7, fontSize: 12 }}>
-              Подсказка: говори фразу и просто замолчи — я сам остановлю запись по тишине.
+              Если не стопается — смотри VAD строки: если rms всегда выше thr, значит шум высокий.
             </div>
 
             <button className="btn ai-ghost" onClick={stopAll}>
