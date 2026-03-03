@@ -773,3 +773,43 @@ th.sortable:hover {
   border-top-color: rgba(124,58,237,1);
   animation: spin 0.8s linear infinite;
 }
+/* ===============================
+   Voice Recording Indicator
+================================= */
+.voice-indicator{
+  display:inline-flex;
+  align-items:center;
+  gap:8px;
+  font-weight:800;
+  font-size:12px;
+  color:rgba(239,68,68,.95);
+}
+.voice-dot{
+  width:10px;height:10px;border-radius:999px;
+  background:rgba(239,68,68,1);
+  box-shadow:0 0 0 0 rgba(239,68,68,.7);
+  animation:pulseRec 1.4s infinite;
+}
+@keyframes pulseRec{
+  0%{ box-shadow:0 0 0 0 rgba(239,68,68,.7); }
+  70%{ box-shadow:0 0 0 10px rgba(239,68,68,0); }
+  100%{ box-shadow:0 0 0 0 rgba(239,68,68,0); }
+}
+
+/* ===============================
+   AI Processing Indicator
+================================= */
+.ai-processing{
+  display:inline-flex;
+  align-items:center;
+  gap:8px;
+  font-weight:800;
+  font-size:12px;
+  color:rgba(124,58,237,1);
+}
+.ai-spinner{
+  width:14px;height:14px;border-radius:999px;
+  border:2px solid rgba(124,58,237,.25);
+  border-top-color:rgba(124,58,237,1);
+  animation:spin .8s linear infinite;
+}
