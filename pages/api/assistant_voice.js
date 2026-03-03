@@ -17,6 +17,13 @@ function bufferToBase64(buf) {
   return Buffer.from(buf).toString("base64");
 }
 
+function cleanForTTS(text) {
+  return String(text || "")
+    .replace(/\n+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 export default async function handler(req, res) {
   if (req.method !== "POST") return json(res, 405, { ok: false, error: "Method not allowed" });
 
@@ -61,12 +68,13 @@ export default async function handler(req, res) {
     const sttText = await sttResp.text();
     let sttJson = null;
     try { sttJson = JSON.parse(sttText); } catch {}
+
     if (!sttResp.ok) return json(res, 500, { ok: false, error: `STT failed: ${sttText.slice(0, 500)}` });
 
     const transcript = String(sttJson?.text || sttJson?.transcript || "").trim();
     if (!transcript) return json(res, 200, { ok: true, transcript: "", answer: "", audioMp3Base64: "" });
 
-    // 2) Answer (direct, no auth issues)
+    // 2) Answer (fast voice style in assistantCore)
     const r = await answerAssistantQuestion({
       month: String(month),
       question: transcript,
@@ -80,7 +88,7 @@ export default async function handler(req, res) {
     const ttsPayload = {
       model: ttsModel,
       voice: "alloy",
-      input: answer,
+      input: cleanForTTS(answer),
       format: "mp3",
     };
 
