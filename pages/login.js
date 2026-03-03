@@ -1,36 +1,39 @@
+// pages/login.js
 import React, { useState } from "react";
 import Link from "next/link";
+import DkrsShell from "../components/DkrsShell";
 
 export default function LoginPage() {
-  const [login, setLogin] = useState("");
+  const [login, setLogin] = useState("admin");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState("");
 
   async function onSubmit(e) {
     e.preventDefault();
+    if (loading) return;
+
     setErr("");
     setLoading(true);
 
     try {
-      const r = await fetch("/api/auth/login", {
+      const resp = await fetch("/api/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ login, password }),
+        body: JSON.stringify({ login: String(login || "").trim(), password: String(password || "") }),
       });
 
-      const text = await r.text();
+      const txt = await resp.text();
       let j = null;
-      try { j = JSON.parse(text); } catch {}
+      try { j = JSON.parse(txt); } catch {}
 
-      if (!r.ok) {
-        setErr(j?.error || text || "Ошибка входа");
+      if (!resp.ok || !j?.ok) {
+        setErr(String(j?.error || "Доступ ограничен").slice(0, 300));
         return;
       }
 
-      // куда редиректить после логина
-      const next = new URLSearchParams(window.location.search).get("next");
-      window.location.href = next || "/dashboard";
+      // success
+      window.location.href = "/dashboard";
     } catch (e2) {
       setErr(String(e2?.message || e2));
     } finally {
@@ -39,40 +42,82 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="crm-wrap" style={{ maxWidth: 520 }}>
-      <div className="card" style={{ padding: 18 }}>
-        <div style={{ fontSize: 22, fontWeight: 950 }}>Вход</div>
-        <div style={{ color: "rgba(234,240,255,.7)", marginTop: 6 }}>
-          AI Finance CRM — доступ по логину и паролю
-        </div>
-
-        <form onSubmit={onSubmit} style={{ marginTop: 14, display: "grid", gap: 10 }}>
-          <div>
-            <div className="small-muted" style={{ marginBottom: 6 }}>Логин</div>
-            <input className="input" value={login} onChange={(e) => setLogin(e.target.value)} placeholder="например: admin" />
-          </div>
-
-          <div>
-            <div className="small-muted" style={{ marginBottom: 6 }}>Пароль</div>
-            <input className="input" type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="••••••••" />
-          </div>
-
-          {err ? (
-            <div style={{ color: "rgba(239,68,68,.95)", fontWeight: 800, whiteSpace: "pre-wrap" }}>
-              {err}
+    <DkrsShell
+      title="Вход"
+      subtitle="AI Finance CRM — доступ по логину и паролю"
+      right={
+        <Link href="/dashboard" legacyBehavior>
+          <a className="dkrs-link">На главную →</a>
+        </Link>
+      }
+    >
+      <div className="dkrs-auth-page">
+        <div className="dkrs-card dkrs-auth-card">
+          <div className="dkrs-card-header">
+            <div>
+              <div className="dkrs-card-title">Авторизация</div>
+              <div className="dkrs-small" style={{ marginTop: 6 }}>
+                Введите данные администратора.
+              </div>
             </div>
-          ) : null}
 
-          <button className="btn primary" disabled={loading} type="submit">
-            {loading ? "Входим…" : "Войти"}
-          </button>
-        </form>
+            <span className="dkrs-badge" title="Secure session via cookies">
+              <span className="dkrs-dot dkrs-dot-green" />
+              Secure
+            </span>
+          </div>
 
-        <div style={{ marginTop: 12, display: "flex", justifyContent: "space-between" }}>
-          <Link href="/"><a className="link">← На главную</a></Link>
-          <div className="small-muted">Доступ ограничен</div>
+          <div className="dkrs-card-body">
+            <form onSubmit={onSubmit} className="dkrs-auth-form">
+              <div>
+                <div className="dkrs-field-label">Логин</div>
+                <input
+                  className="dkrs-input"
+                  value={login}
+                  onChange={(e) => setLogin(e.target.value)}
+                  placeholder="например: admin"
+                  autoComplete="username"
+                />
+              </div>
+
+              <div>
+                <div className="dkrs-field-label">Пароль</div>
+                <input
+                  className="dkrs-input"
+                  type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="••••••••"
+                  autoComplete="current-password"
+                />
+              </div>
+
+              <div className="dkrs-auth-actions">
+                <Link href="/dashboard" legacyBehavior>
+                  <a className="dkrs-btn dkrs-btn-ghost">← На главную</a>
+                </Link>
+
+                <button className="dkrs-btn dkrs-btn-primary" type="submit" disabled={loading}>
+                  {loading ? (
+                    <span style={{ display: "inline-flex", alignItems: "center", gap: 10 }}>
+                      <span className="dkrs-spinner-sm" />
+                      Входим…
+                    </span>
+                  ) : (
+                    "Войти"
+                  )}
+                </button>
+              </div>
+
+              {err ? <div className="dkrs-auth-error">Доступ ограничен: {err}</div> : null}
+
+              <div className="dkrs-auth-foot">
+                Если не помнишь пароль — напиши администратору.
+              </div>
+            </form>
+          </div>
         </div>
       </div>
-    </div>
+    </DkrsShell>
   );
 }
