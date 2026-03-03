@@ -123,7 +123,6 @@ export default function AnomaliesCard({ projects, month }) {
       }
     }
 
-    // uniq by project+title
     const uniq = [];
     const seen = new Set();
     for (const it of out) {
@@ -140,7 +139,7 @@ export default function AnomaliesCard({ projects, month }) {
   const severity = useMemo(() => (items.length ? maxSev(items) : "low"), [items]);
 
   return (
-    <div className="dkrs-card">
+    <div>
       <button
         className="dkrs-anom-head"
         onClick={() => setOpen((v) => !v)}
@@ -167,7 +166,7 @@ export default function AnomaliesCard({ projects, month }) {
       </button>
 
       {open ? (
-        <div className="dkrs-card-body" style={{ paddingTop: 12, display: "grid", gap: 10 }}>
+        <div style={{ marginTop: 12, display: "grid", gap: 10 }}>
           {items.length === 0 ? (
             <div className="dkrs-empty">Пока всё выглядит нормально (или данных мало).</div>
           ) : (
