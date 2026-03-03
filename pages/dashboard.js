@@ -1,7 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 
-import OwnerSummaryCard from "../components/OwnerSummaryCard";
 import TopProjectsCards from "../components/TopProjectsCards";
 
 function n(x) {
@@ -160,7 +159,7 @@ export default function DashboardPage() {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(false);
 
-  // предыдущий месяц
+  // previous month compare
   const [prevMonth, setPrevMonth] = useState("");
   const [prevData, setPrevData] = useState(null);
   const [prevLoading, setPrevLoading] = useState(false);
@@ -186,7 +185,7 @@ export default function DashboardPage() {
     })();
   }, []);
 
-  // определяем prevMonth из списка months
+  // pick prevMonth based on months order (months[0] = latest)
   useEffect(() => {
     if (!month || !months?.length) {
       setPrevMonth("");
@@ -212,7 +211,6 @@ export default function DashboardPage() {
     })();
   }, [month]);
 
-  // грузим предыдущий месяц (для дельт)
   useEffect(() => {
     if (!prevMonth) {
       setPrevData(null);
@@ -232,7 +230,6 @@ export default function DashboardPage() {
     })();
   }, [prevMonth]);
 
-  // totals
   const totals = useMemo(() => extractTotals(data), [data]);
   const prevTotals = useMemo(() => (prevData ? extractTotals(prevData) : null), [prevData]);
 
@@ -367,14 +364,14 @@ export default function DashboardPage() {
     return <span className="sort-icon">{sortDir === "asc" ? "↑" : "↓"}</span>;
   }
 
-  // дельты для KPI (тон: pos/neg/neutral)
   const deltaRevenue = deltas ? fmtDeltaMoney(deltas.revenue) : null;
   const deltaCosts = deltas ? fmtDeltaMoney(deltas.costs) : null;
   const deltaProfit = deltas ? fmtDeltaMoney(deltas.profit) : null;
   const deltaMargin = deltas ? fmtDeltaPp(deltas.margin) : null;
-  const deltaProjects = deltas ? `${deltas.projectsCount > 0 ? "+" : deltas.projectsCount < 0 ? "−" : "±"}${Math.abs(deltas.projectsCount)}` : null;
+  const deltaProjects = deltas
+    ? `${deltas.projectsCount > 0 ? "+" : deltas.projectsCount < 0 ? "−" : "±"}${Math.abs(deltas.projectsCount)}`
+    : null;
 
-  // Для расходов “плохой рост”, поэтому тон наоборот
   const toneMoney = (v) => (v > 0 ? "pos" : v < 0 ? "neg" : "neutral");
   const toneCosts = (v) => (v > 0 ? "neg" : v < 0 ? "pos" : "neutral");
 
@@ -439,9 +436,6 @@ export default function DashboardPage() {
           </div>
         </div>
       </div>
-
-      {/* ✅ Owner Summary */}
-      {month ? <OwnerSummaryCard month={month} /> : null}
 
       {/* ✅ Top-3 Projects */}
       {!loading && data ? <TopProjectsCards projects={projects} month={month} /> : null}
