@@ -1,3 +1,4 @@
+// components/AiAssistantWidget.js
 import React, { useMemo, useRef, useState, useEffect } from "react";
 
 export default function AiAssistantWidget({ month }) {
@@ -14,7 +15,7 @@ export default function AiAssistantWidget({ month }) {
   const [recording, setRecording] = useState(false);
   const recordingRef = useRef(false);
 
-  // simple status (no 60fps setState)
+  // status
   const [status, setStatus] = useState("idle"); // idle | listening | thinking | speaking
 
   const mediaRecRef = useRef(null);
@@ -39,7 +40,7 @@ export default function AiAssistantWidget({ month }) {
   const thrRef = useRef(0.02);
   const calibMsRef = useRef(0);
 
-  // Tuning (под ноутбуки/шум — повыше пороги)
+  // Tuning
   const VAD = {
     calibMs: 650,
     thresholdMult: 3.2,
@@ -140,7 +141,7 @@ export default function AiAssistantWidget({ month }) {
 
     recordingRef.current = false;
     setRecording(false);
-    setStatus("thinking"); // дальше пойдёт обработка onstop → sendVoiceBlob
+    setStatus("thinking"); // дальше: onstop → sendVoiceBlob
 
     try {
       mediaRecRef.current && mediaRecRef.current.stop();
@@ -198,7 +199,6 @@ export default function AiAssistantWidget({ month }) {
 
       const hasSpeech = speechMsRef.current >= VAD.minSpeechMs;
 
-      // status update rarely
       if (hasSpeech && status !== "listening") setStatus("listening");
 
       if (hasSpeech && speechMsRef.current >= VAD.hardStopAfterSpeechMs) {
@@ -283,7 +283,6 @@ export default function AiAssistantWidget({ month }) {
       };
 
       mr.onstop = async () => {
-        // clean mic + VAD first
         stopStream();
         cleanupVad();
 
@@ -448,7 +447,6 @@ export default function AiAssistantWidget({ month }) {
     stopAll();
   }
 
-  // cleanup on unmount
   useEffect(() => {
     return () => {
       try { stopAll(); } catch {}
@@ -456,54 +454,62 @@ export default function AiAssistantWidget({ month }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  const statusLabel =
+    status === "listening" ? "Listening" :
+    status === "thinking" ? "Thinking" :
+    status === "speaking" ? "Speaking" : "Idle";
+
   return (
-    <div className="ai-widget">
-      <div className="ai-title">
-        <div style={{ fontWeight: 900, fontSize: 16 }}>AI помощник</div>
+    <div className="dkrs-card dkrs-ai">
+      <div className="dkrs-ai-inner">
+        <div className="dkrs-ai-header">
+          <div>
+            <div className="dkrs-card-title">AI Assistant</div>
+            <div className="dkrs-small" style={{ marginTop: 4 }}>
+              Status: <b>{statusLabel}</b> • Conversation Mode: auto-stop by silence (VAD)
+            </div>
+          </div>
 
-        <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
-          <span className="ai-badge">
-            <span className="ai-dot" />
-            LIVE • <span className="mono">{month || ""}</span>
-          </span>
-
-          {recording ? (
-            <span className="voice-indicator">
-              <span className="voice-dot" />
-              Слушаю...
+          <div className="dkrs-ai-right">
+            <span className="dkrs-badge">
+              <span className="dkrs-dot dkrs-dot-green" />
+              LIVE • <span className="dkrs-mono">{month || ""}</span>
             </span>
-          ) : null}
 
-          {!recording && loading ? (
-            <span className="ai-processing">
-              <span className="ai-spinner" />
-              Думаю...
-            </span>
-          ) : null}
+            {recording ? (
+              <span className="dkrs-badge">
+                <span className="dkrs-dot dkrs-dot-yellow" />
+                Listening…
+              </span>
+            ) : null}
+
+            {!recording && loading ? (
+              <span className="dkrs-badge">
+                <span className="dkrs-spinner-sm" />
+                Thinking…
+              </span>
+            ) : null}
+          </div>
         </div>
-      </div>
 
-      <div style={{ marginTop: 8, opacity: 0.82, fontSize: 12 }}>
-        Статус: <b>{status}</b> • Conversation Mode: авто-стоп по тишине включен.
-      </div>
-
-      <div style={{ marginTop: 12, display: "grid", gap: 10 }}>
-        <div className="ai-chat" style={{ maxHeight: 260, overflow: "auto" }}>
+        <div className="dkrs-ai-chat" role="log" aria-label="AI chat">
           {items.length === 0 ? (
-            <div style={{ opacity: 0.75 }}>Нажми “Conversation ON” и говори.</div>
+            <div className="dkrs-ai-empty">
+              Нажми <b>Conversation ON</b> и говори. Можно и текстом — ниже.
+            </div>
           ) : (
             items.map((m, i) => (
-              <div key={i} className={`ai-msg ${m.role === "user" ? "user" : "assistant"}`}>
-                <div className="ai-meta">{m.role === "user" ? "Ты" : "AI"}</div>
-                <div style={{ whiteSpace: "pre-wrap", lineHeight: 1.35 }}>{m.content}</div>
+              <div key={i} className={`dkrs-ai-msg ${m.role === "user" ? "user" : "assistant"}`}>
+                <div className="dkrs-ai-meta">{m.role === "user" ? "You" : "AI"}</div>
+                <div className="dkrs-ai-text">{m.content}</div>
               </div>
             ))
           )}
         </div>
 
-        <div className="ai-compose">
+        <div className="dkrs-ai-compose">
           <textarea
-            className="input"
+            className="dkrs-input"
             rows={3}
             value={input}
             onChange={(e) => setInput(e.target.value)}
@@ -511,34 +517,30 @@ export default function AiAssistantWidget({ month }) {
             disabled={convOn || loading}
           />
 
-          <button
-            className={`btn ${convOn ? "primary" : "ai-ghost"}`}
-            onClick={toggleConversation}
-            disabled={loading && !convOn}
-            title="Голосовой диалог: слушаю → отвечаю → снова слушаю"
-          >
-            {convOn ? "🛑 Conversation OFF" : "🎧 Conversation ON"}
-          </button>
+          <div className="dkrs-ai-buttons">
+            <button
+              className={`dkrs-btn ${convOn ? "dkrs-btn-primary" : "dkrs-btn-ghost"}`}
+              onClick={toggleConversation}
+              disabled={loading && !convOn}
+              title="Голосовой диалог: слушаю → отвечаю → снова слушаю"
+            >
+              {convOn ? "🛑 Conversation OFF" : "🎧 Conversation ON"}
+            </button>
 
-          <button className="btn ai-primary" disabled={!canSend} onClick={sendText}>
-            {loading ? "Думаю…" : "Спросить"}
-          </button>
+            <button className="dkrs-btn dkrs-btn-primary" disabled={!canSend} onClick={sendText}>
+              {loading ? "Thinking…" : "Ask"}
+            </button>
+
+            {convOn ? (
+              <button className="dkrs-btn dkrs-btn-ghost" onClick={stopAll} title="Остановить запись и воспроизведение">
+                ⏹ Stop
+              </button>
+            ) : null}
+          </div>
         </div>
 
-        {convOn ? (
-          <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center" }}>
-            <div style={{ opacity: 0.7, fontSize: 12 }}>
-              Если что-то зависло — нажми “Стоп”.
-            </div>
-
-            <button className="btn ai-ghost" onClick={stopAll}>
-              ⏹️ Стоп
-            </button>
-          </div>
-        ) : null}
-
         {err ? (
-          <div style={{ color: "rgba(239,68,68,.95)", fontWeight: 800, fontSize: 12 }}>
+          <div className="dkrs-ai-error">
             {err}
           </div>
         ) : null}
