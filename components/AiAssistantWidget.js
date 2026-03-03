@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useMemo, useRef, useState } from "react";
 
 export default function AiAssistantWidget({ month }) {
   const [input, setInput] = useState("");
@@ -6,11 +6,26 @@ export default function AiAssistantWidget({ month }) {
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState("");
 
-  const canSend = useMemo(() => {
-    return !!month && input.trim().length > 0 && !loading;
-  }, [month, input, loading]);
+  // voice
+  const [recording, setRecording] = useState(false);
+  const mediaRecRef = useRef(null);
+  const chunksRef = useRef([]);
 
-  async function send() {
+  const canSend = useMemo(() => !!month && input.trim().length > 0 && !loading, [month, input, loading]);
+
+  function pushMessage(role, content) {
+    setItems((prev) => [...prev, { role, content }]);
+  }
+
+  function playMp3Base64(b64) {
+    if (!b64) return;
+    try {
+      const audio = new Audio(`data:audio/mpeg;base64,${b64}`);
+      audio.play().catch(() => {});
+    } catch {}
+  }
+
+  async function sendText() {
     if (!canSend) return;
 
     const question = input.trim();
@@ -28,27 +43,130 @@ export default function AiAssistantWidget({ month }) {
         body: JSON.stringify({
           month,
           question,
-          messages: next.slice(-8), // короткая история
+          messages: next.slice(-8),
         }),
       });
 
       const text = await resp.text();
       let json = null;
-      try {
-        json = JSON.parse(text);
-      } catch {}
+      try { json = JSON.parse(text); } catch {}
 
       if (!resp.ok || !json?.ok) {
-        const msg = (json?.error || text || "Ошибка").slice(0, 800);
-        setErr(msg);
-        setItems((prev) => [
-          ...prev,
-          { role: "assistant", content: "Не получилось получить ответ. Попробуй задать вопрос иначе." },
-        ]);
+        setErr((json?.error || text || "Ошибка").slice(0, 800));
+        pushMessage("assistant", "Не получилось получить ответ. Попробуй задать вопрос иначе.");
         return;
       }
 
-      setItems((prev) => [...prev, { role: "assistant", content: String(json.answer || "") }]);
+      pushMessage("assistant", String(json.answer || ""));
+    } catch (e) {
+      setErr(String(e?.message || e));
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function startRecording() {
+    setErr("");
+    if (recording) return;
+
+    if (!navigator?.mediaDevices?.getUserMedia) {
+      setErr("Запись недоступна: браузер не поддерживает getUserMedia.");
+      return;
+    }
+
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+
+      // попробуем webm/opus (обычно поддерживается)
+      const opts = {};
+      if (window.MediaRecorder && MediaRecorder.isTypeSupported("audio/webm;codecs=opus")) {
+        opts.mimeType = "audio/webm;codecs=opus";
+      } else if (window.MediaRecorder && MediaRecorder.isTypeSupported("audio/webm")) {
+        opts.mimeType = "audio/webm";
+      }
+
+      const mr = new MediaRecorder(stream, opts);
+      mediaRecRef.current = mr;
+      chunksRef.current = [];
+
+      mr.ondataavailable = (e) => {
+        if (e.data && e.data.size > 0) chunksRef.current.push(e.data);
+      };
+
+      mr.onstop = async () => {
+        // остановим микрофон
+        try { stream.getTracks().forEach((t) => t.stop()); } catch {}
+
+        const blob = new Blob(chunksRef.current, { type: mr.mimeType || "audio/webm" });
+        chunksRef.current = [];
+
+        // отправим в OpenAI voice endpoint
+        await sendVoiceBlob(blob, mr.mimeType || blob.type || "audio/webm");
+      };
+
+      mr.start();
+      setRecording(true);
+    } catch (e) {
+      setErr("Не удалось включить микрофон: " + String(e?.message || e));
+    }
+  }
+
+  function stopRecording() {
+    if (!recording) return;
+    setRecording(false);
+    try {
+      mediaRecRef.current && mediaRecRef.current.stop();
+    } catch {}
+  }
+
+  async function sendVoiceBlob(blob, mimeType) {
+    if (!month) {
+      setErr("Сначала выбери месяц.");
+      return;
+    }
+
+    setLoading(true);
+    setErr("");
+
+    try {
+      // blob -> base64
+      const arrayBuf = await blob.arrayBuffer();
+      const bytes = new Uint8Array(arrayBuf);
+      let binary = "";
+      for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
+      const audioBase64 = btoa(binary);
+
+      const next = items.slice(-8); // историю отдадим серверу
+      // добавим "пользователь сказал" после распознавания (сервер вернёт transcript)
+
+      const resp = await fetch("/api/assistant_voice", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          month,
+          audioBase64,
+          mimeType,
+          messages: next,
+        }),
+      });
+
+      const text = await resp.text();
+      let json = null;
+      try { json = JSON.parse(text); } catch {}
+
+      if (!resp.ok || !json?.ok) {
+        setErr((json?.error || text || "Ошибка").slice(0, 900));
+        return;
+      }
+
+      const transcript = String(json.transcript || "").trim();
+      const answer = String(json.answer || "").trim();
+
+      if (transcript) pushMessage("user", transcript);
+      if (answer) pushMessage("assistant", answer);
+
+      // play audio
+      if (json.audioMp3Base64) playMp3Base64(json.audioMp3Base64);
     } catch (e) {
       setErr(String(e?.message || e));
     } finally {
@@ -74,7 +192,7 @@ export default function AiAssistantWidget({ month }) {
       <div style={{ marginTop: 12, display: "grid", gap: 10 }}>
         <div className="ai-chat" style={{ maxHeight: 260, overflow: "auto" }}>
           {items.length === 0 ? (
-            <div style={{ opacity: 0.75 }}>Задай вопрос — я отвечу по данным из базы.</div>
+            <div style={{ opacity: 0.75 }}>Напиши или скажи вопрос — я отвечу по данным из базы.</div>
           ) : (
             items.map((m, i) => (
               <div key={i} className={`ai-msg ${m.role === "user" ? "user" : "assistant"}`}>
@@ -85,27 +203,37 @@ export default function AiAssistantWidget({ month }) {
           )}
         </div>
 
+        {/* Composer */}
         <div className="ai-compose">
           <textarea
             className="input"
             rows={3}
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            placeholder="Напиши вопрос по финансам, проектам, рискам, кварталу…"
+            placeholder="Напиши вопрос… (или нажми 🎤 и скажи)"
           />
 
-          <button className="btn ai-primary" disabled={!canSend} onClick={send}>
+          <button
+            className={`btn ${recording ? "primary" : "ai-ghost"}`}
+            onClick={recording ? stopRecording : startRecording}
+            disabled={loading}
+            title="Голосовой вопрос через OpenAI STT"
+          >
+            {recording ? "⏹️ Стоп" : "🎤 Голос"}
+          </button>
+
+          <button className="btn ai-primary" disabled={!canSend} onClick={sendText}>
             {loading ? "Думаю…" : "Спросить"}
           </button>
         </div>
 
         {err ? (
-          <div style={{ marginTop: 2, color: "rgba(239,68,68,.95)", fontWeight: 800, fontSize: 12 }}>
+          <div style={{ color: "rgba(239,68,68,.95)", fontWeight: 800, fontSize: 12 }}>
             {err}
           </div>
         ) : (
-          <div style={{ marginTop: 2, opacity: 0.6, fontSize: 12 }}>
-            Советы: укажи период (“квартал 2025-Q4”) или проект (“Верный”).
+          <div style={{ opacity: 0.6, fontSize: 12 }}>
+            Голос работает через OpenAI: распознавание + озвучка ответа.
           </div>
         )}
       </div>
