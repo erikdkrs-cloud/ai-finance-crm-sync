@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-
+import AiAssistantWidget from "../components/AiAssistantWidget";
 import TopProjectsCards from "../components/TopProjectsCards";
 import AnomaliesCard from "../components/AnomaliesCard";
 
@@ -442,7 +442,7 @@ export default function DashboardPage() {
 
       {/* ✅ Anomalies (NEW) */}
       {!loading && data ? <AnomaliesCard projects={projects} month={month} /> : null}
-
+{!loading && data ? <AiAssistantWidget month={month} /> : null}
       <div key={animKey} className={`fade-wrap ${loading ? "is-loading" : ""}`}>
         {/* KPI */}
         <div className="kpi-grid">
