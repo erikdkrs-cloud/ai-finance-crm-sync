@@ -1,6 +1,5 @@
 // pages/dashboard.js
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import Link from "next/link";
 import DkrsAppShell from "../components/DkrsAppShell";
 
 function n(x) {
@@ -89,7 +88,7 @@ function KpiCard({ title, value, hint, negative, deltaText, deltaTone }) {
     deltaTone === "pos" ? "dkrs-delta-pos" : deltaTone === "neg" ? "dkrs-delta-neg" : "";
 
   return (
-    <div className="dkrs-stat">
+    <div className="dkrs-stat dkrs-stat-glow">
       <div className="dkrs-stat-head">
         <div className="dkrs-stat-label">{title}</div>
         {deltaText ? <div className={`dkrs-stat-delta ${deltaClass}`}>{deltaText}</div> : <div />}
@@ -103,7 +102,7 @@ function KpiCard({ title, value, hint, negative, deltaText, deltaTone }) {
 
 function KpiSkeleton() {
   return (
-    <div className="dkrs-stat">
+    <div className="dkrs-stat dkrs-stat-glow">
       <div className="dkrs-skel dkrs-skel-line" style={{ width: 120 }} />
       <div className="dkrs-skel dkrs-skel-big" style={{ width: 180, marginTop: 10 }} />
       <div className="dkrs-skel dkrs-skel-line" style={{ width: 140, marginTop: 10 }} />
@@ -129,9 +128,7 @@ function TableSkeleton({ rows = 8, cols = 11 }) {
 }
 
 function extractTotals(data) {
-  const totalsRaw =
-    data?.totals || data?.total || data?.summary || data?.kpi || data?.metrics || {};
-
+  const totalsRaw = data?.totals || data?.total || data?.summary || data?.kpi || data?.metrics || {};
   const revenue = n(pick(totalsRaw, ["revenue_no_vat", "revenue", "revenueNoVat", "total_revenue"], 0));
   const costs = n(pick(totalsRaw, ["costs", "expenses", "total_costs", "total_expenses"], 0));
   const profit = n(pick(totalsRaw, ["profit", "net_profit"], revenue - costs));
@@ -139,7 +136,6 @@ function extractTotals(data) {
   const projectsCount =
     pick(totalsRaw, ["projects_count", "projectsCount"], null) ??
     (Array.isArray(data?.projects) ? data.projects.length : null);
-
   return { revenue, costs, profit, margin, projectsCount };
 }
 
@@ -151,18 +147,15 @@ export default function DashboardPage() {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(false);
 
-  // previous month compare
   const [prevMonth, setPrevMonth] = useState("");
   const [prevData, setPrevData] = useState(null);
   const [prevLoading, setPrevLoading] = useState(false);
 
   const [animKey, setAnimKey] = useState(0);
 
-  // report generation UI
   const [reportLoading, setReportLoading] = useState(false);
   const [reportError, setReportError] = useState("");
 
-  // table filters
   const [projectQuery, setProjectQuery] = useState("");
   const [sortKey, setSortKey] = useState("margin");
   const [sortDir, setSortDir] = useState("asc");
@@ -241,9 +234,7 @@ export default function DashboardPage() {
   const marginAnim = useCountUp(totals.margin, { duration: 520, decimals: 4 });
   const projectsAnim = useCountUp(n(totals.projectsCount ?? 0), { duration: 380, decimals: 0 });
 
-  const projectsRaw = Array.isArray(data?.projects)
-    ? data.projects
-    : (Array.isArray(data?.items) ? data.items : []);
+  const projectsRaw = Array.isArray(data?.projects) ? data.projects : (Array.isArray(data?.items) ? data.items : []);
 
   const projects = useMemo(() => {
     return (projectsRaw || []).map((p) => {
@@ -302,7 +293,6 @@ export default function DashboardPage() {
 
   const filteredProjects = useMemo(() => {
     const q = projectQuery.trim().toLowerCase();
-
     let list = projects;
 
     if (riskFilter === "red") list = list.filter((x) => x.risk_level === "red");
@@ -310,7 +300,6 @@ export default function DashboardPage() {
     else if (riskFilter === "yellow_red") list = list.filter((x) => x.risk_level === "yellow" || x.risk_level === "red");
 
     if (q) list = list.filter((x) => (x.project_name || "").toLowerCase().includes(q));
-
     return list;
   }, [projects, riskFilter, projectQuery]);
 
@@ -326,9 +315,7 @@ export default function DashboardPage() {
     return [...filteredProjects].sort((a, b) => {
       const av = get(a);
       const bv = get(b);
-      if (typeof av === "string" || typeof bv === "string") {
-        return String(av).localeCompare(String(bv), "ru") * dir;
-      }
+      if (typeof av === "string" || typeof bv === "string") return String(av).localeCompare(String(bv), "ru") * dir;
       return (av - bv) * dir;
     });
   }, [filteredProjects, sortKey, sortDir]);
@@ -365,18 +352,14 @@ export default function DashboardPage() {
       </span>
 
       <button className="dkrs-btn dkrs-btn-primary" onClick={generateReport} disabled={reportLoading}>
-        {reportLoading ? "Генерируем…" : "Generate report"}
+        {reportLoading ? "Генерируем…" : "Сгенерировать отчёт"}
       </button>
-
-      <Link href="/reports" legacyBehavior>
-        <a className="dkrs-btn dkrs-btn-ghost">Reports</a>
-      </Link>
     </>
   );
 
   return (
     <DkrsAppShell
-      title="Dashboard"
+      title="Дашборд"
       subtitle={
         month
           ? `AI Finance CRM • Период: ${month}${prevMonth ? ` • сравнение с ${prevMonth}` : ""}`
@@ -414,7 +397,7 @@ export default function DashboardPage() {
                   setRiskFilter("all");
                 }}
               >
-                Reset
+                Сбросить
               </button>
             </div>
           </div>
@@ -442,7 +425,7 @@ export default function DashboardPage() {
       <div className="dkrs-card">
         <div className="dkrs-card-header">
           <div>
-            <div className="dkrs-card-title">Projects</div>
+            <div className="dkrs-card-title">Проекты</div>
             <div className="dkrs-small">
               Сортировка: <b>{sortKey}</b> ({sortDir === "asc" ? "по возрастанию" : "по убыванию"}) • Показано: <b>{sortedProjects.length}</b>
             </div>
@@ -453,7 +436,7 @@ export default function DashboardPage() {
             value={projectQuery}
             onChange={(e) => setProjectQuery(e.target.value)}
             placeholder="Поиск: Верный, Ламода, М.Видео…"
-            style={{ maxWidth: 380 }}
+            style={{ maxWidth: 420 }}
           />
         </div>
 
@@ -509,7 +492,6 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* Overlay report */}
       {reportLoading ? (
         <div className="dkrs-overlay">
           <div className="dkrs-toast">
@@ -519,7 +501,7 @@ export default function DashboardPage() {
             </div>
             <div className="dkrs-toast-sub">Обычно занимает 5–15 секунд. После завершения откроется отчёт автоматически.</div>
             {reportError ? (
-              <div className="dkrs-toast-sub" style={{ marginTop: 10, color: "rgba(239,68,68,.95)", fontWeight: 800 }}>
+              <div className="dkrs-toast-sub" style={{ marginTop: 10, color: "rgba(239,68,68,.95)", fontWeight: 900 }}>
                 Ошибка: {reportError}
               </div>
             ) : null}
