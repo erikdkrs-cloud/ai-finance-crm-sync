@@ -4,24 +4,15 @@ import DkrsAppShell from "../components/DkrsAppShell";
 import TopProjectsCards from "../components/TopProjectsCards";
 import AnomaliesCard from "../components/AnomaliesCard";
 
-function n(x) { const v = Number(x); return Number.isFinite(v) ? v : 0; }
-function pick(obj, keys, fallback = null) {
-  for (const k of keys) if (obj && obj[k] !== undefined && obj[k] !== null) return obj[k];
-  return fallback;
+function n(x) {
+  const v = Number(x);
+  return Number.isFinite(v) ? v : 0;
 }
-function fmtMoney(x) { return n(x).toLocaleString("ru-RU"); }
-function fmtPct(x) { return `${(n(x) * 100).toFixed(1)}%`; }
-
-function extractTotals(data) {
-  const totalsRaw = data?.totals || data?.total || data?.summary || data?.kpi || data?.metrics || {};
-  const revenue = n(pick(totalsRaw, ["revenue_no_vat", "revenue", "revenueNoVat", "total_revenue"], 0));
-  const costs = n(pick(totalsRaw, ["costs", "expenses", "total_costs", "total_expenses"], 0));
-  const profit = n(pick(totalsRaw, ["profit", "net_profit"], revenue - costs));
-  const margin = revenue > 0 ? profit / revenue : n(pick(totalsRaw, ["margin"], 0));
-  const projectsCount =
-    pick(totalsRaw, ["projects_count", "projectsCount"], null) ??
-    (Array.isArray(data?.projects) ? data.projects.length : null);
-  return { revenue, costs, profit, margin, projectsCount };
+function pick(obj, keys, fallback = null) {
+  for (const k of keys) {
+    if (obj && obj[k] !== undefined && obj[k] !== null) return obj[k];
+  }
+  return fallback;
 }
 
 function normalizeRisk(r) {
@@ -35,7 +26,6 @@ function normalizeRisk(r) {
 export default function InsightsPage() {
   const [months, setMonths] = useState([]);
   const [month, setMonth] = useState("");
-
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(false);
 
@@ -63,7 +53,8 @@ export default function InsightsPage() {
     })();
   }, [month]);
 
-  const projectsRaw = Array.isArray(data?.projects) ? data.projects : (Array.isArray(data?.items) ? data.items : []);
+  const projectsRaw = Array.isArray(data?.projects) ? data.projects : Array.isArray(data?.items) ? data.items : [];
+
   const projects = useMemo(() => {
     return (projectsRaw || []).map((p) => {
       const revenue = n(pick(p, ["revenue_no_vat", "revenue", "revenueNoVat"], 0));
@@ -71,103 +62,72 @@ export default function InsightsPage() {
       const profit = n(pick(p, ["profit"], revenue - costs));
       const margin = revenue > 0 ? profit / revenue : n(pick(p, ["margin"], 0));
       const risk = normalizeRisk(pick(p, ["risk_level", "risk", "riskLevel"], "green"));
+
       return {
         project_name: String(pick(p, ["project_name", "project", "name"], "—")),
         risk_level: risk,
-        revenue, costs, profit, margin,
+        revenue,
+        costs,
+        profit,
+        margin,
         penalties: n(pick(p, ["penalties", "fine", "fines"], 0)),
         ads: n(pick(p, ["ads", "marketing", "ad_costs"], 0)),
-        salary_workers: n(pick(p, ["salary_workers", "salary", "fot_workers", "workers_salary", "labor"], 0)),
         transport: n(pick(p, ["transport"], 0)),
+        salary_workers: n(pick(p, ["salary_workers", "salary", "fot_workers", "workers_salary", "labor"], 0)),
         team_payroll: n(pick(p, ["team_payroll"], 0)),
       };
     });
   }, [projectsRaw]);
 
-  const totals = useMemo(() => extractTotals(data), [data]);
-
   return (
     <DkrsAppShell
-      title="Insights"
-      subtitle="Краткая характеристика периода: KPI • топ-3 • проблемные зоны"
+      title="Сводка"
+      subtitle={`Краткая характеристика периода • ${month || ""}`}
       right={
-        <span className="dkrs-badge">
-          <span className={`dkrs-dot ${loading ? "dkrs-dot-yellow" : "dkrs-dot-green"}`} />
-          <span className="dkrs-mono">{month || ""}</span>
-        </span>
+        <div style={{ minWidth: 220 }}>
+          <select className="dkrs-select" value={month} onChange={(e) => setMonth(e.target.value)} aria-label="Выбор месяца">
+            {months.map((m) => (
+              <option key={m} value={m}>{m}</option>
+            ))}
+          </select>
+        </div>
       }
     >
-      <div className="dkrs-card" style={{ marginBottom: 14 }}>
-        <div className="dkrs-card-body">
-          <div className="dkrs-controls" style={{ gridTemplateColumns: "240px 1fr auto" }}>
-            <div>
-              <div className="dkrs-field-label">Месяц</div>
-              <select className="dkrs-select" value={month} onChange={(e) => setMonth(e.target.value)}>
-                {months.map((m) => <option key={m} value={m}>{m}</option>)}
-              </select>
-            </div>
-            <div className="dkrs-small" style={{ alignSelf: "center" }}>
-              Этот экран — для руководителя: “что важного произошло и где риск”.
-            </div>
-            <div />
+      {loading ? (
+        <div className="dkrs-card dkrs-card-glass">
+          <div className="dkrs-card-body" style={{ color: "rgba(255,255,255,.7)" }}>
+            Загружаем сводку…
           </div>
         </div>
-      </div>
-
-      {/* KPI compact */}
-      <div className="dkrs-grid dkrs-grid-2" style={{ marginBottom: 14 }}>
-        <div className="dkrs-card">
-          <div className="dkrs-card-header">
-            <div className="dkrs-card-title">KPI</div>
-            <span className="dkrs-badge"><span className="dkrs-dot dkrs-dot-green" /> Summary</span>
+      ) : (
+        <div className="dkrs-grid dkrs-grid-2">
+          <div className="dkrs-card dkrs-card-glass">
+            <div className="dkrs-card-header">
+              <div>
+                <div className="dkrs-card-title">Топ проекты</div>
+                <div className="dkrs-small">Прибыльные / убыточные</div>
+              </div>
+              <span className="dkrs-badge"><span className="dkrs-dot dkrs-dot-green" /> Updated</span>
+            </div>
+            <div className="dkrs-card-body">
+              <TopProjectsCards projects={projects} month={month} />
+            </div>
           </div>
-          <div className="dkrs-card-body">
-            <div className="dkrs-grid dkrs-grid-2">
-              <div className="dkrs-stat">
-                <div className="dkrs-stat-head"><div className="dkrs-stat-label">Выручка</div></div>
-                <div className="dkrs-stat-kpi">{fmtMoney(totals.revenue)}</div>
-                <div className="dkrs-stat-sub">без НДС</div>
+
+          <div className="dkrs-card dkrs-card-glass">
+            <div className="dkrs-card-header">
+              <div>
+                <div className="dkrs-card-title">Аномалии</div>
+                <div className="dkrs-small">Сигналы и проблемные зоны</div>
               </div>
-              <div className="dkrs-stat">
-                <div className="dkrs-stat-head"><div className="dkrs-stat-label">Расходы</div></div>
-                <div className="dkrs-stat-kpi">{fmtMoney(totals.costs)}</div>
-                <div className="dkrs-stat-sub">все затраты</div>
-              </div>
-              <div className="dkrs-stat">
-                <div className="dkrs-stat-head"><div className="dkrs-stat-label">Прибыль</div></div>
-                <div className={`dkrs-stat-kpi ${totals.profit < 0 ? "dkrs-neg" : ""}`}>{fmtMoney(totals.profit)}</div>
-                <div className="dkrs-stat-sub">выручка − расходы</div>
-              </div>
-              <div className="dkrs-stat">
-                <div className="dkrs-stat-head"><div className="dkrs-stat-label">Маржа</div></div>
-                <div className="dkrs-stat-kpi">{fmtPct(totals.margin)}</div>
-                <div className="dkrs-stat-sub">прибыль / выручка</div>
-              </div>
+              <span className="dkrs-badge"><span className="dkrs-dot dkrs-dot-yellow" /> Signals</span>
+            </div>
+            <div className="dkrs-card-body">
+              <AnomaliesCard projects={projects} month={month} />
             </div>
           </div>
         </div>
-
-        <div className="dkrs-card">
-          <div className="dkrs-card-header">
-            <div className="dkrs-card-title">Problems</div>
-            <span className="dkrs-badge"><span className="dkrs-dot dkrs-dot-yellow" /> Signals</span>
-          </div>
-          <div className="dkrs-card-body">
-            <AnomaliesCard projects={projects} month={month} />
-          </div>
-        </div>
-      </div>
-
-      {/* Top-3 */}
-      <div className="dkrs-card">
-        <div className="dkrs-card-header">
-          <div className="dkrs-card-title">Top projects</div>
-          <span className="dkrs-badge"><span className="dkrs-dot dkrs-dot-green" /> Updated</span>
-        </div>
-        <div className="dkrs-card-body">
-          <TopProjectsCards projects={projects} month={month} />
-        </div>
-      </div>
+      )}
     </DkrsAppShell>
   );
 }
