@@ -6,24 +6,34 @@ import MonthRangePicker from "../components/MonthRangePicker";
 import { fetchJson } from "../lib/dkrsClient";
 import { fmtMoney, fmtPct } from "../lib/format";
 
-function MetricIcon({ tone }) {
-  const color =
+function calcDelta(cur, prev) {
+  if (prev == null || cur == null) return { dv: null, dp: null };
+  const c = Number(cur);
+  const p = Number(prev);
+  if (!Number.isFinite(c) || !Number.isFinite(p)) return { dv: null, dp: null };
+  const dv = c - p;
+  const dp = p !== 0 ? (dv / p) * 100 : null;
+  return { dv, dp };
+}
+
+function MetricDot({ tone }) {
+  const bg =
     tone === "teal"
-      ? "linear-gradient(135deg, rgba(20,184,166,1), rgba(52,211,153,0.9))"
+      ? "linear-gradient(135deg, rgba(20,184,166,1), rgba(52,211,153,0.95))"
       : tone === "violet"
-      ? "linear-gradient(135deg, rgba(167,139,250,1), rgba(196,181,253,0.9))"
+      ? "linear-gradient(135deg, rgba(167,139,250,1), rgba(196,181,253,0.95))"
       : tone === "amber"
-      ? "linear-gradient(135deg, rgba(251,191,36,1), rgba(253,230,138,0.9))"
-      : "linear-gradient(135deg, rgba(148,163,184,1), rgba(226,232,240,0.9))";
+      ? "linear-gradient(135deg, rgba(251,191,36,1), rgba(253,230,138,0.95))"
+      : "linear-gradient(135deg, rgba(148,163,184,1), rgba(226,232,240,0.95))";
 
   return (
     <span
       style={{
-        width: 22,
-        height: 22,
+        width: 20,
+        height: 20,
         borderRadius: 999,
-        background: color,
-        boxShadow: "0 12px 24px rgba(15,23,42,0.14)",
+        background: bg,
+        boxShadow: "0 14px 26px rgba(15,23,42,0.12)",
         border: "1px solid rgba(255,255,255,0.75)",
         display: "inline-block",
       }}
@@ -32,15 +42,7 @@ function MetricIcon({ tone }) {
   );
 }
 
-function Row({
-  tone,
-  label,
-  value,
-  month,
-  deltaValue,
-  deltaPct,
-  deltaTone, // "pos" | "neg" | "muted"
-}) {
+function TotalsRow({ tone, label, value, month, deltaValue, deltaPct, deltaTone }) {
   const color =
     deltaTone === "pos"
       ? "rgba(20,184,166,0.95)"
@@ -51,7 +53,7 @@ function Row({
   return (
     <div className="refRow">
       <div className="refCell icon">
-        <MetricIcon tone={tone} />
+        <MetricDot tone={tone} />
       </div>
       <div className="refCell label">{label}</div>
       <div className="refCell value">{value}</div>
@@ -62,19 +64,11 @@ function Row({
       <div className="refCell pct" style={{ color }}>
         {deltaPct || "—"}
       </div>
-      <div className="refCell code">—</div>
+      <div className="refCell code" style={{ color: "rgba(100,116,139,0.75)", fontWeight: 850 }}>
+        —
+      </div>
     </div>
   );
-}
-
-function calcDelta(cur, prev) {
-  if (prev == null || cur == null) return { dv: null, dp: null };
-  const c = Number(cur);
-  const p = Number(prev);
-  if (!Number.isFinite(c) || !Number.isFinite(p)) return { dv: null, dp: null };
-  const dv = c - p;
-  const dp = p !== 0 ? (dv / p) * 100 : null;
-  return { dv, dp };
 }
 
 export default function AssistantPage() {
@@ -87,7 +81,7 @@ export default function AssistantPage() {
   const [prevTotals, setPrevTotals] = useState(null);
   const [err, setErr] = useState("");
 
-  // load months
+  // 1) months
   useEffect(() => {
     let alive = true;
     (async () => {
@@ -95,12 +89,10 @@ export default function AssistantPage() {
         const m = await fetchJson("/api/months");
         const list = m?.months || [];
         if (!alive) return;
-
         setMonths(list);
 
         const end = list?.[0] || "";
         const start = list?.[Math.min(list.length - 1, 5)] || end;
-
         setStartMonth(start);
         setEndMonth(end);
       } catch (e) {
@@ -111,7 +103,7 @@ export default function AssistantPage() {
     return () => (alive = false);
   }, []);
 
-  // load totals for endMonth + prev month (MoM)
+  // 2) totals for end + prev
   useEffect(() => {
     if (!endMonth) return;
     let alive = true;
@@ -161,16 +153,16 @@ export default function AssistantPage() {
     const prevProfit = p ? Number(p.profit) : null;
     const prevMarginPct = p && p.margin != null ? Number(p.margin) * 100 : null;
 
+    const idx = months.indexOf(endMonth);
+    const prevMonth = idx >= 0 ? months[idx + 1] || "" : "";
+
     return {
       revenue: { v: revenue, ...calcDelta(revenue, prevRevenue) },
       costs: { v: costs, ...calcDelta(costs, prevCosts) },
       profit: { v: profit, ...calcDelta(profit, prevProfit) },
       margin: { v: marginPct, ...calcDelta(marginPct, prevMarginPct) },
       hasPrev: !!p,
-      prevMonth: (() => {
-        const idx = months.indexOf(endMonth);
-        return idx >= 0 ? months[idx + 1] || "" : "";
-      })(),
+      prevMonth,
     };
   }, [totals, prevTotals, months, endMonth]);
 
@@ -186,7 +178,7 @@ export default function AssistantPage() {
         }}
       />
 
-      {/* реф-кнопка: зелёная + маленький toggle “внутри” */}
+      {/* ref-style green button + toggle */}
       <button className="btn" onClick={() => location.assign("/reports")} style={{ position: "relative", paddingRight: 56 }}>
         Сформировать отчёт
         <span
@@ -199,8 +191,8 @@ export default function AssistantPage() {
             width: 34,
             height: 18,
             borderRadius: 999,
-            background: "rgba(255,255,255,0.35)",
-            border: "1px solid rgba(255,255,255,0.50)",
+            background: "rgba(255,255,255,0.34)",
+            border: "1px solid rgba(255,255,255,0.52)",
             boxShadow: "0 10px 24px rgba(15,23,42,0.10)",
           }}
         >
@@ -223,7 +215,7 @@ export default function AssistantPage() {
 
   return (
     <DkrsAppShell title="AI помощник" subtitle="Диалог + анализ + генерация отчётов" rightSlot={rightSlot}>
-      {/* Banner — максимально близко к рефу */}
+      {/* Banner 1:1 */}
       <div className="glass strong refBanner" style={{ marginBottom: 14 }}>
         <div className="refBannerInner">
           <div className="refBannerLeft">
@@ -251,14 +243,17 @@ export default function AssistantPage() {
           </div>
 
           <div className="refBannerRight">
-            {/* ВАЖНО: для 1-в-1 положи сюда PNG/WEBP робота из рефа */}
-            <img className="refRobot" src="/robot-assistant.png" alt="AI Robot" />
+            <div className="refGlow g1" aria-hidden />
+            <div className="refGlow g2" aria-hidden />
+            <div className="refGlow g3" aria-hidden />
             <div className="refStars" aria-hidden />
+
+            <img className="refRobot" src="/robot-assistant.png" alt="AI Robot" />
           </div>
         </div>
       </div>
 
-      {/* Totals — табличный блок “как в рефе” */}
+      {/* Totals block like ref */}
       <div className="glass strong" style={{ padding: 16, marginBottom: 14 }}>
         <div className="refTotalsHead">
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
@@ -282,8 +277,7 @@ export default function AssistantPage() {
 
           <span className="dkrs-pill" style={{ padding: "7px 12px", gap: 8 }}>
             <span className="dot" style={{ background: "rgba(148,163,184,0.9)" }} />
-            Сравнение по % и по планам • Звёздочки
-            <span style={{ opacity: 0.7, marginLeft: 6 }}>▾</span>
+            Сравнение по планам • Звёздочки <span style={{ opacity: 0.7, marginLeft: 6 }}>▾</span>
           </span>
         </div>
 
@@ -306,7 +300,7 @@ export default function AssistantPage() {
             <div style={{ padding: 14, fontWeight: 900, color: "rgba(100,116,139,0.90)" }}>Нет данных</div>
           ) : (
             <>
-              <Row
+              <TotalsRow
                 tone="teal"
                 label="Выручка"
                 value={`${fmtMoney(computed.revenue.v)} ₽`}
@@ -324,7 +318,7 @@ export default function AssistantPage() {
                 deltaTone={computed.hasPrev ? (computed.revenue.dv >= 0 ? "pos" : "neg") : "muted"}
               />
 
-              <Row
+              <TotalsRow
                 tone="violet"
                 label="Расходы"
                 value={`${fmtMoney(computed.costs.v)} ₽`}
@@ -339,11 +333,10 @@ export default function AssistantPage() {
                     ? `${computed.costs.dp >= 0 ? "+" : "−"}${fmtPct(Math.abs(computed.costs.dp))}`
                     : null
                 }
-                // рост расходов — “плохо” (в рефе часто красным)
                 deltaTone={computed.hasPrev ? (computed.costs.dv <= 0 ? "pos" : "neg") : "muted"}
               />
 
-              <Row
+              <TotalsRow
                 tone="amber"
                 label="Прибыль"
                 value={`${fmtMoney(computed.profit.v)} ₽`}
@@ -361,7 +354,7 @@ export default function AssistantPage() {
                 deltaTone={computed.hasPrev ? (computed.profit.dv >= 0 ? "pos" : "neg") : "muted"}
               />
 
-              <Row
+              <TotalsRow
                 tone="teal"
                 label="Маржа"
                 value={computed.margin.v == null ? "—" : fmtPct(computed.margin.v)}
@@ -379,64 +372,49 @@ export default function AssistantPage() {
         </div>
       </div>
 
-      {/* Assistant widget */}
+      {/* Chat widget */}
       <div className="glass strong" style={{ padding: 16 }}>
         <AiAssistantWidget startMonth={startMonth} endMonth={endMonth} />
       </div>
 
-      {/* local styles to match reference */}
       <style jsx>{`
-        .refBanner {
-          padding: 0;
-          overflow: hidden;
-        }
+        /* Banner */
+        .refBanner { padding: 0; overflow: hidden; }
         .refBannerInner {
           display: grid;
           grid-template-columns: 1.15fr 0.85fr;
           align-items: stretch;
-          gap: 0;
-          min-height: 210px;
+          min-height: 220px;
           background:
-            radial-gradient(760px 260px at 35% 15%, rgba(167,139,250,0.30), transparent 62%),
-            radial-gradient(760px 280px at 88% 62%, rgba(20,184,166,0.22), transparent 62%),
-            radial-gradient(520px 260px at 92% 82%, rgba(52,211,153,0.14), transparent 62%),
-            linear-gradient(180deg, rgba(255,255,255,0.78), rgba(255,255,255,0.52));
+            radial-gradient(820px 280px at 35% 12%, rgba(167,139,250,0.34), transparent 62%),
+            radial-gradient(900px 320px at 88% 62%, rgba(20,184,166,0.22), transparent 62%),
+            radial-gradient(680px 320px at 92% 86%, rgba(52,211,153,0.14), transparent 62%),
+            linear-gradient(180deg, rgba(255,255,255,0.80), rgba(255,255,255,0.54));
         }
-        .refBannerLeft {
-          display: flex;
-          gap: 14px;
-          padding: 18px 18px 18px 18px;
-          min-width: 0;
-        }
+
+        .refBannerLeft { display: flex; gap: 14px; padding: 18px; min-width: 0; }
+
         .refAvatar {
-          width: 56px;
-          height: 56px;
-          border-radius: 18px;
-          border: 1px solid rgba(148,163,184,0.28);
+          width: 56px; height: 56px; border-radius: 18px;
+          border: 1px solid rgba(148,163,184,0.26);
           background:
             radial-gradient(22px 22px at 28% 28%, rgba(255,255,255,0.95), rgba(255,255,255,0.15)),
             linear-gradient(135deg, rgba(20,184,166,1), rgba(167,139,250,0.90));
           box-shadow: 0 18px 40px rgba(20,184,166,0.18);
-          display: grid;
-          place-items: center;
+          display: grid; place-items: center;
           flex: 0 0 auto;
         }
         .refAvatarFace {
-          width: 34px;
-          height: 24px;
-          border-radius: 12px;
+          width: 34px; height: 24px; border-radius: 12px;
           background: linear-gradient(180deg, rgba(11,43,44,1), rgba(17,60,62,1));
           box-shadow: inset 0 0 0 2px rgba(255,255,255,0.10);
           position: relative;
         }
-        .refAvatarFace:before,
-        .refAvatarFace:after {
+        .refAvatarFace:before, .refAvatarFace:after {
           content: "";
           position: absolute;
           top: 9px;
-          width: 6px;
-          height: 6px;
-          border-radius: 999px;
+          width: 6px; height: 6px; border-radius: 999px;
           background: rgba(124,248,234,0.95);
           box-shadow: 0 10px 18px rgba(124,248,234,0.20);
         }
@@ -452,59 +430,47 @@ export default function AssistantPage() {
         .refBullets {
           margin-top: 6px;
           color: rgba(100,116,139,0.90);
-          font-weight: 700;
+          font-weight: 750;
           font-size: 12px;
           line-height: 1.5;
         }
+
         .refPrompt {
           margin-top: 12px;
           border-radius: 18px;
           border: 1px solid rgba(148,163,184,0.22);
-          background: rgba(255,255,255,0.62);
+          background: rgba(255,255,255,0.64);
           box-shadow: 0 18px 44px rgba(15,23,42,0.08);
           padding: 14px;
-          max-width: 640px;
+          max-width: 660px;
           position: relative;
           overflow: hidden;
         }
         .refPrompt:after {
           content: "";
           position: absolute;
-          right: -60px;
-          top: -60px;
-          width: 200px;
-          height: 200px;
+          right: -60px; top: -60px;
+          width: 200px; height: 200px;
           background: radial-gradient(circle at 30% 30%, rgba(255,255,255,0.55), rgba(255,255,255,0));
           transform: rotate(18deg);
           pointer-events: none;
         }
-        .refPromptTitle {
-          font-weight: 950;
-          letter-spacing: -0.02em;
-          color: rgba(15,23,42,0.84);
-        }
-        .refPromptSub {
-          margin-top: 6px;
-          color: rgba(100,116,139,0.92);
-          font-weight: 700;
-          font-size: 12px;
-          line-height: 1.45;
-        }
+        .refPromptTitle { font-weight: 950; letter-spacing: -0.02em; color: rgba(15,23,42,0.84); }
+        .refPromptSub { margin-top: 6px; color: rgba(100,116,139,0.92); font-weight: 750; font-size: 12px; line-height: 1.45; }
 
-        .refBannerRight {
-          position: relative;
-          display: flex;
-          align-items: center;
-          justify-content: flex-end;
-          padding: 10px 12px;
-          overflow: hidden;
+        .refBannerRight { position: relative; display: flex; align-items: center; justify-content: flex-end; padding: 10px 10px 10px 0; overflow: hidden; }
+
+        .refGlow {
+          position: absolute;
+          border-radius: 999px;
+          filter: blur(10px);
+          opacity: 0.9;
+          pointer-events: none;
         }
-        .refRobot {
-          width: 280px;
-          height: auto;
-          filter: drop-shadow(0 26px 44px rgba(15,23,42,0.18));
-          opacity: 0.98;
-        }
+        .refGlow.g1 { right: -80px; bottom: -70px; width: 320px; height: 320px; background: radial-gradient(circle, rgba(20,184,166,0.32), transparent 68%); }
+        .refGlow.g2 { right: 40px; top: -90px; width: 340px; height: 340px; background: radial-gradient(circle, rgba(167,139,250,0.28), transparent 70%); }
+        .refGlow.g3 { right: 10px; bottom: 40px; width: 260px; height: 260px; background: radial-gradient(circle, rgba(52,211,153,0.16), transparent 70%); }
+
         .refStars {
           position: absolute;
           inset: 0;
@@ -514,22 +480,25 @@ export default function AssistantPage() {
             radial-gradient(circle at 90% 54%, rgba(255,255,255,0.8) 0 2px, transparent 3px),
             radial-gradient(circle at 74% 62%, rgba(255,255,255,0.6) 0 1px, transparent 2px),
             radial-gradient(circle at 88% 78%, rgba(255,255,255,0.7) 0 1px, transparent 2px);
-          opacity: 0.35;
+          opacity: 0.38;
           pointer-events: none;
         }
 
-        .refTotalsHead {
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          gap: 12px;
-          flex-wrap: wrap;
+        .refRobot {
+          width: 308px;
+          height: auto;
+          transform: translateX(18px);
+          filter: drop-shadow(0 26px 44px rgba(15,23,42,0.18));
+          opacity: 0.98;
+          position: relative;
+          z-index: 2;
+          user-select: none;
+          -webkit-user-drag: none;
         }
-        .refTotalsTitle {
-          font-weight: 950;
-          letter-spacing: -0.02em;
-          font-size: 16px;
-        }
+
+        /* Totals table */
+        .refTotalsHead { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+        .refTotalsTitle { font-weight: 950; letter-spacing: -0.02em; font-size: 16px; }
 
         .refTable {
           border-radius: 22px;
@@ -538,8 +507,8 @@ export default function AssistantPage() {
           box-shadow: 0 16px 40px rgba(15,23,42,0.08);
           overflow: hidden;
         }
-        .refHeadRow,
-        .refRow {
+
+        .refHeadRow, .refRow {
           display: grid;
           grid-template-columns: 34px 1.2fr 0.8fr 0.55fr 0.7fr 0.55fr 0.55fr;
           gap: 12px;
@@ -553,16 +522,11 @@ export default function AssistantPage() {
           background: linear-gradient(180deg, rgba(255,255,255,0.78), rgba(255,255,255,0.55));
           border-bottom: 1px solid rgba(148,163,184,0.20);
         }
-        .refRow {
-          border-bottom: 1px solid rgba(148,163,184,0.16);
-        }
-        .refRow:last-child {
-          border-bottom: 0;
-        }
-        .refCell.value,
-        .refCell.delta,
-        .refCell.pct,
-        .refCell.code {
+        .refRow { border-bottom: 1px solid rgba(148,163,184,0.16); }
+        .refRow:last-child { border-bottom: 0; }
+        .refRow:hover { background: rgba(20,184,166,0.05); }
+
+        .refCell.value, .refCell.delta, .refCell.pct, .refCell.code {
           text-align: right;
           font-weight: 950;
           color: rgba(15,23,42,0.86);
@@ -580,29 +544,14 @@ export default function AssistantPage() {
         }
 
         @media (max-width: 980px) {
-          .refBannerInner {
-            grid-template-columns: 1fr;
-          }
-          .refBannerRight {
-            justify-content: center;
-            padding-bottom: 16px;
-          }
-          .refRobot {
-            width: 240px;
-          }
+          .refBannerInner { grid-template-columns: 1fr; }
+          .refBannerRight { justify-content: center; padding-bottom: 16px; padding-right: 0; }
+          .refRobot { width: 270px; transform: none; }
         }
 
         @media (max-width: 740px) {
-          .refHeadRow,
-          .refRow {
-            grid-template-columns: 34px 1fr 0.9fr;
-          }
-          .refCell.month,
-          .refCell.delta,
-          .refCell.pct,
-          .refCell.code {
-            display: none;
-          }
+          .refHeadRow, .refRow { grid-template-columns: 34px 1fr 0.9fr; }
+          .refCell.month, .refCell.delta, .refCell.pct, .refCell.code { display: none; }
         }
       `}</style>
     </DkrsAppShell>
