@@ -1,7 +1,92 @@
 // components/AiAssistantWidget.js
 import React, { useMemo, useRef, useState, useEffect } from "react";
 
-export default function AiAssistantWidget({ month }) {
+function StatusChip({ status }) {
+  // idle | listening | thinking | speaking
+  const map = {
+    idle: { cls: "ok", text: "Готов" },
+    listening: { cls: "ok", text: "Слушаю" },
+    thinking: { cls: "warn", text: "Думаю" },
+    speaking: { cls: "ok", text: "Говорю" },
+  };
+  const x = map[status] || map.idle;
+
+  return (
+    <span className={`badge ${x.cls}`}>
+      <span className="dot" />
+      {x.text}
+    </span>
+  );
+}
+
+function Bubble({ role, content }) {
+  const isUser = role === "user";
+  return (
+    <div
+      style={{
+        display: "flex",
+        justifyContent: isUser ? "flex-end" : "flex-start",
+      }}
+    >
+      <div
+        style={{
+          maxWidth: "86%",
+          borderRadius: 18,
+          border: "1px solid rgba(148,163,184,0.22)",
+          background: isUser
+            ? "linear-gradient(135deg, rgba(20,184,166,0.16), rgba(52,211,153,0.10))"
+            : "rgba(255,255,255,0.60)",
+          boxShadow: "0 14px 34px rgba(15,23,42,0.08)",
+          padding: 12,
+        }}
+      >
+        <div style={{ display: "flex", alignItems: "baseline", gap: 10 }}>
+          <div style={{ fontWeight: 950, letterSpacing: "-0.02em" }}>
+            {isUser ? "Ты" : "AI"}
+          </div>
+          <div className="dkrs-sub" style={{ marginTop: 0 }}>
+            {isUser ? "вопрос" : "ответ"}
+          </div>
+        </div>
+
+        <div
+          style={{
+            marginTop: 8,
+            whiteSpace: "pre-wrap",
+            lineHeight: 1.45,
+            color: "rgba(15,23,42,0.86)",
+            fontWeight: 650,
+            fontSize: 13,
+          }}
+        >
+          {content}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function QuickPrompt({ children, onClick }) {
+  return (
+    <button
+      className="btn ghost"
+      onClick={onClick}
+      style={{
+        padding: "9px 12px",
+        fontWeight: 850,
+        fontSize: 12,
+        borderRadius: 999,
+      }}
+      type="button"
+    >
+      {children}
+    </button>
+  );
+}
+
+export default function AiAssistantWidget({ month, startMonth, endMonth }) {
+  const effectiveMonth = endMonth || month || "";
+
   const [input, setInput] = useState("");
   const [items, setItems] = useState([]); // {role, content}
   const [loading, setLoading] = useState(false);
@@ -46,10 +131,9 @@ export default function AiAssistantWidget({ month }) {
     hardStopAfterSpeechMs: 7000,
   };
 
-  const canSend = useMemo(
-    () => !!month && input.trim().length > 0 && !loading && !convOn,
-    [month, input, loading, convOn]
-  );
+  const canSend = useMemo(() => {
+    return !!effectiveMonth && input.trim().length > 0 && !loading && !convOn;
+  }, [effectiveMonth, input, loading, convOn]);
 
   function pushMessage(role, content) {
     setItems((prev) => [...prev, { role, content }]);
@@ -58,6 +142,7 @@ export default function AiAssistantWidget({ month }) {
   function stopPlayback() {
     try {
       if (audioRef.current) {
+        audioRef.current.onended = null;
         audioRef.current.pause();
         audioRef.current.currentTime = 0;
       }
@@ -89,7 +174,9 @@ export default function AiAssistantWidget({ month }) {
   }
 
   function cleanupVad() {
-    try { if (rafRef.current) cancelAnimationFrame(rafRef.current); } catch {}
+    try {
+      if (rafRef.current) cancelAnimationFrame(rafRef.current);
+    } catch {}
     rafRef.current = null;
 
     lastTRef.current = 0;
@@ -101,8 +188,12 @@ export default function AiAssistantWidget({ month }) {
     thrRef.current = 0.02;
     calibMsRef.current = 0;
 
-    try { if (sourceRef.current) sourceRef.current.disconnect(); } catch {}
-    try { if (analyserRef.current) analyserRef.current.disconnect(); } catch {}
+    try {
+      if (sourceRef.current) sourceRef.current.disconnect();
+    } catch {}
+    try {
+      if (analyserRef.current) analyserRef.current.disconnect();
+    } catch {}
 
     sourceRef.current = null;
     analyserRef.current = null;
@@ -124,14 +215,18 @@ export default function AiAssistantWidget({ month }) {
   function hardStopRecording() {
     recordingRef.current = false;
     setRecording(false);
-    setStatus("idle");
 
-    try { mediaRecRef.current && mediaRecRef.current.stop(); } catch {}
+    try {
+      if (mediaRecRef.current && mediaRecRef.current.state !== "inactive") {
+        mediaRecRef.current.stop();
+      }
+    } catch {}
+
     cleanupVad();
     stopStream();
   }
 
-  function stopRecording() {
+  function stopRecordingSoft() {
     if (!recordingRef.current) return;
 
     recordingRef.current = false;
@@ -139,9 +234,14 @@ export default function AiAssistantWidget({ month }) {
     setStatus("thinking");
 
     try {
-      mediaRecRef.current && mediaRecRef.current.stop();
+      if (mediaRecRef.current && mediaRecRef.current.state !== "inactive") {
+        mediaRecRef.current.stop();
+      } else {
+        setStatus(convOnRef.current ? "thinking" : "idle");
+      }
     } catch {
       hardStopRecording();
+      setStatus("idle");
     }
   }
 
@@ -173,10 +273,9 @@ export default function AiAssistantWidget({ month }) {
 
         const alpha = 0.10;
         noiseRef.current = noiseRef.current ? noiseRef.current * (1 - alpha) + rms * alpha : rms;
-
         thrRef.current = Math.max(VAD.thresholdMin, noiseRef.current * VAD.thresholdMult);
 
-        if (totalMsRef.current >= VAD.maxRecordMs) stopRecording();
+        if (totalMsRef.current >= VAD.maxRecordMs) stopRecordingSoft();
         else rafRef.current = requestAnimationFrame(tick);
         return;
       }
@@ -195,9 +294,9 @@ export default function AiAssistantWidget({ month }) {
 
       if (hasSpeech && status !== "listening") setStatus("listening");
 
-      if (hasSpeech && speechMsRef.current >= VAD.hardStopAfterSpeechMs) return stopRecording();
-      if (hasSpeech && silenceMsRef.current >= VAD.stopAfterSilenceMs) return stopRecording();
-      if (totalMsRef.current >= VAD.maxRecordMs) return stopRecording();
+      if (hasSpeech && speechMsRef.current >= VAD.hardStopAfterSpeechMs) return stopRecordingSoft();
+      if (hasSpeech && silenceMsRef.current >= VAD.stopAfterSilenceMs) return stopRecordingSoft();
+      if (totalMsRef.current >= VAD.maxRecordMs) return stopRecordingSoft();
 
       rafRef.current = requestAnimationFrame(tick);
     };
@@ -208,8 +307,8 @@ export default function AiAssistantWidget({ month }) {
   async function startRecording() {
     setErr("");
 
-    if (!month) {
-      setErr("Сначала выбери месяц.");
+    if (!effectiveMonth) {
+      setErr("Сначала выбери период (месяц).");
       return;
     }
     if (recordingRef.current) return;
@@ -268,6 +367,7 @@ export default function AiAssistantWidget({ month }) {
         const blob = new Blob(chunksRef.current, { type: mr.mimeType || "audio/webm" });
         chunksRef.current = [];
 
+        // если Conversation OFF — не отправляем
         if (!convOnRef.current) {
           setStatus("idle");
           return;
@@ -276,6 +376,7 @@ export default function AiAssistantWidget({ month }) {
         await sendVoiceBlob(blob, mr.mimeType || blob.type || "audio/webm");
       };
 
+      // reset VAD
       lastTRef.current = 0;
       silenceMsRef.current = 0;
       speechMsRef.current = 0;
@@ -294,12 +395,13 @@ export default function AiAssistantWidget({ month }) {
     } catch (e) {
       setErr("Не удалось включить микрофон: " + String(e?.message || e));
       hardStopRecording();
+      setStatus("idle");
     }
   }
 
   async function sendVoiceBlob(blob, mimeType) {
-    if (!month) {
-      setErr("Сначала выбери месяц.");
+    if (!effectiveMonth) {
+      setErr("Сначала выбери период (месяц).");
       setStatus("idle");
       return;
     }
@@ -321,12 +423,20 @@ export default function AiAssistantWidget({ month }) {
       const resp = await fetch("/api/assistant_voice", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ month, audioBase64, mimeType, messages: next }),
+        body: JSON.stringify({
+          month: effectiveMonth,
+          range: startMonth && endMonth ? { startMonth, endMonth } : null,
+          audioBase64,
+          mimeType,
+          messages: next,
+        }),
       });
 
       const txt = await resp.text();
       let j = null;
-      try { j = JSON.parse(txt); } catch {}
+      try {
+        j = JSON.parse(txt);
+      } catch {}
 
       if (!resp.ok || !j?.ok) {
         setErr((j?.error || txt || "Ошибка").slice(0, 900));
@@ -359,11 +469,16 @@ export default function AiAssistantWidget({ month }) {
     }
   }
 
-  async function sendText() {
-    if (!canSend) return;
+  async function sendText(textOverride) {
+    if (!effectiveMonth) {
+      setErr("Сначала выбери период (месяц).");
+      return;
+    }
 
-    const question = input.trim();
-    setInput("");
+    const question = (textOverride ?? input).trim();
+    if (!question || loading || convOn) return;
+
+    if (!textOverride) setInput("");
     setErr("");
 
     const next = [...items, { role: "user", content: question }];
@@ -376,12 +491,19 @@ export default function AiAssistantWidget({ month }) {
       const resp = await fetch("/api/assistant", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ month, question, messages: next.slice(-8) }),
+        body: JSON.stringify({
+          month: effectiveMonth,
+          range: startMonth && endMonth ? { startMonth, endMonth } : null,
+          question,
+          messages: next.slice(-8),
+        }),
       });
 
       const text = await resp.text();
       let json = null;
-      try { json = JSON.parse(text); } catch {}
+      try {
+        json = JSON.parse(text);
+      } catch {}
 
       if (!resp.ok || !json?.ok) {
         setErr((json?.error || text || "Ошибка").slice(0, 800));
@@ -390,7 +512,7 @@ export default function AiAssistantWidget({ month }) {
         return;
       }
 
-      pushMessage("assistant", String(json.answer || ""));
+      pushMessage("assistant", String(json.answer || "").trim());
       setStatus("idle");
     } catch (e) {
       setErr(String(e?.message || e));
@@ -401,24 +523,34 @@ export default function AiAssistantWidget({ month }) {
   }
 
   function stopAll() {
+    // важно: сначала гасим флаги, потом чистим ресурсы
     convOnRef.current = false;
     setConvOn(false);
+
     stopPlayback();
-    stopRecording();
-    hardStopRecording();
+
+    // stop recorder safely
+    try {
+      stopRecordingSoft();
+    } catch {}
+    try {
+      hardStopRecording();
+    } catch {}
+
     setLoading(false);
     setStatus("idle");
   }
 
   async function toggleConversation() {
     if (!convOn) {
-      if (!month) {
-        setErr("Сначала выбери месяц.");
+      if (!effectiveMonth) {
+        setErr("Сначала выбери период (месяц).");
         return;
       }
       setErr("");
       convOnRef.current = true;
       setConvOn(true);
+      setStatus("listening");
       await startRecording();
       return;
     }
@@ -427,89 +559,168 @@ export default function AiAssistantWidget({ month }) {
 
   useEffect(() => {
     return () => {
-      try { stopAll(); } catch {}
+      try {
+        stopAll();
+      } catch {}
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const statusChip = (() => {
-    if (recording) return { tone: "green", text: "Слушаю" };
-    if (loading) return { tone: "violet", text: "Думаю" };
-    if (status === "speaking") return { tone: "lime", text: "Говорю" };
-    return { tone: "neutral", text: "Готов" };
-  })();
+  const quicks = useMemo(() => {
+    const s = startMonth && endMonth ? `${startMonth} → ${endMonth}` : effectiveMonth;
+    return [
+      `Подведи итоги за период ${s}.`,
+      `Какие проекты самые убыточные за ${s}?`,
+      `Где низкая маржа и почему за ${s}?`,
+      `Покажи аномалии: штрафы, реклама, транспорт за ${s}.`,
+    ];
+  }, [startMonth, endMonth, effectiveMonth]);
 
   return (
-    <div className="dkrs-card dkrs-ai dkrs-ai-premium">
-      <div className="dkrs-card-header">
-        <div style={{ display: "grid", gap: 4 }}>
-          <div className="dkrs-card-title">AI помощник</div>
-          <div className="dkrs-small" style={{ marginTop: 0 }}>
+    <div>
+      {/* Header row */}
+      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
+        <div>
+          <div style={{ fontWeight: 950, letterSpacing: "-0.02em", fontSize: 16 }}>AI помощник</div>
+          <div className="dkrs-sub" style={{ marginTop: 6 }}>
             Voice Conversation Mode • авто-стоп по тишине (VAD)
           </div>
         </div>
 
         <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", justifyContent: "flex-end" }}>
-          <span className={`dkrs-chip ${statusChip.tone}`}>
-            <span className="dkrs-chip-dot" />
-            {statusChip.text}
-          </span>
-
-          <span className="dkrs-badge">
-            <span className="dkrs-dot dkrs-dot-green" />
-            LIVE • <span className="dkrs-mono">{month || ""}</span>
+          <StatusChip status={status === "thinking" ? "thinking" : status === "speaking" ? "speaking" : recording ? "listening" : "idle"} />
+          <span className="badge">
+            <span className="dot" style={{ background: "rgba(20,184,166,0.9)" }} />
+            LIVE • <span style={{ fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace", fontWeight: 900 }}>
+              {effectiveMonth || "—"}
+            </span>
           </span>
         </div>
       </div>
 
-      <div className="dkrs-card-body dkrs-ai-body">
-        <div className="dkrs-ai-chatbox">
+      {/* Quick prompts */}
+      <div style={{ marginTop: 12, display: "flex", gap: 10, flexWrap: "wrap" }}>
+        {quicks.map((q, i) => (
+          <QuickPrompt key={i} onClick={() => sendText(q)}>
+            {q}
+          </QuickPrompt>
+        ))}
+      </div>
+
+      {/* Chat box */}
+      <div
+        style={{
+          marginTop: 12,
+          borderRadius: 22,
+          border: "1px solid rgba(148,163,184,0.26)",
+          background: "rgba(255,255,255,0.58)",
+          boxShadow: "0 14px 34px rgba(15,23,42,0.08)",
+          overflow: "hidden",
+        }}
+      >
+        <div
+          style={{
+            padding: 12,
+            maxHeight: 420,
+            overflow: "auto",
+            display: "grid",
+            gap: 10,
+            background:
+              "radial-gradient(520px 240px at 20% 10%, rgba(167,139,250,0.10), transparent 60%)," +
+              "radial-gradient(520px 240px at 80% 90%, rgba(20,184,166,0.08), transparent 62%)",
+          }}
+        >
           {items.length === 0 ? (
-            <div className="dkrs-ai-empty">
+            <div
+              style={{
+                borderRadius: 18,
+                border: "1px dashed rgba(148,163,184,0.45)",
+                background: "rgba(255,255,255,0.50)",
+                padding: 14,
+                color: "rgba(100,116,139,0.95)",
+                fontWeight: 800,
+              }}
+            >
               Нажми <b>Conversation ON</b> и говори. Можно и текстом — ниже.
             </div>
           ) : (
-            items.map((m, i) => (
-              <div key={i} className={`dkrs-ai-bubble ${m.role === "user" ? "user" : "assistant"}`}>
-                <div className="dkrs-ai-bubble-top">
-                  <div className="dkrs-ai-role">{m.role === "user" ? "Ты" : "AI"}</div>
-                  <div className="dkrs-ai-role-sub">{m.role === "user" ? "вопрос" : "ответ"}</div>
-                </div>
-                <div className="dkrs-ai-text">{m.content}</div>
-              </div>
-            ))
+            items.map((m, i) => <Bubble key={i} role={m.role} content={m.content} />)
           )}
         </div>
 
-        <div className="dkrs-ai-compose">
+        {/* Composer */}
+        <div
+          style={{
+            padding: 12,
+            borderTop: "1px solid rgba(148,163,184,0.18)",
+            background: "linear-gradient(180deg, rgba(255,255,255,0.70), rgba(255,255,255,0.55))",
+          }}
+        >
           <textarea
-            className="dkrs-input"
-            rows={3}
+            className="input"
+            style={{
+              width: "100%",
+              height: 92,
+              paddingTop: 10,
+              paddingBottom: 10,
+              resize: "vertical",
+              borderRadius: 18,
+            }}
             value={input}
             onChange={(e) => setInput(e.target.value)}
             placeholder="Напиши вопрос…"
             disabled={convOn || loading}
           />
 
-          <div className="dkrs-ai-actions">
-            <button className={`dkrs-btn ${convOn ? "dkrs-btn-violet" : "dkrs-btn-ghost"}`} onClick={toggleConversation} disabled={loading && !convOn}>
+          <div style={{ marginTop: 10, display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+            <button
+              className={convOn ? "btn" : "btn ghost"}
+              onClick={toggleConversation}
+              disabled={loading && !convOn}
+              type="button"
+              title="Включить/выключить голосовой режим"
+            >
               {convOn ? "🛑 Conversation OFF" : "🎧 Conversation ON"}
             </button>
 
-            <button className="dkrs-btn dkrs-btn-primary" disabled={!canSend} onClick={sendText}>
+            <button className="btn" disabled={!canSend} onClick={() => sendText()} type="button">
               {loading ? "Думаю…" : "Спросить"}
             </button>
 
             {convOn ? (
-              <button className="dkrs-btn dkrs-btn-ghost" onClick={stopAll}>
+              <button className="btn ghost" onClick={stopAll} type="button">
                 ⏹️ Стоп
               </button>
             ) : null}
+
+            <div className="dkrs-sub" style={{ marginLeft: "auto" }}>
+              {startMonth && endMonth ? (
+                <>
+                  Период: <b>{startMonth}</b> → <b>{endMonth}</b>
+                </>
+              ) : (
+                <>
+                  Месяц: <b>{effectiveMonth || "—"}</b>
+                </>
+              )}
+            </div>
           </div>
 
-          {err ? <div className="dkrs-ai-error">{err}</div> : null}
+          {err ? (
+            <div style={{ marginTop: 10, color: "rgba(251,113,133,0.95)", fontWeight: 900, fontSize: 13 }}>
+              {err}
+            </div>
+          ) : null}
         </div>
       </div>
+
+      <style jsx>{`
+        @media (max-width: 640px) {
+          textarea.input {
+            height: 84px !important;
+          }
+        }
+      `}</style>
     </div>
   );
 }
