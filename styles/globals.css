@@ -4,19 +4,20 @@
 * { box-sizing: border-box; }
 html, body { padding: 0; margin: 0; }
 a { color: inherit; text-decoration: none; }
+button, input, select, textarea { font-family: var(--font); }
 
 ::selection { background: rgba(20,184,166,0.25); }
 
+/* App layout */
 .dkrs-app {
   display: grid;
   grid-template-columns: var(--sidebar-w) 1fr;
   min-height: 100vh;
 }
 
-.dkrs-main {
-  min-width: 0;
-}
+.dkrs-main { min-width: 0; }
 
+/* Topbar */
 .dkrs-topbar {
   height: var(--topbar-h);
   display: flex;
@@ -25,6 +26,7 @@ a { color: inherit; text-decoration: none; }
   gap: 14px;
   padding: 14px var(--pad);
   margin: 14px var(--pad) 0;
+  overflow: hidden;
 }
 
 .dkrs-topbarInner {
@@ -33,6 +35,7 @@ a { color: inherit; text-decoration: none; }
   align-items: center;
   justify-content: space-between;
   gap: 14px;
+  min-width: 0;
 }
 
 .dkrs-topbarLeft {
@@ -52,6 +55,9 @@ a { color: inherit; text-decoration: none; }
   display:flex;
   align-items:center;
   gap: 10px;
+  flex-wrap: wrap;      /* important for small widths */
+  justify-content: flex-end;
+  min-width: 0;
 }
 
 /* Sidebar */
@@ -65,7 +71,7 @@ a { color: inherit; text-decoration: none; }
 .dkrs-sidebarPanel {
   height: calc(100vh - 28px);
   border-radius: 24px;
-  border: 1px solid rgba(148,163,184,0.30);
+  border: 1px solid rgba(148,163,184,0.28);
   background: rgba(255,255,255,0.60);
   backdrop-filter: blur(14px);
   -webkit-backdrop-filter: blur(14px);
@@ -80,6 +86,7 @@ a { color: inherit; text-decoration: none; }
 
 .dkrs-sidebarPanel:hover { width: var(--sidebar-w-open); }
 
+/* Brand */
 .dkrs-brand {
   display:flex;
   align-items:center;
@@ -87,7 +94,7 @@ a { color: inherit; text-decoration: none; }
   padding: 12px 12px;
   margin: 10px 10px 6px;
   border-radius: 16px;
-  border: 1px solid rgba(148,163,184,0.28);
+  border: 1px solid rgba(148,163,184,0.26);
   background: rgba(255,255,255,0.65);
   box-shadow: 0 10px 24px rgba(15,23,42,0.06);
 }
@@ -95,8 +102,9 @@ a { color: inherit; text-decoration: none; }
 .dkrs-brandMark {
   width: 28px; height: 28px;
   border-radius: 10px;
-  background: radial-gradient(16px 16px at 30% 30%, rgba(255,255,255,0.95), rgba(255,255,255,0.20)),
-              linear-gradient(135deg, rgba(20,184,166,1), rgba(167,139,250,0.90));
+  background:
+    radial-gradient(16px 16px at 30% 30%, rgba(255,255,255,0.95), rgba(255,255,255,0.20)),
+    linear-gradient(135deg, rgba(20,184,166,1), rgba(167,139,250,0.90));
   box-shadow: 0 14px 28px rgba(20,184,166,0.18);
 }
 
@@ -116,6 +124,7 @@ a { color: inherit; text-decoration: none; }
   transform: translateX(0);
 }
 
+/* Nav */
 .dkrs-nav {
   padding: 8px 8px 10px;
   display:flex;
@@ -150,7 +159,7 @@ a { color: inherit; text-decoration: none; }
 .dkrs-navIcon {
   width: 28px; height: 28px;
   border-radius: 12px;
-  border: 1px solid rgba(148,163,184,0.28);
+  border: 1px solid rgba(148,163,184,0.26);
   background: rgba(255,255,255,0.70);
   display:flex;
   align-items:center;
@@ -160,7 +169,7 @@ a { color: inherit; text-decoration: none; }
 }
 
 .dkrs-navLabel {
-  font-weight: 800;
+  font-weight: 850;
   font-size: 13px;
   white-space: nowrap;
   opacity: 0;
@@ -173,13 +182,14 @@ a { color: inherit; text-decoration: none; }
   transform: translateX(0);
 }
 
+/* Footer */
 .dkrs-sidebarFooter {
   margin-top: auto;
   padding: 10px;
 }
 
 .dkrs-footerCard {
-  border: 1px solid rgba(148,163,184,0.28);
+  border: 1px solid rgba(148,163,184,0.26);
   background: rgba(255,255,255,0.62);
   border-radius: 18px;
   padding: 10px;
@@ -199,7 +209,7 @@ a { color: inherit; text-decoration: none; }
 .dkrs-small {
   font-size: 12px;
   color: rgba(100,116,139,0.85);
-  font-weight: 800;
+  font-weight: 850;
   white-space: nowrap;
   opacity: 0;
   transform: translateX(-6px);
@@ -234,8 +244,23 @@ a { color: inherit; text-decoration: none; }
 .dkrs-drawer .dkrs-navLabel,
 .dkrs-drawer .dkrs-small { opacity: 1 !important; transform: none !important; }
 
+/* Mobile breakpoint */
 @media (max-width: 920px) {
   .dkrs-app { grid-template-columns: 1fr; }
   .dkrs-sidebar { display: none; }
-  .dkrs-topbar { margin-left: 14px; margin-right: 14px; padding-left: 14px; padding-right: 14px; }
+
+  .dkrs-topbar {
+    margin-left: 14px;
+    margin-right: 14px;
+    padding-left: 14px;
+    padding-right: 14px;
+    height: auto;              /* allow wrap */
+    padding-top: 12px;
+    padding-bottom: 12px;
+  }
+
+  .dkrs-topbarRight {
+    width: 100%;
+    justify-content: flex-start;
+  }
 }
