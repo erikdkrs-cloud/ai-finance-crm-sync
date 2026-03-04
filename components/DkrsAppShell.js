@@ -74,8 +74,8 @@ export default function DkrsAppShell({ title, subtitle, right, children }) {
 
   return (
     <div className="dkrs-app dkrs-app-mini">
-      {/* MINI SIDEBAR (desktop hover expand) */}
-      <aside className="dkrs-mini">
+      {/* MINI SIDEBAR (desktop hover expand; overlay, NOT pushing content) */}
+      <aside className="dkrs-mini" aria-label="Навигация">
         <div className="dkrs-mini-top">
           <div className="dkrs-mini-brand" title="DKRS">
             <div className="dkrs-logo">DKRS</div>
@@ -122,7 +122,14 @@ export default function DkrsAppShell({ title, subtitle, right, children }) {
 
         <nav className="dkrs-sb-nav">
           {items.map((it) => (
-            <NavItem key={`m-${it.href}`} href={it.href} label={it.label} icon={it.icon} isActive={path === it.key} onClick={() => setDrawerOpen(false)} />
+            <NavItem
+              key={`m-${it.href}`}
+              href={it.href}
+              label={it.label}
+              icon={it.icon}
+              isActive={path === it.key}
+              onClick={() => setDrawerOpen(false)}
+            />
           ))}
         </nav>
 
