@@ -3,31 +3,39 @@ import React, { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import DkrsAppShell from "../components/DkrsAppShell";
 import RiskBadge from "../components/RiskBadge";
-import { fmtMoney, fmtPct, clampRisk } from "../lib/format";
-import { tryMany } from "../lib/dkrsClient";
+import { fetchJson } from "../lib/dkrsClient";
 
-function normalizeRows(payload) {
-  // ожидаем либо {rows:[...]} либо просто [...]
-  const arr = Array.isArray(payload) ? payload : payload?.rows || payload?.data || [];
-  return arr.map((r, idx) => ({
-    id: r.id ?? r.report_id ?? r.ai_report_id ?? String(idx + 1),
-    month: r.month ?? r.period ?? r.period_month ?? r.period_id ?? "—",
-    project: r.project ?? r.project_name ?? r.name ?? "—",
-    revenue: r.revenue ?? r.revenue_no_vat ?? r.metrics?.revenue ?? r.metrics?.revenue_no_vat ?? null,
-    expense: r.expense ?? r.costs ?? r.metrics?.expense ?? r.metrics?.costs ?? null,
-    profit: r.profit ?? r.metrics?.profit ?? null,
-    margin: r.margin ?? r.metrics?.margin ?? null,
-    risk: r.risk_level ?? r.risk ?? r.level ?? "low",
-  }));
+function fmtDateTime(dt) {
+  if (!dt) return "—";
+  const s = String(dt);
+  // Neon often returns ISO string
+  // Show "YYYY-MM-DD HH:mm"
+  return s.replace("T", " ").slice(0, 16);
+}
+
+function preview(text, n = 140) {
+  const t = String(text || "").replace(/\s+/g, " ").trim();
+  if (!t) return "—";
+  if (t.length <= n) return t;
+  return t.slice(0, n).trimEnd() + "…";
+}
+
+function normalizeRisk(r) {
+  const v = String(r || "").toLowerCase();
+  // поддержим старые "green/yellow/red" и новые "low/medium/high"
+  if (v.includes("high") || v.includes("red") || v.includes("danger")) return "high";
+  if (v.includes("med") || v.includes("yellow") || v.includes("warn")) return "medium";
+  return "low";
 }
 
 export default function ReportsPage() {
-  const [q, setQ] = useState("");
-  const [riskFilter, setRiskFilter] = useState("all");
-  const [sort, setSort] = useState("month_desc");
+  const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [rows, setRows] = useState([]);
   const [err, setErr] = useState("");
+
+  const [q, setQ] = useState("");
+  const [risk, setRisk] = useState("all");
+  const [sort, setSort] = useState("created_desc"); // created_desc | created_asc | month_desc | month_asc
 
   useEffect(() => {
     let alive = true;
@@ -35,15 +43,14 @@ export default function ReportsPage() {
       setLoading(true);
       setErr("");
       try {
-        const data = await tryMany([
-          "/api/reports_list",
-          "/api/reports",
-        ]);
+        const data = await fetchJson("/api/reports_list");
         if (!alive) return;
-        setRows(normalizeRows(data));
+        if (!data?.ok) throw new Error(data?.error || "reports_list ok=false");
+        setItems(Array.isArray(data.items) ? data.items : []);
       } catch (e) {
         if (!alive) return;
         setErr(e?.message || "Не удалось загрузить отчёты");
+        setItems([]);
       } finally {
         if (alive) setLoading(false);
       }
@@ -54,38 +61,41 @@ export default function ReportsPage() {
   }, []);
 
   const view = useMemo(() => {
-    let r = [...rows];
+    let arr = [...items];
 
     if (q.trim()) {
       const qq = q.trim().toLowerCase();
-      r = r.filter((x) => `${x.project} ${x.month}`.toLowerCase().includes(qq));
+      arr = arr.filter((x) => {
+        const hay = `${x.month} ${x.summary_text} ${x.id}`.toLowerCase();
+        return hay.includes(qq);
+      });
     }
 
-    if (riskFilter !== "all") {
-      r = r.filter((x) => clampRisk(x.risk) === riskFilter);
+    if (risk !== "all") {
+      arr = arr.filter((x) => normalizeRisk(x.risk_level) === risk);
     }
 
     const sorters = {
-      month_desc: (a, b) => String(b.month).localeCompare(String(a.month)),
-      month_asc: (a, b) => String(a.month).localeCompare(String(b.month)),
-      profit_desc: (a, b) => (Number(b.profit) || -Infinity) - (Number(a.profit) || -Infinity),
-      profit_asc: (a, b) => (Number(a.profit) || Infinity) - (Number(b.profit) || Infinity),
+      created_desc: (a, b) => String(b.created_at || "").localeCompare(String(a.created_at || "")),
+      created_asc: (a, b) => String(a.created_at || "").localeCompare(String(b.created_at || "")),
+      month_desc: (a, b) => String(b.month || "").localeCompare(String(a.month || "")),
+      month_asc: (a, b) => String(a.month || "").localeCompare(String(b.month || "")),
     };
+    arr.sort(sorters[sort] || sorters.created_desc);
 
-    r.sort(sorters[sort] || sorters.month_desc);
-    return r;
-  }, [rows, q, riskFilter, sort]);
+    return arr;
+  }, [items, q, risk, sort]);
 
   return (
     <DkrsAppShell
       title="Отчёты"
-      subtitle="Список отчётов по периодам и проектам"
+      subtitle="Список AI отчётов по периодам"
       rightSlot={
         <>
           <input
             className="input"
             style={{ width: 260 }}
-            placeholder="Поиск…"
+            placeholder="Поиск по summary / месяцу / id…"
             value={q}
             onChange={(e) => setQ(e.target.value)}
           />
@@ -96,20 +106,31 @@ export default function ReportsPage() {
       }
     >
       <div className="glass strong" style={{ padding: 16 }}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: 12,
+            flexWrap: "wrap",
+          }}
+        >
           <div>
             <div style={{ fontWeight: 900, letterSpacing: "-0.02em" }}>Список отчётов</div>
-            <div className="dkrs-sub">Поиск, сортировка и бейджи риска в светлом glass-стиле</div>
+            <div className="dkrs-sub" style={{ marginTop: 6 }}>
+              Поиск • фильтр риска • сортировка • светлый glass UI
+            </div>
           </div>
 
           <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
             <select className="select" value={sort} onChange={(e) => setSort(e.target.value)}>
+              <option value="created_desc">Дата ↓</option>
+              <option value="created_asc">Дата ↑</option>
               <option value="month_desc">Месяц ↓</option>
               <option value="month_asc">Месяц ↑</option>
-              <option value="profit_desc">Прибыль ↓</option>
-              <option value="profit_asc">Прибыль ↑</option>
             </select>
-            <select className="select" value={riskFilter} onChange={(e) => setRiskFilter(e.target.value)}>
+
+            <select className="select" value={risk} onChange={(e) => setRisk(e.target.value)}>
               <option value="all">Все риски</option>
               <option value="low">LOW</option>
               <option value="medium">MED</option>
@@ -122,38 +143,56 @@ export default function ReportsPage() {
           <table className="table">
             <thead>
               <tr>
-                <th style={{ width: 56 }}>#</th>
-                <th>Месяц</th>
-                <th>Проект</th>
-                <th>Выручка</th>
-                <th>Расход</th>
-                <th>Прибыль</th>
-                <th>Маржа</th>
-                <th style={{ width: 120 }}>Риск</th>
+                <th style={{ width: 70 }}>ID</th>
+                <th style={{ width: 110 }}>Месяц</th>
+                <th>Summary</th>
+                <th style={{ width: 140 }}>Риск</th>
+                <th style={{ width: 170 }}>Создан</th>
               </tr>
             </thead>
             <tbody>
               {loading ? (
-                <tr><td colSpan={8} style={{ color: "rgba(100,116,139,0.9)", fontWeight: 800 }}>Загрузка…</td></tr>
+                <tr>
+                  <td colSpan={5} style={{ color: "rgba(100,116,139,0.9)", fontWeight: 800 }}>
+                    Загрузка…
+                  </td>
+                </tr>
               ) : err ? (
-                <tr><td colSpan={8} style={{ color: "rgba(251,113,133,0.95)", fontWeight: 900 }}>{err}</td></tr>
+                <tr>
+                  <td colSpan={5} style={{ color: "rgba(251,113,133,0.95)", fontWeight: 900 }}>
+                    {err}
+                  </td>
+                </tr>
               ) : view.length === 0 ? (
-                <tr><td colSpan={8} style={{ color: "rgba(100,116,139,0.9)", fontWeight: 800 }}>Ничего не найдено</td></tr>
+                <tr>
+                  <td colSpan={5} style={{ color: "rgba(100,116,139,0.9)", fontWeight: 800 }}>
+                    Ничего не найдено
+                  </td>
+                </tr>
               ) : (
-                view.map((r, idx) => (
+                view.map((r) => (
                   <tr key={r.id}>
-                    <td>{idx + 1}</td>
-                    <td>{r.month}</td>
-                    <td>
-                      <Link href={`/reports/${encodeURIComponent(r.id)}`} style={{ fontWeight: 900 }}>
-                        {r.project}
-                      </Link>
+                    <td style={{ fontWeight: 950 }}>
+                      <Link href={`/reports/${encodeURIComponent(r.id)}`}>{r.id}</Link>
                     </td>
-                    <td>{fmtMoney(r.revenue)}</td>
-                    <td>{fmtMoney(r.expense)}</td>
-                    <td>{fmtMoney(r.profit)}</td>
-                    <td>{fmtPct(r.margin)}</td>
-                    <td><RiskBadge risk={r.risk} /></td>
+                    <td style={{ fontWeight: 900 }}>{r.month}</td>
+                    <td>
+                      <Link
+                        href={`/reports/${encodeURIComponent(r.id)}`}
+                        style={{ fontWeight: 900, display: "inline-block", marginBottom: 4 }}
+                      >
+                        Открыть отчёт →
+                      </Link>
+                      <div className="dkrs-sub" style={{ marginTop: 0 }}>
+                        {preview(r.summary_text, 160)}
+                      </div>
+                    </td>
+                    <td>
+                      <RiskBadge risk={r.risk_level} />
+                    </td>
+                    <td style={{ color: "rgba(100,116,139,0.95)", fontWeight: 900 }}>
+                      {fmtDateTime(r.created_at)}
+                    </td>
                   </tr>
                 ))
               )}
