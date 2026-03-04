@@ -1,10 +1,6 @@
 // pages/dashboard.js
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import Link from "next/link";
 import DkrsAppShell from "../components/DkrsAppShell";
-import AiAssistantWidget from "../components/AiAssistantWidget";
-import TopProjectsCards from "../components/TopProjectsCards";
-import AnomaliesCard from "../components/AnomaliesCard";
 
 function n(x) {
   const v = Number(x);
@@ -32,19 +28,6 @@ function fmtDeltaPp(d) {
   const v = n(d) * 100;
   const sign = v > 0 ? "+" : v < 0 ? "−" : "±";
   return `${sign}${Math.abs(v).toFixed(1)} п.п.`;
-}
-
-function normalizeRisk(r) {
-  if (!r) return "green";
-  const s = String(r).toLowerCase();
-  if (s.includes("red") || s.includes("крас")) return "red";
-  if (s.includes("yellow") || s.includes("жел")) return "yellow";
-  return "green";
-}
-function riskRu(r) {
-  if (r === "red") return "красный";
-  if (r === "yellow") return "жёлтый";
-  return "зелёный";
 }
 
 /** Count-up */
@@ -106,10 +89,15 @@ function KpiCard({ title, value, hint, deltaText, deltaTone, variant = "lime", n
 }
 
 function KpiSkeleton() {
-  return <div className="dkrs-kpi dkrs-kpi-skel"><div className="dkrs-skel dkrs-skel-big" style={{ width: 140 }} /><div className="dkrs-skel dkrs-skel-line" style={{ width: 90, marginTop: 10 }} /></div>;
+  return (
+    <div className="dkrs-kpi dkrs-kpi-skel">
+      <div className="dkrs-skel dkrs-skel-big" style={{ width: 140 }} />
+      <div className="dkrs-skel dkrs-skel-line" style={{ width: 90, marginTop: 10 }} />
+    </div>
+  );
 }
 
-function TableSkeleton({ rows = 8, cols = 11 }) {
+function TableSkeleton({ rows = 10, cols = 11 }) {
   const widths = ["70px","220px","140px","140px","140px","110px","110px","110px","120px","140px","140px"];
   return (
     <tbody>
@@ -233,6 +221,7 @@ export default function DashboardPage() {
   const marginAnim = useCountUp(totals.margin, { duration: 520, decimals: 4 });
   const projectsAnim = useCountUp(n(totals.projectsCount ?? 0), { duration: 380, decimals: 0 });
 
+  // projects normalize
   const projectsRaw = Array.isArray(data?.projects) ? data.projects : Array.isArray(data?.items) ? data.items : [];
 
   const projects = useMemo(() => {
@@ -241,19 +230,19 @@ export default function DashboardPage() {
       const costs = n(pick(p, ["costs", "expenses", "total_costs"], 0));
       const profit = n(pick(p, ["profit"], revenue - costs));
       const margin = revenue > 0 ? profit / revenue : n(pick(p, ["margin"], 0));
-      const risk = normalizeRisk(pick(p, ["risk_level", "risk", "riskLevel"], "green"));
+      const risk = String(pick(p, ["risk_level", "risk", "riskLevel"], "green")).toLowerCase();
 
       return {
         project_name: String(pick(p, ["project_name", "project", "name"], "—")),
-        risk_level: risk,
+        risk_level: risk.includes("red") || risk.includes("крас") ? "red" : risk.includes("yellow") || risk.includes("жел") ? "yellow" : "green",
         revenue,
         costs,
         profit,
         margin,
         penalties: n(pick(p, ["penalties", "fine", "fines"], 0)),
         ads: n(pick(p, ["ads", "marketing", "ad_costs"], 0)),
-        salary_workers: n(pick(p, ["salary_workers", "salary", "fot_workers", "workers_salary", "labor"], 0)),
         transport: n(pick(p, ["transport"], 0)),
+        salary_workers: n(pick(p, ["salary_workers", "salary", "fot_workers", "workers_salary", "labor"], 0)),
         team_payroll: n(pick(p, ["team_payroll"], 0)),
       };
     });
@@ -303,7 +292,6 @@ export default function DashboardPage() {
 
   const sortedProjects = useMemo(() => {
     const dir = sortDir === "asc" ? 1 : -1;
-
     const get = (p) => {
       if (sortKey === "project_name") return String(p.project_name || "");
       if (sortKey === "risk_level") return String(p.risk_level || "");
@@ -325,7 +313,6 @@ export default function DashboardPage() {
       setSortDir("asc");
     }
   }
-
   function SortIcon({ colKey }) {
     if (sortKey !== colKey) return <span className="dkrs-sort dim">↕</span>;
     return <span className="dkrs-sort">{sortDir === "asc" ? "↑" : "↓"}</span>;
@@ -345,9 +332,6 @@ export default function DashboardPage() {
       <button className="dkrs-btn dkrs-btn-primary" disabled={reportLoading} onClick={generateReport}>
         {reportLoading ? "Генерируем…" : "Сгенерировать отчёт"}
       </button>
-      <Link href="/reports" legacyBehavior>
-        <a className="dkrs-btn dkrs-btn-ghost">Отчёты →</a>
-      </Link>
     </>
   );
 
@@ -357,7 +341,7 @@ export default function DashboardPage() {
       subtitle={`AI Finance CRM • ${month ? `Период: ${month}` : "загрузка периода…"}${prevMonth ? ` • сравнение с ${prevMonth}` : ""}`}
       right={right}
     >
-      {/* Controls card */}
+      {/* Controls */}
       <div className="dkrs-card" style={{ marginBottom: 14 }}>
         <div className="dkrs-card-body">
           <div className="dkrs-controls">
@@ -388,37 +372,6 @@ export default function DashboardPage() {
           </div>
         </div>
       </div>
-
-      {/* Top cards: keep existing widgets but within a nice grid container */}
-      {!loading && data ? (
-        <div className="dkrs-grid dkrs-grid-2" style={{ marginBottom: 14 }}>
-          <div className="dkrs-card dkrs-card-glass">
-            <div className="dkrs-card-header">
-              <div>
-                <div className="dkrs-card-title">Топ проекты</div>
-                <div className="dkrs-small">Прибыльные / убыточные</div>
-              </div>
-              <span className="dkrs-badge"><span className="dkrs-dot dkrs-dot-green" /> Updated</span>
-            </div>
-            <div className="dkrs-card-body">
-              <TopProjectsCards projects={projects} month={month} />
-            </div>
-          </div>
-
-          <div className="dkrs-card dkrs-card-glass">
-            <div className="dkrs-card-header">
-              <div>
-                <div className="dkrs-card-title">Аномалии</div>
-                <div className="dkrs-small">Сигналы и проблемные зоны</div>
-              </div>
-              <span className="dkrs-badge"><span className="dkrs-dot dkrs-dot-yellow" /> Signals</span>
-            </div>
-            <div className="dkrs-card-body">
-              <AnomaliesCard projects={projects} month={month} />
-            </div>
-          </div>
-        </div>
-      ) : null}
 
       {/* KPI */}
       <div key={animKey} className="dkrs-grid dkrs-grid-5" style={{ marginBottom: 14 }}>
@@ -472,22 +425,6 @@ export default function DashboardPage() {
           </>
         )}
       </div>
-
-      {/* AI widget stays as is for now, but framed */}
-      {!loading && data ? (
-        <div className="dkrs-card dkrs-card-glass" style={{ marginBottom: 14 }}>
-          <div className="dkrs-card-header">
-            <div>
-              <div className="dkrs-card-title">AI помощник</div>
-              <div className="dkrs-small">Conversation Mode • авто-стоп по тишине</div>
-            </div>
-            <span className="dkrs-badge"><span className="dkrs-dot dkrs-dot-green" /> LIVE • <span className="dkrs-mono">{month}</span></span>
-          </div>
-          <div className="dkrs-card-body">
-            <AiAssistantWidget month={month} />
-          </div>
-        </div>
-      ) : null}
 
       {/* Projects table */}
       <div className="dkrs-card dkrs-card-glass">
@@ -576,7 +513,7 @@ export default function DashboardPage() {
                         <td>
                           <span className="dkrs-badge">
                             <span className={`dkrs-dot ${dotClass}`} />
-                            {riskRu(p.risk_level)}
+                            {p.risk_level === "red" ? "красный" : p.risk_level === "yellow" ? "жёлтый" : "зелёный"}
                           </span>
                         </td>
                         <td className="dkrs-strong" style={{ maxWidth: 320, overflow: "hidden", textOverflow: "ellipsis" }}>
@@ -628,10 +565,6 @@ export default function DashboardPage() {
                 Ошибка: {reportError}
               </div>
             ) : null}
-
-            <div className="dkrs-toast-sub" style={{ marginTop: 10, opacity: 0.85 }}>
-              Не закрывай вкладку — после завершения откроется отчёт автоматически.
-            </div>
           </div>
         </div>
       ) : null}
