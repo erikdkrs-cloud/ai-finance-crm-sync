@@ -1,6 +1,10 @@
 // pages/dashboard.js
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import Link from "next/link";
 import DkrsAppShell from "../components/DkrsAppShell";
+import AiAssistantWidget from "../components/AiAssistantWidget";
+import TopProjectsCards from "../components/TopProjectsCards";
+import AnomaliesCard from "../components/AnomaliesCard";
 
 function n(x) {
   const v = Number(x);
@@ -83,42 +87,37 @@ function useCountUp(value, { duration = 450, decimals = 0 } = {}) {
   return display;
 }
 
-function KpiCard({ title, value, hint, negative, deltaText, deltaTone }) {
-  const deltaClass =
-    deltaTone === "pos" ? "dkrs-delta-pos" : deltaTone === "neg" ? "dkrs-delta-neg" : "";
-
+function KpiCard({ title, value, hint, deltaText, deltaTone, variant = "lime", negative }) {
   return (
-    <div className="dkrs-stat dkrs-stat-glow">
-      <div className="dkrs-stat-head">
-        <div className="dkrs-stat-label">{title}</div>
-        {deltaText ? <div className={`dkrs-stat-delta ${deltaClass}`}>{deltaText}</div> : <div />}
+    <div className={`dkrs-kpi dkrs-kpi-${variant}`}>
+      <div className="dkrs-kpi-top">
+        <div className="dkrs-kpi-title">{title}</div>
+        {deltaText ? (
+          <div className={`dkrs-kpi-delta ${deltaTone === "pos" ? "pos" : deltaTone === "neg" ? "neg" : ""}`}>
+            {deltaText}
+          </div>
+        ) : null}
       </div>
 
-      <div className={`dkrs-stat-kpi ${negative ? "dkrs-neg" : ""}`}>{value}</div>
-      <div className="dkrs-stat-sub">{hint}</div>
+      <div className={`dkrs-kpi-value dkrs-mono ${negative ? "dkrs-neg" : ""}`}>{value}</div>
+      <div className="dkrs-kpi-sub">{hint}</div>
     </div>
   );
 }
 
 function KpiSkeleton() {
-  return (
-    <div className="dkrs-stat dkrs-stat-glow">
-      <div className="dkrs-skel dkrs-skel-line" style={{ width: 120 }} />
-      <div className="dkrs-skel dkrs-skel-big" style={{ width: 180, marginTop: 10 }} />
-      <div className="dkrs-skel dkrs-skel-line" style={{ width: 140, marginTop: 10 }} />
-    </div>
-  );
+  return <div className="dkrs-kpi dkrs-kpi-skel"><div className="dkrs-skel dkrs-skel-big" style={{ width: 140 }} /><div className="dkrs-skel dkrs-skel-line" style={{ width: 90, marginTop: 10 }} /></div>;
 }
 
 function TableSkeleton({ rows = 8, cols = 11 }) {
-  const widths = ["55%","80%","70%","70%","70%","60%","55%","55%","55%","55%","55%"];
+  const widths = ["70px","220px","140px","140px","140px","110px","110px","110px","120px","140px","140px"];
   return (
     <tbody>
       {Array.from({ length: rows }).map((_, r) => (
         <tr key={r} className="dkrs-row">
           {Array.from({ length: cols }).map((__, c) => (
             <td key={c}>
-              <div className="dkrs-skel dkrs-skel-line" style={{ width: widths[c] || "70%", height: 14 }} />
+              <div className="dkrs-skel dkrs-skel-line" style={{ width: widths[c] || "120px" }} />
             </td>
           ))}
         </tr>
@@ -176,7 +175,7 @@ export default function DashboardPage() {
       return;
     }
     const idx = months.findIndex((m) => String(m) === String(month));
-    const pm = idx >= 0 ? (months[idx + 1] || "") : "";
+    const pm = idx >= 0 ? months[idx + 1] || "" : "";
     setPrevMonth(pm);
   }, [month, months]);
 
@@ -234,7 +233,7 @@ export default function DashboardPage() {
   const marginAnim = useCountUp(totals.margin, { duration: 520, decimals: 4 });
   const projectsAnim = useCountUp(n(totals.projectsCount ?? 0), { duration: 380, decimals: 0 });
 
-  const projectsRaw = Array.isArray(data?.projects) ? data.projects : (Array.isArray(data?.items) ? data.items : []);
+  const projectsRaw = Array.isArray(data?.projects) ? data.projects : Array.isArray(data?.items) ? data.items : [];
 
   const projects = useMemo(() => {
     return (projectsRaw || []).map((p) => {
@@ -262,7 +261,6 @@ export default function DashboardPage() {
 
   async function generateReport() {
     if (!month || reportLoading) return;
-
     setReportError("");
     setReportLoading(true);
 
@@ -337,41 +335,33 @@ export default function DashboardPage() {
   const deltaCosts = deltas ? fmtDeltaMoney(deltas.costs) : null;
   const deltaProfit = deltas ? fmtDeltaMoney(deltas.profit) : null;
   const deltaMargin = deltas ? fmtDeltaPp(deltas.margin) : null;
-  const deltaProjects = deltas
-    ? `${deltas.projectsCount > 0 ? "+" : deltas.projectsCount < 0 ? "−" : "±"}${Math.abs(deltas.projectsCount)}`
-    : null;
+  const deltaProjects = deltas ? `${deltas.projectsCount > 0 ? "+" : deltas.projectsCount < 0 ? "−" : "±"}${Math.abs(deltas.projectsCount)}` : null;
 
   const toneMoney = (v) => (v > 0 ? "pos" : v < 0 ? "neg" : "neutral");
   const toneCosts = (v) => (v > 0 ? "neg" : v < 0 ? "pos" : "neutral");
 
   const right = (
     <>
-      <span className="dkrs-badge">
-        <span className="dkrs-dot dkrs-dot-green" />
-        LIVE • <span className="dkrs-mono">{month || ""}</span>
-      </span>
-
-      <button className="dkrs-btn dkrs-btn-primary" onClick={generateReport} disabled={reportLoading}>
+      <button className="dkrs-btn dkrs-btn-primary" disabled={reportLoading} onClick={generateReport}>
         {reportLoading ? "Генерируем…" : "Сгенерировать отчёт"}
       </button>
+      <Link href="/reports" legacyBehavior>
+        <a className="dkrs-btn dkrs-btn-ghost">Отчёты →</a>
+      </Link>
     </>
   );
 
   return (
     <DkrsAppShell
       title="Дашборд"
-      subtitle={
-        month
-          ? `AI Finance CRM • Период: ${month}${prevMonth ? ` • сравнение с ${prevMonth}` : ""}`
-          : "AI Finance CRM • загрузка периода…"
-      }
+      subtitle={`AI Finance CRM • ${month ? `Период: ${month}` : "загрузка периода…"}${prevMonth ? ` • сравнение с ${prevMonth}` : ""}`}
       right={right}
     >
-      {/* Controls */}
+      {/* Controls card */}
       <div className="dkrs-card" style={{ marginBottom: 14 }}>
         <div className="dkrs-card-body">
           <div className="dkrs-controls">
-            <div className="dkrs-field">
+            <div>
               <div className="dkrs-field-label">Месяц</div>
               <select className="dkrs-select" value={month} onChange={(e) => setMonth(e.target.value)} aria-label="Выбор месяца">
                 {months.map((m) => (
@@ -380,23 +370,18 @@ export default function DashboardPage() {
               </select>
             </div>
 
-            <div className="dkrs-pills">
-              <button className={`dkrs-pill ${riskFilter === "all" ? "dkrs-pill-active" : ""}`} onClick={() => setRiskFilter("all")}>Все</button>
-              <button className={`dkrs-pill ${riskFilter === "yellow_red" ? "dkrs-pill-active" : ""}`} onClick={() => setRiskFilter("yellow_red")}>Жёлтые+красные</button>
-              <button className={`dkrs-pill ${riskFilter === "red" ? "dkrs-pill-active" : ""}`} onClick={() => setRiskFilter("red")}>Только красные</button>
-              <button className={`dkrs-pill ${riskFilter === "green" ? "dkrs-pill-active" : ""}`} onClick={() => setRiskFilter("green")}>Только зелёные</button>
+            <div>
+              <div className="dkrs-field-label">Фильтр риска</div>
+              <div className="dkrs-pills">
+                <button className={`dkrs-pill ${riskFilter === "all" ? "dkrs-pill-active" : ""}`} onClick={() => setRiskFilter("all")}>Все</button>
+                <button className={`dkrs-pill ${riskFilter === "yellow_red" ? "dkrs-pill-active" : ""}`} onClick={() => setRiskFilter("yellow_red")}>Жёлтые+красные</button>
+                <button className={`dkrs-pill ${riskFilter === "red" ? "dkrs-pill-active" : ""}`} onClick={() => setRiskFilter("red")}>Только красные</button>
+                <button className={`dkrs-pill ${riskFilter === "green" ? "dkrs-pill-active" : ""}`} onClick={() => setRiskFilter("green")}>Только зелёные</button>
+              </div>
             </div>
 
             <div className="dkrs-actions">
-              <button
-                className="dkrs-btn dkrs-btn-ghost"
-                onClick={() => {
-                  setSortKey("margin");
-                  setSortDir("asc");
-                  setProjectQuery("");
-                  setRiskFilter("all");
-                }}
-              >
+              <button className="dkrs-btn dkrs-btn-ghost" onClick={() => { setRiskFilter("all"); setProjectQuery(""); }}>
                 Сбросить
               </button>
             </div>
@@ -404,87 +389,221 @@ export default function DashboardPage() {
         </div>
       </div>
 
+      {/* Top cards: keep existing widgets but within a nice grid container */}
+      {!loading && data ? (
+        <div className="dkrs-grid dkrs-grid-2" style={{ marginBottom: 14 }}>
+          <div className="dkrs-card dkrs-card-glass">
+            <div className="dkrs-card-header">
+              <div>
+                <div className="dkrs-card-title">Топ проекты</div>
+                <div className="dkrs-small">Прибыльные / убыточные</div>
+              </div>
+              <span className="dkrs-badge"><span className="dkrs-dot dkrs-dot-green" /> Updated</span>
+            </div>
+            <div className="dkrs-card-body">
+              <TopProjectsCards projects={projects} month={month} />
+            </div>
+          </div>
+
+          <div className="dkrs-card dkrs-card-glass">
+            <div className="dkrs-card-header">
+              <div>
+                <div className="dkrs-card-title">Аномалии</div>
+                <div className="dkrs-small">Сигналы и проблемные зоны</div>
+              </div>
+              <span className="dkrs-badge"><span className="dkrs-dot dkrs-dot-yellow" /> Signals</span>
+            </div>
+            <div className="dkrs-card-body">
+              <AnomaliesCard projects={projects} month={month} />
+            </div>
+          </div>
+        </div>
+      ) : null}
+
       {/* KPI */}
-      <div className="dkrs-grid dkrs-grid-5" style={{ marginBottom: 14 }} key={animKey}>
+      <div key={animKey} className="dkrs-grid dkrs-grid-5" style={{ marginBottom: 14 }}>
         {loading && !data ? (
           <>
             <KpiSkeleton /><KpiSkeleton /><KpiSkeleton /><KpiSkeleton /><KpiSkeleton />
           </>
         ) : (
           <>
-            <KpiCard title="Выручка" value={fmtMoney(revenueAnim)} hint="без НДС" deltaText={prevLoading ? "…" : (prevMonth ? deltaRevenue : null)} deltaTone={deltas ? toneMoney(deltas.revenue) : "neutral"} />
-            <KpiCard title="Расходы" value={fmtMoney(costsAnim)} hint="все затраты" deltaText={prevLoading ? "…" : (prevMonth ? deltaCosts : null)} deltaTone={deltas ? toneCosts(deltas.costs) : "neutral"} />
-            <KpiCard title="Прибыль" value={fmtMoney(profitAnim)} hint="выручка − расходы" negative={profitAnim < 0} deltaText={prevLoading ? "…" : (prevMonth ? deltaProfit : null)} deltaTone={deltas ? toneMoney(deltas.profit) : "neutral"} />
-            <KpiCard title="Маржа" value={fmtPct(marginAnim)} hint="прибыль / выручка" deltaText={prevLoading ? "…" : (prevMonth ? deltaMargin : null)} deltaTone={deltas ? toneMoney(deltas.margin) : "neutral"} />
-            <KpiCard title="Проектов" value={String(Math.round(projectsAnim))} hint={loading ? "обновляем…" : "в выбранном месяце"} deltaText={prevLoading ? "…" : (prevMonth ? deltaProjects : null)} deltaTone="neutral" />
+            <KpiCard
+              title="Выручка"
+              value={fmtMoney(revenueAnim)}
+              hint="без НДС"
+              deltaText={prevLoading ? "…" : (prevMonth ? deltaRevenue : null)}
+              deltaTone={deltas ? toneMoney(deltas.revenue) : "neutral"}
+              variant="lime"
+            />
+            <KpiCard
+              title="Расходы"
+              value={fmtMoney(costsAnim)}
+              hint="все затраты"
+              deltaText={prevLoading ? "…" : (prevMonth ? deltaCosts : null)}
+              deltaTone={deltas ? toneCosts(deltas.costs) : "neutral"}
+              variant="violet"
+            />
+            <KpiCard
+              title="Прибыль"
+              value={fmtMoney(profitAnim)}
+              hint="выручка − расходы"
+              negative={profitAnim < 0}
+              deltaText={prevLoading ? "…" : (prevMonth ? deltaProfit : null)}
+              deltaTone={deltas ? toneMoney(deltas.profit) : "neutral"}
+              variant="cyan"
+            />
+            <KpiCard
+              title="Маржа"
+              value={fmtPct(marginAnim)}
+              hint="прибыль / выручка"
+              deltaText={prevLoading ? "…" : (prevMonth ? deltaMargin : null)}
+              deltaTone={deltas ? toneMoney(deltas.margin) : "neutral"}
+              variant="amber"
+            />
+            <KpiCard
+              title="Проектов"
+              value={String(Math.round(projectsAnim))}
+              hint={loading ? "обновляем…" : "в выбранном месяце"}
+              deltaText={prevLoading ? "…" : (prevMonth ? deltaProjects : null)}
+              deltaTone="neutral"
+              variant="glass"
+            />
           </>
         )}
       </div>
 
-      {/* Table */}
-      <div className="dkrs-card">
+      {/* AI widget stays as is for now, but framed */}
+      {!loading && data ? (
+        <div className="dkrs-card dkrs-card-glass" style={{ marginBottom: 14 }}>
+          <div className="dkrs-card-header">
+            <div>
+              <div className="dkrs-card-title">AI помощник</div>
+              <div className="dkrs-small">Conversation Mode • авто-стоп по тишине</div>
+            </div>
+            <span className="dkrs-badge"><span className="dkrs-dot dkrs-dot-green" /> LIVE • <span className="dkrs-mono">{month}</span></span>
+          </div>
+          <div className="dkrs-card-body">
+            <AiAssistantWidget month={month} />
+          </div>
+        </div>
+      ) : null}
+
+      {/* Projects table */}
+      <div className="dkrs-card dkrs-card-glass">
         <div className="dkrs-card-header">
           <div>
             <div className="dkrs-card-title">Проекты</div>
             <div className="dkrs-small">
-              Сортировка: <b>{sortKey}</b> ({sortDir === "asc" ? "по возрастанию" : "по убыванию"}) • Показано: <b>{sortedProjects.length}</b>
+              Сортировка: <b>{sortKey}</b> ({sortDir === "asc" ? "по возрастанию" : "по убыванию"}) • Показано:{" "}
+              <b>{sortedProjects.length}</b>
             </div>
           </div>
 
-          <input
-            className="dkrs-input"
-            value={projectQuery}
-            onChange={(e) => setProjectQuery(e.target.value)}
-            placeholder="Поиск: Верный, Ламода, М.Видео…"
-            style={{ maxWidth: 420 }}
-          />
+          <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+            <div style={{ minWidth: 260 }}>
+              <input
+                className="dkrs-input"
+                value={projectQuery}
+                onChange={(e) => setProjectQuery(e.target.value)}
+                placeholder="Поиск по проекту…"
+              />
+            </div>
+
+            <button
+              className="dkrs-btn dkrs-btn-ghost"
+              onClick={() => {
+                setSortKey("margin");
+                setSortDir("asc");
+              }}
+            >
+              Сбросить сортировку
+            </button>
+          </div>
         </div>
 
         <div className="dkrs-card-body" style={{ padding: 0 }}>
-          <div style={{ overflowX: "auto" }}>
-            <table className="dkrs-table">
+          <div className="dkrs-table-wrap">
+            <table className="dkrs-table dkrs-table-pro">
               <thead>
                 <tr>
-                  <th className="sortable" onClick={() => toggleSort("risk_level")}>Риск <SortIcon colKey="risk_level" /></th>
-                  <th className="sortable" onClick={() => toggleSort("project_name")}>Проект <SortIcon colKey="project_name" /></th>
-                  <th className="sortable" onClick={() => toggleSort("revenue")}>Выручка <SortIcon colKey="revenue" /></th>
-                  <th className="sortable" onClick={() => toggleSort("costs")}>Расходы <SortIcon colKey="costs" /></th>
-                  <th className="sortable" onClick={() => toggleSort("profit")}>Прибыль <SortIcon colKey="profit" /></th>
-                  <th className="sortable" onClick={() => toggleSort("margin")}>Маржа <SortIcon colKey="margin" /></th>
-                  <th className="sortable" onClick={() => toggleSort("penalties")}>Штрафы <SortIcon colKey="penalties" /></th>
-                  <th className="sortable" onClick={() => toggleSort("ads")}>Реклама <SortIcon colKey="ads" /></th>
-                  <th className="sortable" onClick={() => toggleSort("transport")}>Транспорт <SortIcon colKey="transport" /></th>
-                  <th className="sortable" onClick={() => toggleSort("salary_workers")}>ФОТ (рабочие) <SortIcon colKey="salary_workers" /></th>
-                  <th className="sortable" onClick={() => toggleSort("team_payroll")}>ФОТ (команда) <SortIcon colKey="team_payroll" /></th>
+                  <th className="sortable" onClick={() => toggleSort("risk_level")}>
+                    Риск <SortIcon colKey="risk_level" />
+                  </th>
+                  <th className="sortable" onClick={() => toggleSort("project_name")}>
+                    Проект <SortIcon colKey="project_name" />
+                  </th>
+                  <th className="sortable dkrs-num" onClick={() => toggleSort("revenue")}>
+                    Выручка <SortIcon colKey="revenue" />
+                  </th>
+                  <th className="sortable dkrs-num" onClick={() => toggleSort("costs")}>
+                    Расходы <SortIcon colKey="costs" />
+                  </th>
+                  <th className="sortable dkrs-num" onClick={() => toggleSort("profit")}>
+                    Прибыль <SortIcon colKey="profit" />
+                  </th>
+                  <th className="sortable dkrs-num" onClick={() => toggleSort("margin")}>
+                    Маржа <SortIcon colKey="margin" />
+                  </th>
+                  <th className="sortable dkrs-num" onClick={() => toggleSort("penalties")}>
+                    Штрафы <SortIcon colKey="penalties" />
+                  </th>
+                  <th className="sortable dkrs-num" onClick={() => toggleSort("ads")}>
+                    Реклама <SortIcon colKey="ads" />
+                  </th>
+                  <th className="sortable dkrs-num" onClick={() => toggleSort("transport")}>
+                    Транспорт <SortIcon colKey="transport" />
+                  </th>
+                  <th className="sortable dkrs-num" onClick={() => toggleSort("salary_workers")}>
+                    ФОТ (рабочие) <SortIcon colKey="salary_workers" />
+                  </th>
+                  <th className="sortable dkrs-num" onClick={() => toggleSort("team_payroll")}>
+                    ФОТ (команда) <SortIcon colKey="team_payroll" />
+                  </th>
                 </tr>
               </thead>
 
               {loading && (!data || sortedProjects.length === 0) ? (
-                <TableSkeleton rows={8} cols={11} />
+                <TableSkeleton rows={10} cols={11} />
               ) : (
                 <tbody>
-                  {sortedProjects.map((p, idx) => (
-                    <tr key={`${p.project_name}-${idx}`} className="dkrs-row">
-                      <td>
-                        <span className="dkrs-badge">
-                          <span className={`dkrs-dot ${
-                            p.risk_level === "red" ? "dkrs-dot-red" : p.risk_level === "yellow" ? "dkrs-dot-yellow" : "dkrs-dot-green"
-                          }`} />
-                          {riskRu(p.risk_level)}
-                        </span>
+                  {sortedProjects.map((p, idx) => {
+                    const dotClass =
+                      p.risk_level === "red" ? "dkrs-dot-red" : p.risk_level === "yellow" ? "dkrs-dot-yellow" : "dkrs-dot-green";
+
+                    return (
+                      <tr key={`${p.project_name}-${idx}`} className="dkrs-row">
+                        <td>
+                          <span className="dkrs-badge">
+                            <span className={`dkrs-dot ${dotClass}`} />
+                            {riskRu(p.risk_level)}
+                          </span>
+                        </td>
+                        <td className="dkrs-strong" style={{ maxWidth: 320, overflow: "hidden", textOverflow: "ellipsis" }}>
+                          {p.project_name}
+                        </td>
+                        <td className="dkrs-num dkrs-mono">{fmtMoney(p.revenue)}</td>
+                        <td className="dkrs-num dkrs-mono">{fmtMoney(p.costs)}</td>
+                        <td className={`dkrs-num dkrs-mono dkrs-strong ${p.profit < 0 ? "dkrs-neg" : ""}`}>
+                          {fmtMoney(p.profit)}
+                        </td>
+                        <td className="dkrs-num dkrs-mono">{fmtPct(p.margin)}</td>
+                        <td className="dkrs-num dkrs-mono">{fmtMoney(p.penalties)}</td>
+                        <td className="dkrs-num dkrs-mono">{fmtMoney(p.ads)}</td>
+                        <td className="dkrs-num dkrs-mono">{fmtMoney(p.transport)}</td>
+                        <td className="dkrs-num dkrs-mono">{fmtMoney(p.salary_workers)}</td>
+                        <td className="dkrs-num dkrs-mono">{fmtMoney(p.team_payroll)}</td>
+                      </tr>
+                    );
+                  })}
+
+                  {sortedProjects.length === 0 ? (
+                    <tr>
+                      <td colSpan={11} style={{ padding: 16, color: "rgba(255,255,255,.65)" }}>
+                        Нет данных (проверь фильтры/поиск).
                       </td>
-                      <td className="dkrs-strong">{p.project_name}</td>
-                      <td className="dkrs-num">{fmtMoney(p.revenue)}</td>
-                      <td className="dkrs-num">{fmtMoney(p.costs)}</td>
-                      <td className={`dkrs-num dkrs-strong ${p.profit < 0 ? "dkrs-neg" : ""}`}>{fmtMoney(p.profit)}</td>
-                      <td className="dkrs-num">{fmtPct(p.margin)}</td>
-                      <td className="dkrs-num">{fmtMoney(p.penalties)}</td>
-                      <td className="dkrs-num">{fmtMoney(p.ads)}</td>
-                      <td className="dkrs-num">{fmtMoney(p.transport)}</td>
-                      <td className="dkrs-num">{fmtMoney(p.salary_workers)}</td>
-                      <td className="dkrs-num">{fmtMoney(p.team_payroll)}</td>
                     </tr>
-                  ))}
+                  ) : null}
                 </tbody>
               )}
             </table>
@@ -492,6 +611,7 @@ export default function DashboardPage() {
         </div>
       </div>
 
+      {/* Report overlay */}
       {reportLoading ? (
         <div className="dkrs-overlay">
           <div className="dkrs-toast">
@@ -499,12 +619,19 @@ export default function DashboardPage() {
               <span className="dkrs-spinner" />
               <div className="dkrs-toast-title">Генерируем AI-отчёт…</div>
             </div>
-            <div className="dkrs-toast-sub">Обычно занимает 5–15 секунд. После завершения откроется отчёт автоматически.</div>
+            <div className="dkrs-toast-sub">
+              Обычно занимает 5–15 секунд. Мы считаем KPI, сравнение с прошлым месяцем и формируем рекомендации.
+            </div>
+
             {reportError ? (
               <div className="dkrs-toast-sub" style={{ marginTop: 10, color: "rgba(239,68,68,.95)", fontWeight: 900 }}>
                 Ошибка: {reportError}
               </div>
             ) : null}
+
+            <div className="dkrs-toast-sub" style={{ marginTop: 10, opacity: 0.85 }}>
+              Не закрывай вкладку — после завершения откроется отчёт автоматически.
+            </div>
           </div>
         </div>
       ) : null}
