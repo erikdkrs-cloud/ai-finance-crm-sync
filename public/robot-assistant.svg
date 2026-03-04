@@ -1,0 +1,60 @@
+<!-- public/robot-assistant.svg -->
+<svg width="520" height="520" viewBox="0 0 520 520" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="g1" x1="110" y1="120" x2="420" y2="420" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#34D399"/>
+      <stop offset="0.55" stop-color="#14B8A6"/>
+      <stop offset="1" stop-color="#A78BFA"/>
+    </linearGradient>
+    <radialGradient id="g2" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(170 170) rotate(40) scale(280 240)">
+      <stop stop-color="white" stop-opacity="0.95"/>
+      <stop offset="1" stop-color="white" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="glow" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(330 320) rotate(120) scale(220 220)">
+      <stop stop-color="#14B8A6" stop-opacity="0.35"/>
+      <stop offset="1" stop-color="#14B8A6" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+
+  <!-- ambient -->
+  <circle cx="350" cy="360" r="150" fill="url(#glow)"/>
+  <circle cx="190" cy="170" r="170" fill="url(#g2)"/>
+
+  <!-- body -->
+  <path d="M168 335c0-42 34-76 76-76h32c42 0 76 34 76 76v68c0 39-32 71-71 71H239c-39 0-71-32-71-71v-68z"
+        fill="rgba(255,255,255,0.55)" stroke="rgba(148,163,184,0.55)" stroke-width="2"/>
+  <path d="M190 345c0-30 24-54 54-54h32c30 0 54 24 54 54v54c0 30-24 54-54 54h-32c-30 0-54-24-54-54v-54z"
+        fill="url(#g1)" opacity="0.20"/>
+
+  <!-- head -->
+  <path d="M132 210c0-56 45-102 102-102h52c56 0 102 46 102 102v44c0 56-46 102-102 102h-52c-57 0-102-46-102-102v-44z"
+        fill="rgba(255,255,255,0.62)" stroke="rgba(148,163,184,0.55)" stroke-width="2"/>
+  <path d="M160 215c0-40 33-73 73-73h56c40 0 73 33 73 73v20c0 40-33 73-73 73h-56c-40 0-73-33-73-73v-20z"
+        fill="#0B1220" opacity="0.92"/>
+
+  <!-- face glow -->
+  <path d="M165 209c6-36 38-63 76-63h50c38 0 70 27 76 63v28c-6 36-38 63-76 63h-50c-38 0-70-27-76-63v-28z"
+        fill="url(#g1)" opacity="0.16"/>
+
+  <!-- eyes -->
+  <circle cx="235" cy="232" r="10" fill="#7CFCE6" opacity="0.95"/>
+  <circle cx="318" cy="232" r="10" fill="#7CFCE6" opacity="0.95"/>
+  <circle cx="231" cy="228" r="4" fill="white" opacity="0.65"/>
+  <circle cx="314" cy="228" r="4" fill="white" opacity="0.65"/>
+
+  <!-- smile -->
+  <path d="M250 260c18 16 50 16 68 0" stroke="#7CFCE6" stroke-width="6" stroke-linecap="round" opacity="0.65"/>
+
+  <!-- ears -->
+  <path d="M110 234c0-22 18-40 40-40h10v96h-10c-22 0-40-18-40-40v-16z"
+        fill="rgba(255,255,255,0.58)" stroke="rgba(148,163,184,0.50)" stroke-width="2"/>
+  <path d="M360 194h10c22 0 40 18 40 40v16c0 22-18 40-40 40h-10v-96z"
+        fill="rgba(255,255,255,0.58)" stroke="rgba(148,163,184,0.50)" stroke-width="2"/>
+
+  <!-- small details -->
+  <path d="M208 372h104" stroke="rgba(255,255,255,0.65)" stroke-width="10" stroke-linecap="round"/>
+  <path d="M214 420h92" stroke="rgba(255,255,255,0.55)" stroke-width="10" stroke-linecap="round"/>
+
+  <!-- highlight -->
+  <path d="M170 150c22-24 52-38 85-38" stroke="white" stroke-opacity="0.50" stroke-width="10" stroke-linecap="round"/>
+</svg>
