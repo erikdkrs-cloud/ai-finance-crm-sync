@@ -25,6 +25,15 @@ function normalizeReport(payload) {
   };
 }
 
+function Pill({ dotColor, children }) {
+  return (
+    <span className="dkrs-pill" style={{ padding: "7px 10px", gap: 8 }}>
+      <span className="dot" style={{ background: dotColor }} />
+      <span style={{ fontWeight: 950, fontSize: 12 }}>{children}</span>
+    </span>
+  );
+}
+
 function MetricCard({ label, value, sub }) {
   return (
     <div className="kpiCard">
@@ -78,6 +87,7 @@ export default function ReportViewPage() {
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState("");
   const [report, setReport] = useState(null);
+  const [copied, setCopied] = useState(false);
 
   useEffect(() => {
     if (!id) return;
@@ -100,22 +110,28 @@ export default function ReportViewPage() {
       }
     })();
 
-    return () => {
-      alive = false;
-    };
+    return () => (alive = false);
   }, [id]);
 
   const metricsView = useMemo(() => {
     const m = report?.metrics || {};
-    // универсально поддержим ключи revenue/costs/profit/margin если они есть
     const revenue = m.revenue ?? m.revenue_no_vat ?? null;
     const costs = m.costs ?? m.expense ?? null;
     const profit = m.profit ?? null;
-    const margin = m.margin ?? null; // может быть 0..1 или уже % — если 0..1, домножим
+    const margin = m.margin ?? null;
     const marginPct = margin == null ? null : Number(margin) <= 1.2 ? Number(margin) * 100 : Number(margin);
-
     return { revenue, costs, profit, marginPct };
   }, [report]);
+
+  async function copyId() {
+    try {
+      await navigator.clipboard.writeText(String(report?.id || ""));
+      setCopied(true);
+      setTimeout(() => setCopied(false), 900);
+    } catch {
+      setCopied(false);
+    }
+  }
 
   return (
     <DkrsAppShell
@@ -140,18 +156,27 @@ export default function ReportViewPage() {
             <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
               <div>
                 <div style={{ fontWeight: 950, letterSpacing: "-0.02em", fontSize: 18 }}>
-                  AI Report • {report.month}
+                  AI Report
                 </div>
                 <div className="dkrs-sub" style={{ marginTop: 6 }}>
-                  ID: <b>{report.id}</b> • создан: <b>{fmtDateTime(report.created_at)}</b>
+                  Полный разбор + issues + метрики
                 </div>
               </div>
 
-              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                <button className="btn ghost" onClick={() => window.print()}>
-                  Печать
+              <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+                <Pill dotColor="rgba(167,139,250,0.9)">Month: {report.month}</Pill>
+                <Pill dotColor="rgba(20,184,166,0.9)">Created: {fmtDateTime(report.created_at)}</Pill>
+                <Pill dotColor="rgba(100,116,139,0.85)">ID: {report.id}</Pill>
+
+                <button className="btn ghost" onClick={copyId} type="button">
+                  {copied ? "✅ Copied" : "📋 Copy ID"}
                 </button>
-                <button className="btn" onClick={() => location.assign("/assistant")}>
+
+                <button className="btn ghost" onClick={() => window.print()} type="button">
+                  🖨️ Печать
+                </button>
+
+                <button className="btn" onClick={() => location.assign("/assistant")} type="button">
                   Спросить AI
                 </button>
               </div>
@@ -180,7 +205,9 @@ export default function ReportViewPage() {
         <>
           <div className="glass strong" style={{ padding: 16, marginBottom: 14 }}>
             <div style={{ fontWeight: 950, letterSpacing: "-0.02em" }}>Метрики</div>
-            <div className="dkrs-sub" style={{ marginTop: 6 }}>Если metrics пустые — просто покажем “—”.</div>
+            <div className="dkrs-sub" style={{ marginTop: 6 }}>
+              Если metrics пустые — отображаем “—”.
+            </div>
 
             <div className="kpiGrid" style={{ marginTop: 12 }}>
               <MetricCard label="Выручка" value={metricsView.revenue == null ? "—" : `${fmtMoney(metricsView.revenue)} ₽`} sub="revenue" />
@@ -196,6 +223,7 @@ export default function ReportViewPage() {
                 <div style={{ fontWeight: 950, letterSpacing: "-0.02em" }}>Проблемы и риски</div>
                 <div className="dkrs-sub" style={{ marginTop: 6 }}>Issues из AI отчёта</div>
               </div>
+
               <span className="badge">
                 <span className="dot" style={{ background: "rgba(167,139,250,0.9)" }} />
                 {Array.isArray(report.issues) ? report.issues.length : 0} items
