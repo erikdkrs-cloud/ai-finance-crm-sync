@@ -1,6 +1,12 @@
 // components/RiskBadge.js
 import React from "react";
-import { clampRisk, riskLabel } from "../lib/format";
+import { clampRisk } from "../lib/format";
+
+function ruRisk(r) {
+  if (r === "high") return "ВЫСОКИЙ";
+  if (r === "medium") return "СРЕДНИЙ";
+  return "НИЗКИЙ";
+}
 
 export default function RiskBadge({ risk }) {
   const r = clampRisk(risk);
@@ -9,7 +15,7 @@ export default function RiskBadge({ risk }) {
   return (
     <span className={`badge ${cls}`}>
       <span className="dot" />
-      {riskLabel(r)}
+      {ruRisk(r)}
     </span>
   );
 }
