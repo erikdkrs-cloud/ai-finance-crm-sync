@@ -7,22 +7,18 @@ export default function AiAssistantWidget({ month }) {
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState("");
 
-  // conversation mode
   const [convOn, setConvOn] = useState(false);
   const convOnRef = useRef(false);
 
-  // recording
   const [recording, setRecording] = useState(false);
   const recordingRef = useRef(false);
 
-  // status
   const [status, setStatus] = useState("idle"); // idle | listening | thinking | speaking
 
   const mediaRecRef = useRef(null);
   const chunksRef = useRef([]);
   const streamRef = useRef(null);
 
-  // audio playback
   const audioRef = useRef(null);
 
   // VAD
@@ -40,7 +36,6 @@ export default function AiAssistantWidget({ month }) {
   const thrRef = useRef(0.02);
   const calibMsRef = useRef(0);
 
-  // Tuning
   const VAD = {
     calibMs: 650,
     thresholdMult: 3.2,
@@ -141,7 +136,7 @@ export default function AiAssistantWidget({ month }) {
 
     recordingRef.current = false;
     setRecording(false);
-    setStatus("thinking"); // дальше: onstop → sendVoiceBlob
+    setStatus("thinking");
 
     try {
       mediaRecRef.current && mediaRecRef.current.stop();
@@ -172,7 +167,6 @@ export default function AiAssistantWidget({ month }) {
       }
       const rms = Math.sqrt(sum / buf.length);
 
-      // calibration
       if (calibMsRef.current < VAD.calibMs) {
         calibMsRef.current += dt;
         totalMsRef.current += dt;
@@ -201,20 +195,9 @@ export default function AiAssistantWidget({ month }) {
 
       if (hasSpeech && status !== "listening") setStatus("listening");
 
-      if (hasSpeech && speechMsRef.current >= VAD.hardStopAfterSpeechMs) {
-        stopRecording();
-        return;
-      }
-
-      if (hasSpeech && silenceMsRef.current >= VAD.stopAfterSilenceMs) {
-        stopRecording();
-        return;
-      }
-
-      if (totalMsRef.current >= VAD.maxRecordMs) {
-        stopRecording();
-        return;
-      }
+      if (hasSpeech && speechMsRef.current >= VAD.hardStopAfterSpeechMs) return stopRecording();
+      if (hasSpeech && silenceMsRef.current >= VAD.stopAfterSilenceMs) return stopRecording();
+      if (totalMsRef.current >= VAD.maxRecordMs) return stopRecording();
 
       rafRef.current = requestAnimationFrame(tick);
     };
@@ -240,11 +223,7 @@ export default function AiAssistantWidget({ month }) {
       stopPlayback();
 
       const stream = await navigator.mediaDevices.getUserMedia({
-        audio: {
-          echoCancellation: true,
-          noiseSuppression: true,
-          autoGainControl: true,
-        },
+        audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
       });
       streamRef.current = stream;
 
@@ -297,7 +276,6 @@ export default function AiAssistantWidget({ month }) {
         await sendVoiceBlob(blob, mr.mimeType || blob.type || "audio/webm");
       };
 
-      // reset counters
       lastTRef.current = 0;
       silenceMsRef.current = 0;
       speechMsRef.current = 0;
@@ -370,7 +348,7 @@ export default function AiAssistantWidget({ month }) {
           }
           setTimeout(() => {
             if (convOnRef.current) startRecording();
-          }, 250);
+          }, 240);
         },
       });
     } catch (e) {
@@ -454,53 +432,49 @@ export default function AiAssistantWidget({ month }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const statusLabel =
-    status === "listening" ? "Listening" :
-    status === "thinking" ? "Thinking" :
-    status === "speaking" ? "Speaking" : "Idle";
+  const statusChip = (() => {
+    if (recording) return { tone: "green", text: "Слушаю" };
+    if (loading) return { tone: "violet", text: "Думаю" };
+    if (status === "speaking") return { tone: "lime", text: "Говорю" };
+    return { tone: "neutral", text: "Готов" };
+  })();
 
   return (
-    <div className="dkrs-card dkrs-ai">
-      <div className="dkrs-ai-inner">
-        <div className="dkrs-ai-header">
-          <div>
-            <div className="dkrs-card-title">AI Assistant</div>
-            <div className="dkrs-small" style={{ marginTop: 4 }}>
-              Status: <b>{statusLabel}</b> • Conversation Mode: auto-stop by silence (VAD)
-            </div>
-          </div>
-
-          <div className="dkrs-ai-right">
-            <span className="dkrs-badge">
-              <span className="dkrs-dot dkrs-dot-green" />
-              LIVE • <span className="dkrs-mono">{month || ""}</span>
-            </span>
-
-            {recording ? (
-              <span className="dkrs-badge">
-                <span className="dkrs-dot dkrs-dot-yellow" />
-                Listening…
-              </span>
-            ) : null}
-
-            {!recording && loading ? (
-              <span className="dkrs-badge">
-                <span className="dkrs-spinner-sm" />
-                Thinking…
-              </span>
-            ) : null}
+    <div className="dkrs-card dkrs-ai dkrs-ai-premium">
+      <div className="dkrs-card-header">
+        <div style={{ display: "grid", gap: 4 }}>
+          <div className="dkrs-card-title">AI помощник</div>
+          <div className="dkrs-small" style={{ marginTop: 0 }}>
+            Voice Conversation Mode • авто-стоп по тишине (VAD)
           </div>
         </div>
 
-        <div className="dkrs-ai-chat" role="log" aria-label="AI chat">
+        <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", justifyContent: "flex-end" }}>
+          <span className={`dkrs-chip ${statusChip.tone}`}>
+            <span className="dkrs-chip-dot" />
+            {statusChip.text}
+          </span>
+
+          <span className="dkrs-badge">
+            <span className="dkrs-dot dkrs-dot-green" />
+            LIVE • <span className="dkrs-mono">{month || ""}</span>
+          </span>
+        </div>
+      </div>
+
+      <div className="dkrs-card-body dkrs-ai-body">
+        <div className="dkrs-ai-chatbox">
           {items.length === 0 ? (
             <div className="dkrs-ai-empty">
               Нажми <b>Conversation ON</b> и говори. Можно и текстом — ниже.
             </div>
           ) : (
             items.map((m, i) => (
-              <div key={i} className={`dkrs-ai-msg ${m.role === "user" ? "user" : "assistant"}`}>
-                <div className="dkrs-ai-meta">{m.role === "user" ? "You" : "AI"}</div>
+              <div key={i} className={`dkrs-ai-bubble ${m.role === "user" ? "user" : "assistant"}`}>
+                <div className="dkrs-ai-bubble-top">
+                  <div className="dkrs-ai-role">{m.role === "user" ? "Ты" : "AI"}</div>
+                  <div className="dkrs-ai-role-sub">{m.role === "user" ? "вопрос" : "ответ"}</div>
+                </div>
                 <div className="dkrs-ai-text">{m.content}</div>
               </div>
             ))
@@ -513,37 +487,28 @@ export default function AiAssistantWidget({ month }) {
             rows={3}
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            placeholder="Можно и текстом: напиши вопрос…"
+            placeholder="Напиши вопрос…"
             disabled={convOn || loading}
           />
 
-          <div className="dkrs-ai-buttons">
-            <button
-              className={`dkrs-btn ${convOn ? "dkrs-btn-primary" : "dkrs-btn-ghost"}`}
-              onClick={toggleConversation}
-              disabled={loading && !convOn}
-              title="Голосовой диалог: слушаю → отвечаю → снова слушаю"
-            >
+          <div className="dkrs-ai-actions">
+            <button className={`dkrs-btn ${convOn ? "dkrs-btn-violet" : "dkrs-btn-ghost"}`} onClick={toggleConversation} disabled={loading && !convOn}>
               {convOn ? "🛑 Conversation OFF" : "🎧 Conversation ON"}
             </button>
 
             <button className="dkrs-btn dkrs-btn-primary" disabled={!canSend} onClick={sendText}>
-              {loading ? "Thinking…" : "Ask"}
+              {loading ? "Думаю…" : "Спросить"}
             </button>
 
             {convOn ? (
-              <button className="dkrs-btn dkrs-btn-ghost" onClick={stopAll} title="Остановить запись и воспроизведение">
-                ⏹ Stop
+              <button className="dkrs-btn dkrs-btn-ghost" onClick={stopAll}>
+                ⏹️ Стоп
               </button>
             ) : null}
           </div>
-        </div>
 
-        {err ? (
-          <div className="dkrs-ai-error">
-            {err}
-          </div>
-        ) : null}
+          {err ? <div className="dkrs-ai-error">{err}</div> : null}
+        </div>
       </div>
     </div>
   );
