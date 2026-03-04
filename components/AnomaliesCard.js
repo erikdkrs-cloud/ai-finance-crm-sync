@@ -1,201 +1,144 @@
 // components/AnomaliesCard.js
-import React, { useMemo, useState } from "react";
+import React, { useMemo } from "react";
+import { fmtMoney } from "../lib/format";
+import RiskBadge from "./RiskBadge";
 
-function n(x) {
-  const v = Number(x);
-  return Number.isFinite(v) ? v : 0;
-}
-function fmtMoney(x) {
-  return n(x).toLocaleString("ru-RU");
-}
-function fmtPct(x) {
-  return `${(n(x) * 100).toFixed(1)}%`;
+function Row({ title, subtitle, value, badgeRisk }) {
+  return (
+    <div
+      style={{
+        borderRadius: 18,
+        border: "1px solid rgba(148,163,184,0.22)",
+        background: "rgba(255,255,255,0.58)",
+        boxShadow: "0 14px 34px rgba(15,23,42,0.08)",
+        padding: 12,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "space-between",
+        gap: 12,
+      }}
+    >
+      <div style={{ minWidth: 0 }}>
+        <div style={{ fontWeight: 900, letterSpacing: "-0.02em", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+          {title}
+        </div>
+        <div className="dkrs-sub" style={{ marginTop: 4, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+          {subtitle}
+        </div>
+      </div>
+
+      <div style={{ display: "flex", alignItems: "center", gap: 10, flex: "0 0 auto" }}>
+        <div style={{ fontWeight: 950, color: "rgba(100,116,139,0.95)" }}>{value}</div>
+        {badgeRisk ? <RiskBadge risk={badgeRisk} /> : null}
+      </div>
+    </div>
+  );
 }
 
-function sevRu(sev) {
-  if (sev === "high") return "HIGH";
-  if (sev === "medium") return "MEDIUM";
-  return "LOW";
-}
-
-function sevDotClass(sev) {
-  if (sev === "high") return "dkrs-dot-red";
-  if (sev === "medium") return "dkrs-dot-yellow";
-  return "dkrs-dot-green";
-}
-
-function maxSev(items) {
-  if (items.some((x) => x.sev === "high")) return "high";
-  if (items.some((x) => x.sev === "medium")) return "medium";
-  return "low";
-}
-
-export default function AnomaliesCard({ projects, month }) {
-  const [open, setOpen] = useState(false);
-
+export default function AnomaliesCard({ projects = [] }) {
   const items = useMemo(() => {
     const list = Array.isArray(projects) ? projects : [];
+
+    // простые правила аномалий по твоим полям:
+    // - penalties > 0
+    // - ads заметные
+    // - margin < 0.20 при revenue > 0
+    // - profit < 0
     const out = [];
 
-    for (const p of list) {
-      const revenue = n(p.revenue);
-      const costs = n(p.costs);
-      const profit = n(p.profit);
-      const margin = revenue > 0 ? profit / revenue : n(p.margin);
+    // 1) top penalties
+    const pen = [...list]
+      .filter((p) => Number(p.penalties) > 0)
+      .sort((a, b) => (Number(b.penalties) || 0) - (Number(a.penalties) || 0))
+      .slice(0, 2);
 
-      const penalties = n(p.penalties);
-      const ads = n(p.ads);
-      const transport = n(p.transport);
-      const sw = n(p.salary_workers);
-      const team = n(p.team_payroll);
+    pen.forEach((p) => {
+      out.push({
+        key: `pen-${p.project}`,
+        title: p.project,
+        subtitle: "Штрафы за период",
+        value: `${fmtMoney(p.penalties)} ₽`,
+        risk: "yellow",
+      });
+    });
 
-      const name = String(p.project_name || "—");
+    // 2) top ads
+    const ads = [...list]
+      .filter((p) => Number(p.ads) > 0)
+      .sort((a, b) => (Number(b.ads) || 0) - (Number(a.ads) || 0))
+      .slice(0, 2);
 
-      if (profit < 0) {
-        out.push({
-          sev: "high",
-          project: name,
-          title: "Проект убыточный",
-          detail: `Убыток: ${fmtMoney(profit)} • Маржа: ${fmtPct(margin)}`,
-          score: 100 + Math.min(50, Math.abs(profit) / 10000),
-        });
-      }
+    ads.forEach((p) => {
+      out.push({
+        key: `ads-${p.project}`,
+        title: p.project,
+        subtitle: "Высокие расходы на рекламу",
+        value: `${fmtMoney(p.ads)} ₽`,
+        risk: "green",
+      });
+    });
 
-      if (revenue > 0 && margin >= 0 && margin < 0.12) {
-        out.push({
-          sev: "medium",
-          project: name,
-          title: "Низкая маржа",
-          detail: `Маржа: ${fmtPct(margin)} • Прибыль: ${fmtMoney(profit)}`,
-          score: 70 + (0.12 - margin) * 200,
-        });
-      }
+    // 3) low margin
+    const lowMargin = [...list]
+      .filter((p) => Number(p.revenue) > 0)
+      .filter((p) => Number(p.margin) < 0.2)
+      .sort((a, b) => (Number(a.margin) || 0) - (Number(b.margin) || 0))
+      .slice(0, 2);
 
-      if (revenue > 0 && costs / revenue >= 0.9) {
-        out.push({
-          sev: costs > revenue ? "high" : "medium",
-          project: name,
-          title: "Расходы съедают выручку",
-          detail: `Расходы/выручка: ${fmtPct(costs / revenue)} • Расходы: ${fmtMoney(costs)}`,
-          score: 85 + (costs / revenue) * 10,
-        });
-      }
+    lowMargin.forEach((p) => {
+      out.push({
+        key: `m-${p.project}`,
+        title: p.project,
+        subtitle: "Низкая маржинальность",
+        value: `${(Number(p.margin) * 100).toFixed(2).replace(".", ",")}%`,
+        risk: Number(p.margin) < 0.1 ? "red" : "yellow",
+      });
+    });
 
-      if (penalties > 0) {
-        out.push({
-          sev: penalties > 50000 ? "high" : "medium",
-          project: name,
-          title: "Есть штрафы",
-          detail: `Штрафы: ${fmtMoney(penalties)} • Доля от выручки: ${revenue > 0 ? fmtPct(penalties / revenue) : "—"}`,
-          score: 60 + Math.min(40, penalties / 2000),
-        });
-      }
+    // 4) loss
+    const loss = [...list]
+      .filter((p) => Number(p.profit) < 0)
+      .sort((a, b) => (Number(a.profit) || 0) - (Number(b.profit) || 0))
+      .slice(0, 2);
 
-      if (revenue > 0 && ads / revenue >= 0.18) {
-        out.push({
-          sev: ads / revenue >= 0.3 ? "high" : "medium",
-          project: name,
-          title: "Высокая доля рекламы",
-          detail: `Реклама: ${fmtMoney(ads)} • Доля: ${fmtPct(ads / revenue)}`,
-          score: 55 + (ads / revenue) * 80,
-        });
-      }
+    loss.forEach((p) => {
+      out.push({
+        key: `loss-${p.project}`,
+        title: p.project,
+        subtitle: "Отрицательная прибыль",
+        value: `−${fmtMoney(Math.abs(Number(p.profit || 0)))} ₽`,
+        risk: "red",
+      });
+    });
 
-      if (revenue > 0 && transport / revenue >= 0.12) {
-        out.push({
-          sev: transport / revenue >= 0.2 ? "high" : "medium",
-          project: name,
-          title: "Высокие транспортные",
-          detail: `Транспорт: ${fmtMoney(transport)} • Доля: ${fmtPct(transport / revenue)}`,
-          score: 50 + (transport / revenue) * 70,
-        });
-      }
-
-      const payroll = sw + team;
-      if (revenue > 0 && payroll / revenue >= 0.45) {
-        out.push({
-          sev: payroll / revenue >= 0.6 ? "high" : "medium",
-          project: name,
-          title: "Высокий ФОТ относительно выручки",
-          detail: `ФОТ: ${fmtMoney(payroll)} • Доля: ${fmtPct(payroll / revenue)}`,
-          score: 58 + (payroll / revenue) * 60,
-        });
-      }
-    }
-
-    const uniq = [];
+    // uniq by key and limit like a neat card
     const seen = new Set();
-    for (const it of out) {
-      const key = `${it.project}__${it.title}`;
-      if (seen.has(key)) continue;
-      seen.add(key);
-      uniq.push(it);
+    const uniq = [];
+    for (const x of out) {
+      if (seen.has(x.key)) continue;
+      seen.add(x.key);
+      uniq.push(x);
+      if (uniq.length >= 6) break;
     }
 
-    uniq.sort((a, b) => (b.score || 0) - (a.score || 0));
-    return uniq.slice(0, 8);
+    return uniq;
   }, [projects]);
 
-  const severity = useMemo(() => (items.length ? maxSev(items) : "low"), [items]);
+  if (!items.length) {
+    return <div className="dkrs-sub">Аномалии не найдены — всё выглядит стабильно.</div>;
+  }
 
   return (
-    <div>
-      <button
-        className="dkrs-anom-head"
-        onClick={() => setOpen((v) => !v)}
-        aria-expanded={open ? "true" : "false"}
-      >
-        <div className="dkrs-anom-left">
-          <div className="dkrs-anom-title">
-            Аномалии месяца <span className="dkrs-mono dkrs-anom-month">{month || ""}</span>
-          </div>
-          <div className="dkrs-small">
-            {items.length ? `Найдено: ${items.length}` : "Аномалий не найдено"}
-          </div>
-        </div>
-
-        <div className="dkrs-anom-right">
-          <span className="dkrs-badge">
-            <span className={`dkrs-dot ${sevDotClass(severity)}`} />
-            {sevRu(severity)}
-          </span>
-          <span className="dkrs-mono" style={{ opacity: 0.75, fontWeight: 900 }}>
-            {open ? "▲" : "▼"}
-          </span>
-        </div>
-      </button>
-
-      {open ? (
-        <div style={{ marginTop: 12, display: "grid", gap: 10 }}>
-          {items.length === 0 ? (
-            <div className="dkrs-empty">Пока всё выглядит нормально (или данных мало).</div>
-          ) : (
-            items.map((it, idx) => (
-              <div key={`${it.project}-${it.title}-${idx}`} className="dkrs-anom-item">
-                <div className="dkrs-anom-item-top">
-                  <div className="dkrs-anom-item-main">
-                    <div className="dkrs-row-title" title={it.project}>{it.project}</div>
-                    <div className="dkrs-row-sub">{it.title}</div>
-                  </div>
-
-                  <span className="dkrs-badge">
-                    <span className={`dkrs-dot ${sevDotClass(it.sev)}`} />
-                    {sevRu(it.sev)}
-                  </span>
-                </div>
-
-                <div className="dkrs-mono" style={{ opacity: 0.9, marginTop: 8 }}>
-                  {it.detail}
-                </div>
-              </div>
-            ))
-          )}
-
-          <div className="dkrs-small" style={{ opacity: 0.55 }}>
-            Правила MVP: убыток, низкая маржа, расходы≈выручка, штрафы, высокая доля рекламы/транспорта/ФОТ.
-          </div>
-        </div>
-      ) : null}
+    <div style={{ display: "grid", gap: 10 }}>
+      {items.map((it) => (
+        <Row
+          key={it.key}
+          title={it.title}
+          subtitle={it.subtitle}
+          value={it.value}
+          badgeRisk={it.risk}
+        />
+      ))}
     </div>
   );
 }
