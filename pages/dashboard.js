@@ -1,10 +1,11 @@
 // pages/dashboard.js
-import React from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import DkrsAppShell from "../components/DkrsAppShell";
-
-// Если у тебя уже есть эти компоненты — подключи обратно
 import TopProjectsCards from "../components/TopProjectsCards";
 import AnomaliesCard from "../components/AnomaliesCard";
+import RiskBadge from "../components/RiskBadge";
+import { fetchJson, tryMany } from "../lib/dkrsClient";
+import { fmtMoney, fmtPct } from "../lib/format";
 
 function KpiCard({ label, value, delta, positive }) {
   return (
@@ -21,63 +22,177 @@ function KpiCard({ label, value, delta, positive }) {
         <div className={["kpiDelta", positive ? "pos" : "neg"].join(" ")}>
           {delta}
         </div>
-      ) : null}
+      ) : (
+        <div className="kpiDelta" style={{ color: "rgba(100,116,139,0.85)" }}>
+          —
+        </div>
+      )}
     </div>
   );
 }
 
+function safeMonthFallback() {
+  // на всякий случай, если /api/months вдруг не доступен
+  const d = new Date();
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  return `${y}-${m}`;
+}
+
 export default function DashboardPage() {
+  const [months, setMonths] = useState([]);
+  const [month, setMonth] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [err, setErr] = useState("");
+
+  const [totals, setTotals] = useState(null);
+  const [projects, setProjects] = useState([]);
+
+  // 1) load months
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      try {
+        // у тебя точно есть /api/months (по старым логам)
+        const m = await fetchJson("/api/months");
+        const list = m?.months || m?.data || m || [];
+        if (!alive) return;
+
+        const clean = Array.isArray(list) ? list : [];
+        setMonths(clean);
+
+        // select last available month
+        const defaultMonth = clean?.[0] || clean?.[clean.length - 1] || safeMonthFallback();
+        setMonth(String(defaultMonth));
+      } catch (e) {
+        if (!alive) return;
+        setMonths([]);
+        setMonth(safeMonthFallback());
+      }
+    })();
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  // 2) load dashboard for month
+  useEffect(() => {
+    if (!month) return;
+
+    let alive = true;
+    (async () => {
+      setLoading(true);
+      setErr("");
+      try {
+        const data = await tryMany([
+          `/api/dashboard?month=${encodeURIComponent(month)}`,
+          `/api/dashboard.js?month=${encodeURIComponent(month)}`,
+        ]);
+
+        if (!alive) return;
+
+        if (!data?.ok) throw new Error(data?.error || "Dashboard API returned ok=false");
+
+        setTotals(data.totals || null);
+        setProjects(Array.isArray(data.projects) ? data.projects : []);
+      } catch (e) {
+        if (!alive) return;
+        setErr(e?.message || "Не удалось загрузить дашборд");
+        setTotals(null);
+        setProjects([]);
+      } finally {
+        if (alive) setLoading(false);
+      }
+    })();
+
+    return () => {
+      alive = false;
+    };
+  }, [month]);
+
+  const kpi = useMemo(() => {
+    const t = totals || {};
+    // margin у тебя приходит 0..1
+    const marginPct = t.margin != null ? t.margin * 100 : null;
+    return {
+      revenue: fmtMoney(t.revenue),
+      costs: fmtMoney(t.costs),
+      profit: fmtMoney(t.profit),
+      margin: marginPct == null ? "—" : fmtPct(marginPct),
+    };
+  }, [totals]);
+
+  const titleRight = (
+    <>
+      <span className="dkrs-pill">
+        <span className="dot" style={{ background: "rgba(167,139,250,0.9)" }} />
+        Период:&nbsp;
+        <b>{month || "—"}</b>
+      </span>
+
+      <select
+        className="select"
+        value={month}
+        onChange={(e) => setMonth(e.target.value)}
+        style={{ width: 140 }}
+        title="Выбрать месяц"
+      >
+        {(months.length ? months : [month]).map((m) => (
+          <option key={m} value={m}>
+            {m}
+          </option>
+        ))}
+      </select>
+
+      <button className="btn" onClick={() => location.assign("/assistant")}>
+        Сформировать отчёт
+      </button>
+    </>
+  );
+
   return (
     <DkrsAppShell
       title="Дашборд"
       subtitle="Ключевые метрики, топ-проекты и аномалии"
-      rightSlot={
-        <>
-          <span className="dkrs-pill">
-            <span className="dot" style={{ background: "rgba(167,139,250,0.9)" }} />
-            Период: <b>2025-01</b>
-          </span>
-          <button className="btn">Сформировать отчёт</button>
-        </>
-      }
+      rightSlot={titleRight}
     >
+      {err ? (
+        <div className="glass strong" style={{ padding: 16, marginBottom: 14 }}>
+          <div style={{ fontWeight: 900, color: "rgba(251,113,133,0.95)" }}>{err}</div>
+        </div>
+      ) : null}
+
       <div className="kpiGrid" style={{ marginBottom: 14 }}>
-        <KpiCard label="Выручка" value="175 355 856,81 ₽" delta="+3,29% MoM" positive />
-        <KpiCard label="Расходы" value="136 948 060,01 ₽" delta="-2,77% MoM" positive={false} />
-        <KpiCard label="Прибыль" value="38 407 796,81 ₽" delta="+23,70% MoM" positive />
-        <KpiCard label="Маржа" value="21,9%" delta="+3,0 п.п." positive />
+        <KpiCard label="Выручка" value={loading ? "…" : `${kpi.revenue} ₽`} />
+        <KpiCard label="Расходы" value={loading ? "…" : `${kpi.costs} ₽`} />
+        <KpiCard label="Прибыль" value={loading ? "…" : `${kpi.profit} ₽`} />
+        <KpiCard label="Маржа" value={loading ? "…" : kpi.margin} />
       </div>
 
+      {/* Top-3 block like reference */}
       <div className="glass strong" style={{ padding: 16, marginBottom: 14 }}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
           <div>
             <div style={{ fontWeight: 900, letterSpacing: "-0.02em" }}>Топ-3 убыточных</div>
-            <div className="dkrs-sub">Быстрый обзор проблемных проектов</div>
+            <div className="dkrs-sub">Проекты с отрицательной прибылью за период</div>
           </div>
-          <button className="btn ghost">Сбросить</button>
+          <button className="btn ghost" onClick={() => setMonth(month)}>
+            Сбросить
+          </button>
         </div>
 
         <div style={{ marginTop: 12 }}>
-          {/* Блок как на референсе: карточки топ-проектов */}
-          <TopProjectsCards />
+          <TopProjectsCards projects={projects} />
         </div>
       </div>
 
+      {/* Main grid: projects table + anomalies */}
       <div style={{ display: "grid", gridTemplateColumns: "1.25fr 0.75fr", gap: 14 }}>
         <div className="glass strong" style={{ padding: 16, minWidth: 0 }}>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
             <div>
               <div style={{ fontWeight: 900, letterSpacing: "-0.02em" }}>Проекты</div>
-              <div className="dkrs-sub">Таблица с фильтрами и показателями</div>
-            </div>
-            <div style={{ display: "flex", gap: 10 }}>
-              <input className="input" placeholder="Поиск проекта…" />
-              <select className="select" defaultValue="all">
-                <option value="all">Все</option>
-                <option value="green">Зелёные</option>
-                <option value="yellow">Жёлтые</option>
-                <option value="red">Красные</option>
-              </select>
+              <div className="dkrs-sub">Таблица по всем проектам за выбранный месяц</div>
             </div>
           </div>
 
@@ -90,34 +205,41 @@ export default function DashboardPage() {
                   <th>Расход</th>
                   <th>Прибыль</th>
                   <th>Маржа</th>
-                  <th>Риск</th>
+                  <th style={{ width: 120 }}>Риск</th>
                 </tr>
               </thead>
               <tbody>
-                <tr>
-                  <td>Датовый мер (месяц)</td>
-                  <td>175 355 856</td>
-                  <td>136 948 060</td>
-                  <td>38 407 796</td>
-                  <td>21,9%</td>
-                  <td><span className="badge ok"><span className="dot" />Низкий</span></td>
-                </tr>
-                <tr>
-                  <td>Lamoda Казани</td>
-                  <td>136 948 060</td>
-                  <td>135 338 730</td>
-                  <td>278 992</td>
-                  <td>18,09%</td>
-                  <td><span className="badge warn"><span className="dot" />Средний</span></td>
-                </tr>
-                <tr>
-                  <td>DNS</td>
-                  <td>355 407 098</td>
-                  <td>95 990 958</td>
-                  <td>399 189</td>
-                  <td>18,02%</td>
-                  <td><span className="badge danger"><span className="dot" />Высокий</span></td>
-                </tr>
+                {loading ? (
+                  <tr>
+                    <td colSpan={6} style={{ color: "rgba(100,116,139,0.9)", fontWeight: 800 }}>
+                      Загрузка…
+                    </td>
+                  </tr>
+                ) : projects.length === 0 ? (
+                  <tr>
+                    <td colSpan={6} style={{ color: "rgba(100,116,139,0.9)", fontWeight: 800 }}>
+                      Нет данных
+                    </td>
+                  </tr>
+                ) : (
+                  projects.map((p) => (
+                    <tr key={p.project}>
+                      <td style={{ fontWeight: 900 }}>{p.project}</td>
+                      <td>{fmtMoney(p.revenue)}</td>
+                      <td>{fmtMoney(p.costs)}</td>
+                      <td style={{ fontWeight: 900, color: Number(p.profit) < 0 ? "rgba(251,113,133,0.95)" : "rgba(20,184,166,0.95)" }}>
+                        {fmtMoney(p.profit)}
+                      </td>
+                      <td>
+                        {p.margin == null ? "—" : fmtPct(Number(p.margin) * 100)}
+                      </td>
+                      <td>
+                        {/* твой риск: green/yellow/red */}
+                        <RiskBadge risk={p.risk} />
+                      </td>
+                    </tr>
+                  ))
+                )}
               </tbody>
             </table>
           </div>
@@ -125,9 +247,9 @@ export default function DashboardPage() {
 
         <div className="glass strong" style={{ padding: 16, minWidth: 0 }}>
           <div style={{ fontWeight: 900, letterSpacing: "-0.02em" }}>Аномалии</div>
-          <div className="dkrs-sub">События, отклонения и подсветка проблем</div>
+          <div className="dkrs-sub">Штрафы, реклама, низкая маржа, отрицательная прибыль</div>
           <div style={{ marginTop: 12 }}>
-            <AnomaliesCard />
+            <AnomaliesCard projects={projects} />
           </div>
         </div>
       </div>
