@@ -1,12 +1,7 @@
 // pages/reports.js
 import React, { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import DkrsShell from "../components/DkrsShell";
-
-function n(x) {
-  const v = Number(x);
-  return Number.isFinite(v) ? v : 0;
-}
+import DkrsAppShell from "../components/DkrsAppShell";
 
 function normalizeRisk(r) {
   if (!r) return "green";
@@ -15,191 +10,148 @@ function normalizeRisk(r) {
   if (s.includes("yellow") || s.includes("жел")) return "yellow";
   return "green";
 }
+
 function riskRu(r) {
   if (r === "red") return "красный";
   if (r === "yellow") return "жёлтый";
   return "зелёный";
 }
-function riskDot(r) {
-  if (r === "red") return "dkrs-dot-red";
-  if (r === "yellow") return "dkrs-dot-yellow";
-  return "dkrs-dot-green";
-}
-
-function fmtDateTime(x) {
-  try {
-    const d = new Date(x);
-    if (Number.isNaN(d.getTime())) return String(x || "");
-    return d.toLocaleString("ru-RU");
-  } catch {
-    return String(x || "");
-  }
-}
-
-async function fetchJsonAny(urls) {
-  let lastText = "";
-  for (const url of urls) {
-    try {
-      const r = await fetch(url);
-      const t = await r.text();
-      lastText = t;
-      let j = null;
-      try {
-        j = JSON.parse(t);
-      } catch {
-        j = null;
-      }
-      if (r.ok && j) return { ok: true, json: j, url };
-      // if ok but not json — still return text error
-      if (!r.ok) continue;
-    } catch {}
-  }
-  return { ok: false, error: lastText || "Не удалось загрузить отчёты." };
-}
-
-function normalizeList(payload) {
-  // Accept many shapes:
-  // {ok:true, reports:[...]}
-  // {reports:[...]}
-  // [...]
-  const list =
-    (payload && payload.reports) ||
-    (payload && payload.items) ||
-    (Array.isArray(payload) ? payload : null) ||
-    [];
-  return Array.isArray(list) ? list : [];
-}
 
 export default function ReportsPage() {
   const [items, setItems] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [err, setErr] = useState("");
 
-  // filters
   const [q, setQ] = useState("");
-  const [risk, setRisk] = useState("all"); // all|green|yellow|red
+  const [riskFilter, setRiskFilter] = useState("all"); // all|green|yellow|red
 
   useEffect(() => {
     (async () => {
       setLoading(true);
       setErr("");
+      try {
+        // ✅ твой текущий endpoint
+        const r = await fetch("/api/reports_list");
+        const t = await r.text();
+        let j = null;
+        try {
+          j = JSON.parse(t);
+        } catch {
+          j = null;
+        }
 
-      const res = await fetchJsonAny([
-        "/api/reports_list",
-        "/api/reports",
-        "/api/report_get?mode=list",
-      ]);
+        if (!r.ok) {
+          setErr(t.slice(0, 800));
+          setItems([]);
+          return;
+        }
 
-      if (!res.ok) {
-        setErr(String(res.error || "Ошибка").slice(0, 900));
+        // ожидаем: { ok:true, items:[...] } или просто массив
+        const list = j?.items || j?.reports || j || [];
+        setItems(Array.isArray(list) ? list : []);
+      } catch (e) {
+        setErr(String(e?.message || e));
         setItems([]);
+      } finally {
         setLoading(false);
-        return;
       }
-
-      const payload = res.json?.ok ? res.json : res.json;
-      const list = normalizeList(payload);
-      setItems(list);
-      setLoading(false);
     })();
   }, []);
 
-  const normalized = useMemo(() => {
-    return (items || []).map((it) => {
-      const id = it?.id ?? it?.report_id ?? it?.reportId ?? it?.uuid ?? "";
-      const month = it?.month ?? it?.period ?? it?.period_month ?? it?.periodMonth ?? it?.period_id ?? it?.periodId ?? "";
-      const risk_level = normalizeRisk(it?.risk_level ?? it?.riskLevel ?? it?.risk ?? it?.severity);
-      const created_at = it?.created_at ?? it?.createdAt ?? it?.ts ?? it?.time ?? "";
-      const summary = it?.summary_text ?? it?.summary ?? it?.text ?? "";
-      return { id: String(id), month: String(month), risk_level, created_at, summary: String(summary || "") };
-    });
-  }, [items]);
-
   const filtered = useMemo(() => {
     const qq = q.trim().toLowerCase();
-    let list = normalized;
 
-    if (risk !== "all") list = list.filter((x) => x.risk_level === risk);
-    if (qq) list = list.filter((x) => (x.month || "").toLowerCase().includes(qq) || (x.summary || "").toLowerCase().includes(qq));
-
-    // newest first by created_at if possible
-    return [...list].sort((a, b) => {
-      const ta = Date.parse(a.created_at) || 0;
-      const tb = Date.parse(b.created_at) || 0;
-      return tb - ta;
+    let list = items.map((x) => {
+      const risk = normalizeRisk(x?.risk_level || x?.risk || x?.riskLevel);
+      return { ...x, _risk: risk };
     });
-  }, [normalized, q, risk]);
+
+    if (riskFilter !== "all") list = list.filter((x) => x._risk === riskFilter);
+
+    if (qq) {
+      list = list.filter((x) => {
+        const period = String(x?.month || x?.period || x?.period_month || "");
+        const summary = String(x?.summary_text || x?.summary || x?.short || x?.kpi_text || "");
+        const created = String(x?.created_at || x?.created || "");
+        return (
+          period.toLowerCase().includes(qq) ||
+          summary.toLowerCase().includes(qq) ||
+          created.toLowerCase().includes(qq) ||
+          String(x?.id || "").toLowerCase().includes(qq)
+        );
+      });
+    }
+
+    return list;
+  }, [items, q, riskFilter]);
+
+  const count = filtered.length;
 
   const right = (
     <>
+      <span className="dkrs-badge">
+        <span className="dkrs-dot dkrs-dot-green" />
+        Найдено: <span className="dkrs-mono">{count}</span>
+      </span>
+
       <Link href="/dashboard" legacyBehavior>
-        <a className="dkrs-link">Dashboard →</a>
+        <a className="dkrs-btn dkrs-btn-ghost">Дашборд →</a>
       </Link>
-      <button
-        className="dkrs-btn dkrs-btn-ghost"
-        onClick={async () => {
-          await fetch("/api/auth/logout");
-          window.location.href = "/login";
-        }}
-      >
-        Выйти
-      </button>
     </>
   );
 
   return (
-    <DkrsShell title="Reports" subtitle="AI отчёты по периодам: риски, метрики и рекомендации" right={right}>
+    <DkrsAppShell
+      title="Отчёты"
+      subtitle="AI отчёты по периодам: риски, метрики и рекомендации"
+      right={right}
+    >
+      {/* Filters */}
       <div className="dkrs-card" style={{ marginBottom: 14 }}>
         <div className="dkrs-card-body">
-          <div className="dkrs-reports-toolbar">
-            <div>
+          <div className="dkrs-controls" style={{ gridTemplateColumns: "1fr 1fr auto" }}>
+            <div className="dkrs-field">
               <div className="dkrs-field-label">Поиск</div>
               <input
                 className="dkrs-input"
                 value={q}
                 onChange={(e) => setQ(e.target.value)}
-                placeholder="например: 2026-01 или «штрафы»…"
+                placeholder='например: 2026-01 или "штрафы"...'
               />
             </div>
 
             <div>
               <div className="dkrs-field-label">Риск</div>
               <div className="dkrs-pills">
-                <button className={`dkrs-pill ${risk === "all" ? "dkrs-pill-active" : ""}`} onClick={() => setRisk("all")}>
-                  Все
-                </button>
-                <button className={`dkrs-pill ${risk === "green" ? "dkrs-pill-active" : ""}`} onClick={() => setRisk("green")}>
-                  Зелёные
-                </button>
-                <button className={`dkrs-pill ${risk === "yellow" ? "dkrs-pill-active" : ""}`} onClick={() => setRisk("yellow")}>
-                  Жёлтые
-                </button>
-                <button className={`dkrs-pill ${risk === "red" ? "dkrs-pill-active" : ""}`} onClick={() => setRisk("red")}>
-                  Красные
-                </button>
+                <button className={`dkrs-pill ${riskFilter === "all" ? "dkrs-pill-active" : ""}`} onClick={() => setRiskFilter("all")}>Все</button>
+                <button className={`dkrs-pill ${riskFilter === "green" ? "dkrs-pill-active" : ""}`} onClick={() => setRiskFilter("green")}>Зелёные</button>
+                <button className={`dkrs-pill ${riskFilter === "yellow" ? "dkrs-pill-active" : ""}`} onClick={() => setRiskFilter("yellow")}>Жёлтые</button>
+                <button className={`dkrs-pill ${riskFilter === "red" ? "dkrs-pill-active" : ""}`} onClick={() => setRiskFilter("red")}>Красные</button>
               </div>
             </div>
 
-            <div style={{ justifySelf: "end" }}>
-              <div className="dkrs-field-label">Статус</div>
-              <span className="dkrs-badge">
-                <span className={`dkrs-dot ${loading ? "dkrs-dot-yellow" : "dkrs-dot-green"}`} />
-                {loading ? "Loading" : `Найдено: ${filtered.length}`}
-              </span>
+            <div className="dkrs-actions">
+              <button className="dkrs-btn dkrs-btn-ghost" onClick={() => { setQ(""); setRiskFilter("all"); }}>
+                Сбросить
+              </button>
             </div>
           </div>
 
-          {err ? <div className="dkrs-ai-error" style={{ marginTop: 12 }}>{err}</div> : null}
+          {err ? (
+            <div className="dkrs-ai-error" style={{ marginTop: 10 }}>
+              Ошибка: {err}
+            </div>
+          ) : null}
         </div>
       </div>
 
+      {/* List */}
       <div className="dkrs-card">
         <div className="dkrs-card-header">
           <div>
             <div className="dkrs-card-title">Список отчётов</div>
             <div className="dkrs-small">Открой отчёт, чтобы увидеть summary, issues и metrics.</div>
           </div>
-
           <span className="dkrs-badge">
             <span className="dkrs-dot dkrs-dot-green" />
             Enterprise view
@@ -219,66 +171,64 @@ export default function ReportsPage() {
                 </tr>
               </thead>
 
-              {loading ? (
-                <tbody>
-                  {Array.from({ length: 8 }).map((_, i) => (
+              <tbody>
+                {loading ? (
+                  Array.from({ length: 8 }).map((_, i) => (
                     <tr key={i} className="dkrs-row">
+                      <td><div className="dkrs-skel dkrs-skel-line" style={{ width: 70 }} /></td>
                       <td><div className="dkrs-skel dkrs-skel-line" style={{ width: 90 }} /></td>
-                      <td><div className="dkrs-skel dkrs-skel-line" style={{ width: 120 }} /></td>
-                      <td><div className="dkrs-skel dkrs-skel-line" style={{ width: 140 }} /></td>
-                      <td><div className="dkrs-skel dkrs-skel-line" style={{ width: 360 }} /></td>
-                      <td><div className="dkrs-skel dkrs-skel-line" style={{ width: 70, marginLeft: "auto" }} /></td>
+                      <td><div className="dkrs-skel dkrs-skel-line" style={{ width: 160 }} /></td>
+                      <td><div className="dkrs-skel dkrs-skel-line" style={{ width: 520 }} /></td>
+                      <td style={{ textAlign: "right" }}><div className="dkrs-skel dkrs-skel-line" style={{ width: 70 }} /></td>
                     </tr>
-                  ))}
-                </tbody>
-              ) : (
-                <tbody>
-                  {filtered.map((r) => (
-                    <tr key={r.id || `${r.month}-${r.created_at}`} className="dkrs-row">
-                      <td className="dkrs-mono">{r.month || "—"}</td>
+                  ))
+                ) : filtered.length === 0 ? (
+                  <tr>
+                    <td colSpan={5} style={{ padding: 16, color: "rgba(255,255,255,0.65)" }}>
+                      Нет отчётов по текущим фильтрам.
+                    </td>
+                  </tr>
+                ) : (
+                  filtered.map((r, idx) => {
+                    const id = r?.id ?? r?.report_id ?? r?._id ?? idx;
+                    const month = r?.month || r?.period || r?.period_month || "—";
+                    const created = r?.created_at || r?.created || "";
+                    const risk = normalizeRisk(r?.risk_level || r?.risk || r?.riskLevel);
+                    const short =
+                      String(r?.summary_text || r?.summary || r?.short || "")
+                        .replace(/\s+/g, " ")
+                        .trim()
+                        .slice(0, 140) + (String(r?.summary_text || r?.summary || r?.short || "").length > 140 ? "…" : "");
 
-                      <td>
-                        <span className="dkrs-badge">
-                          <span className={`dkrs-dot ${riskDot(r.risk_level)}`} />
-                          {riskRu(r.risk_level)}
-                        </span>
-                      </td>
+                    const dotClass = risk === "red" ? "dkrs-dot-red" : risk === "yellow" ? "dkrs-dot-yellow" : "dkrs-dot-green";
 
-                      <td className="dkrs-mono" style={{ opacity: 0.9 }}>
-                        {r.created_at ? fmtDateTime(r.created_at) : "—"}
-                      </td>
-
-                      <td style={{ color: "rgba(255,255,255,0.78)" }}>
-                        <span className="dkrs-reports-ellipsis" title={r.summary || ""}>
-                          {r.summary || "—"}
-                        </span>
-                      </td>
-
-                      <td style={{ textAlign: "right" }}>
-                        {r.id ? (
-                          <Link href={`/reports/${encodeURIComponent(r.id)}`} legacyBehavior>
+                    return (
+                      <tr key={String(id)} className="dkrs-row">
+                        <td className="dkrs-strong">{month}</td>
+                        <td>
+                          <span className="dkrs-badge">
+                            <span className={`dkrs-dot ${dotClass}`} />
+                            {riskRu(risk)}
+                          </span>
+                        </td>
+                        <td className="dkrs-mono">{created ? String(created).replace("T", ", ").slice(0, 19) : "—"}</td>
+                        <td style={{ maxWidth: 720, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                          {short || "—"}
+                        </td>
+                        <td style={{ textAlign: "right" }}>
+                          <Link href={`/reports/${id}`} legacyBehavior>
                             <a className="dkrs-btn dkrs-btn-ghost">Open</a>
                           </Link>
-                        ) : (
-                          <span style={{ opacity: 0.55 }}>—</span>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-
-                  {filtered.length === 0 ? (
-                    <tr>
-                      <td colSpan={5} style={{ padding: 16, color: "rgba(234,240,255,.65)" }}>
-                        Нет отчётов (или фильтры скрыли результат).
-                      </td>
-                    </tr>
-                  ) : null}
-                </tbody>
-              )}
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
             </table>
           </div>
         </div>
       </div>
-    </DkrsShell>
+    </DkrsAppShell>
   );
 }
