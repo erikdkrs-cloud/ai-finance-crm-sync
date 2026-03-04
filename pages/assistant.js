@@ -19,37 +19,23 @@ export default function AssistantPage() {
 
   return (
     <DkrsAppShell
-      title="AI Assistant"
-      subtitle="Conversation Mode • voice → AI → voice • enterprise UX"
+      title="AI помощник"
+      subtitle="Голосовой Conversation Mode • авто-стоп по тишине"
       right={
-        <span className="dkrs-badge">
-          <span className="dkrs-dot dkrs-dot-green" />
-          LIVE • <span className="dkrs-mono">{month || ""}</span>
-        </span>
+        <div style={{ minWidth: 220 }}>
+          <select className="dkrs-select" value={month} onChange={(e) => setMonth(e.target.value)} aria-label="Выбор месяца">
+            {months.map((m) => (
+              <option key={m} value={m}>{m}</option>
+            ))}
+          </select>
+        </div>
       }
     >
-      <div className="dkrs-card" style={{ marginBottom: 14 }}>
+      <div className="dkrs-card dkrs-card-glass">
         <div className="dkrs-card-body">
-          <div className="dkrs-controls" style={{ gridTemplateColumns: "240px 1fr auto" }}>
-            <div>
-              <div className="dkrs-field-label">Месяц</div>
-              <select className="dkrs-select" value={month} onChange={(e) => setMonth(e.target.value)}>
-                {months.map((m) => (
-                  <option key={m} value={m}>{m}</option>
-                ))}
-              </select>
-            </div>
-
-            <div className="dkrs-small" style={{ alignSelf: "center" }}>
-              Этот экран полностью для диалога. Таблица и KPI — в Dashboard.
-            </div>
-
-            <div />
-          </div>
+          <AiAssistantWidget month={month} />
         </div>
       </div>
-
-      <AiAssistantWidget month={month} />
     </DkrsAppShell>
   );
 }
