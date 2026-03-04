@@ -1428,3 +1428,31 @@ html, body {
   }
   .dkrs-container.dkrs-container-app { padding: 16px 14px 32px; }
 }
+/* ===== Top-left alignment fix ===== */
+.dkrs-topbar-inner {
+  align-items: center;
+  padding-top: 12px;
+  padding-bottom: 12px;
+}
+
+.dkrs-app-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.dkrs-hero {
+  min-width: 0;
+}
+
+.dkrs-h1.dkrs-h1-sm {
+  margin: 0;
+  line-height: 1.05;
+  white-space: nowrap;
+}
+
+.dkrs-sub {
+  line-height: 1.2;
+  max-width: 760px;
+}
