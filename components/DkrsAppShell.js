@@ -3,173 +3,200 @@ import React, { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/router";
 
-const Icons = {
-  dashboard: ({ active }) => (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-      <path d="M4 13.2c0-.7.5-1.2 1.2-1.2h4.6c.7 0 1.2.5 1.2 1.2v5.6c0 .7-.5 1.2-1.2 1.2H5.2c-.7 0-1.2-.5-1.2-1.2v-5.6Z" stroke={active ? "rgba(255,255,255,0.92)" : "rgba(255,255,255,0.72)"} strokeWidth="1.6" />
-      <path d="M13 5.2c0-.7.5-1.2 1.2-1.2h4.6c.7 0 1.2.5 1.2 1.2v13.6c0 .7-.5 1.2-1.2 1.2h-4.6c-.7 0-1.2-.5-1.2-1.2V5.2Z" stroke={active ? "rgba(255,255,255,0.92)" : "rgba(255,255,255,0.72)"} strokeWidth="1.6" />
-      <path d="M4 5.2C4 4.5 4.5 4 5.2 4h4.6c.7 0 1.2.5 1.2 1.2v3.6c0 .7-.5 1.2-1.2 1.2H5.2C4.5 10 4 9.5 4 8.8V5.2Z" stroke={active ? "rgba(185,255,46,0.95)" : "rgba(185,255,46,0.65)"} strokeWidth="1.6" />
-    </svg>
-  ),
-  insights: ({ active }) => (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-      <path d="M4 17.2c3.2-8 6.6-10.8 10.2-8.4 2.4 1.6 3.8 1 5.8-1.8" stroke={active ? "rgba(255,255,255,0.92)" : "rgba(255,255,255,0.72)"} strokeWidth="1.6" strokeLinecap="round" />
-      <path d="M7 19h10" stroke={active ? "rgba(185,255,46,0.95)" : "rgba(185,255,46,0.65)"} strokeWidth="1.6" strokeLinecap="round" />
-      <path d="M6.2 13.2l2.1 2.1 3.8-5.2 3 2.5 4-5" stroke={active ? "rgba(124,58,237,0.95)" : "rgba(124,58,237,0.70)"} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  ),
-  assistant: ({ active }) => (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-      <path d="M12 3a6 6 0 0 0-6 6v3.4a3.6 3.6 0 0 0 3.6 3.6H12a3.6 3.6 0 0 0 3.6-3.6V9a6 6 0 0 0-6-6Z" stroke={active ? "rgba(255,255,255,0.92)" : "rgba(255,255,255,0.72)"} strokeWidth="1.6" />
-      <path d="M5.5 11.2v1.2A6.5 6.5 0 0 0 12 19a6.5 6.5 0 0 0 6.5-6.6v-1.2" stroke={active ? "rgba(185,255,46,0.95)" : "rgba(185,255,46,0.65)"} strokeWidth="1.6" strokeLinecap="round" />
-      <path d="M12 19v2" stroke={active ? "rgba(124,58,237,0.95)" : "rgba(124,58,237,0.70)"} strokeWidth="1.6" strokeLinecap="round" />
-    </svg>
-  ),
-  reports: ({ active }) => (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-      <path d="M7 3.8h7.2L18 7.6V20a1.8 1.8 0 0 1-1.8 1.8H7A1.8 1.8 0 0 1 5.2 20V5.6A1.8 1.8 0 0 1 7 3.8Z" stroke={active ? "rgba(255,255,255,0.92)" : "rgba(255,255,255,0.72)"} strokeWidth="1.6" />
-      <path d="M14.2 3.8V7a.9.9 0 0 0 .9.9H18" stroke={active ? "rgba(185,255,46,0.95)" : "rgba(185,255,46,0.65)"} strokeWidth="1.6" />
-      <path d="M8 11h8M8 14.5h8M8 18h5" stroke={active ? "rgba(124,58,237,0.95)" : "rgba(124,58,237,0.70)"} strokeWidth="1.6" strokeLinecap="round" />
-    </svg>
-  ),
-};
+function NavIcon({ name }) {
+  // simple inline “icons” without libs
+  const common = { width: 18, height: 18, viewBox: "0 0 24 24", fill: "none" };
+  const stroke = "currentColor";
 
-function NavItem({ href, label, icon, isActive, onClick }) {
-  return (
-    <Link href={href} legacyBehavior>
-      <a
-        className={`dkrs-sb-item ${isActive ? "active" : ""}`}
-        onClick={onClick}
-        aria-current={isActive ? "page" : undefined}
-        title={label}
-      >
-        <span className="dkrs-sb-ic">{icon}</span>
-        <span className="dkrs-sb-label">{label}</span>
-      </a>
-    </Link>
-  );
+  if (name === "dashboard") {
+    return (
+      <svg {...common}>
+        <path d="M4 13h7V4H4v9zM13 20h7V11h-7v9zM13 4v5h7V4h-7zM4 20h7v-5H4v5z" stroke={stroke} strokeWidth="1.8" />
+      </svg>
+    );
+  }
+  if (name === "insights") {
+    return (
+      <svg {...common}>
+        <path d="M4 19h16" stroke={stroke} strokeWidth="1.8" />
+        <path d="M7 16V8" stroke={stroke} strokeWidth="1.8" strokeLinecap="round" />
+        <path d="M12 16V5" stroke={stroke} strokeWidth="1.8" strokeLinecap="round" />
+        <path d="M17 16v-6" stroke={stroke} strokeWidth="1.8" strokeLinecap="round" />
+      </svg>
+    );
+  }
+  if (name === "assistant") {
+    return (
+      <svg {...common}>
+        <path d="M12 3a4 4 0 0 1 4 4v3a4 4 0 0 1-8 0V7a4 4 0 0 1 4-4z" stroke={stroke} strokeWidth="1.8" />
+        <path d="M6 10a6 6 0 0 0 12 0" stroke={stroke} strokeWidth="1.8" strokeLinecap="round" />
+        <path d="M12 16v5" stroke={stroke} strokeWidth="1.8" strokeLinecap="round" />
+      </svg>
+    );
+  }
+  if (name === "reports") {
+    return (
+      <svg {...common}>
+        <path d="M7 3h8l2 2v16H7V3z" stroke={stroke} strokeWidth="1.8" />
+        <path d="M9 9h6M9 13h6M9 17h5" stroke={stroke} strokeWidth="1.8" strokeLinecap="round" />
+      </svg>
+    );
+  }
+  if (name === "menu") {
+    return (
+      <svg {...common}>
+        <path d="M5 7h14M5 12h14M5 17h14" stroke={stroke} strokeWidth="1.8" strokeLinecap="round" />
+      </svg>
+    );
+  }
+  if (name === "close") {
+    return (
+      <svg {...common}>
+        <path d="M6 6l12 12M18 6L6 18" stroke={stroke} strokeWidth="1.8" strokeLinecap="round" />
+      </svg>
+    );
+  }
+
+  return null;
 }
 
 export default function DkrsAppShell({ title, subtitle, right, children }) {
   const router = useRouter();
   const [drawerOpen, setDrawerOpen] = useState(false);
 
-  const path = router.pathname;
-
-  useEffect(() => {
-    const handle = () => setDrawerOpen(false);
-    router.events.on("routeChangeStart", handle);
-    return () => router.events.off("routeChangeStart", handle);
-  }, [router.events]);
-
   const items = useMemo(
     () => [
-      { href: "/dashboard", label: "Дашборд", key: "/dashboard", icon: <Icons.dashboard active={path === "/dashboard"} /> },
-      { href: "/insights", label: "Сводка", key: "/insights", icon: <Icons.insights active={path === "/insights"} /> },
-      { href: "/assistant", label: "AI помощник", key: "/assistant", icon: <Icons.assistant active={path === "/assistant"} /> },
-      { href: "/reports", label: "Отчёты", key: "/reports", icon: <Icons.reports active={path === "/reports"} /> },
+      { href: "/dashboard", label: "Дашборд", icon: "dashboard" },
+      { href: "/insights", label: "Сводка", icon: "insights" },
+      { href: "/assistant", label: "AI помощник", icon: "assistant" },
+      { href: "/reports", label: "Отчёты", icon: "reports" },
     ],
-    [path]
+    []
   );
 
+  function isActive(href) {
+    if (!router?.pathname) return false;
+    if (href === "/dashboard") return router.pathname === "/dashboard" || router.pathname === "/";
+    return router.pathname === href || router.pathname.startsWith(href + "/");
+  }
+
+  // close drawer on route change
+  useEffect(() => {
+    const handle = () => setDrawerOpen(false);
+    router?.events?.on("routeChangeStart", handle);
+    return () => router?.events?.off("routeChangeStart", handle);
+  }, [router]);
+
   return (
-    <div className="dkrs-app dkrs-app-mini">
-      {/* MINI SIDEBAR (desktop hover expand; overlay, NOT pushing content) */}
+    <div className="dkrs-bg">
+      {/* Mini icon sidebar (desktop/tablet) */}
       <aside className="dkrs-mini" aria-label="Навигация">
         <div className="dkrs-mini-top">
-          <div className="dkrs-mini-brand" title="DKRS">
-            <div className="dkrs-logo">DKRS</div>
-            <div className="dkrs-mini-brand-sub">AI Finance CRM</div>
-          </div>
+          <Link href="/dashboard">
+            <a className="dkrs-mini-brand" aria-label="DKRS">
+              DKRS
+            </a>
+          </Link>
         </div>
 
         <nav className="dkrs-mini-nav">
           {items.map((it) => (
-            <NavItem key={it.href} href={it.href} label={it.label} icon={it.icon} isActive={path === it.key} />
+            <Link key={it.href} href={it.href}>
+              <a className={`dkrs-mini-item ${isActive(it.href) ? "active" : ""}`}>
+                <span className="dkrs-mini-ico">
+                  <NavIcon name={it.icon} />
+                </span>
+                <span className="dkrs-mini-text">{it.label}</span>
+              </a>
+            </Link>
           ))}
         </nav>
 
         <div className="dkrs-mini-bottom">
           <button
-            className="dkrs-btn dkrs-btn-ghost dkrs-mini-logout"
+            className="dkrs-mini-logout"
             onClick={async () => {
               await fetch("/api/auth/logout");
               window.location.href = "/login";
             }}
             title="Выйти"
           >
-            <span className="dkrs-mini-logout-ic">⎋</span>
-            <span className="dkrs-sb-label">Выйти</span>
-          </button>
-        </div>
-      </aside>
-
-      {/* DRAWER (mobile) */}
-      <aside className={`dkrs-sb ${drawerOpen ? "open" : ""}`}>
-        <div className="dkrs-sb-top">
-          <div className="dkrs-sb-brand">
-            <div className="dkrs-logo">DKRS</div>
-            <div className="dkrs-sb-brand-sub">AI Finance CRM</div>
-          </div>
-          <button className="dkrs-sb-close" onClick={() => setDrawerOpen(false)} aria-label="Закрыть меню">
-            ✕
-          </button>
-        </div>
-
-        <div className="dkrs-sb-section">
-          <div className="dkrs-sb-section-title">Навигация</div>
-        </div>
-
-        <nav className="dkrs-sb-nav">
-          {items.map((it) => (
-            <NavItem
-              key={`m-${it.href}`}
-              href={it.href}
-              label={it.label}
-              icon={it.icon}
-              isActive={path === it.key}
-              onClick={() => setDrawerOpen(false)}
-            />
-          ))}
-        </nav>
-
-        <div className="dkrs-sb-bottom">
-          <button
-            className="dkrs-btn dkrs-btn-ghost"
-            onClick={async () => {
-              await fetch("/api/auth/logout");
-              window.location.href = "/login";
-            }}
-          >
             Выйти
           </button>
         </div>
       </aside>
 
-      <div className={`dkrs-sb-overlay ${drawerOpen ? "open" : ""}`} onClick={() => setDrawerOpen(false)} />
-
-      {/* MAIN */}
-      <main className="dkrs-main">
-        <div className="dkrs-topbar dkrs-topbar-app">
+      {/* Main content */}
+      <div className="dkrs-main">
+        <header className="dkrs-topbar dkrs-topbar-app">
           <div className="dkrs-topbar-inner">
             <div className="dkrs-app-left">
-              {/* burger only on mobile */}
-              <button className="dkrs-sb-burger dkrs-burger-mobile" onClick={() => setDrawerOpen(true)} aria-label="Открыть меню">
-                <span className="dkrs-burger-ic">☰</span>
-              </button>
-
               <div className="dkrs-hero" style={{ padding: 0 }}>
-                {title ? <div className="dkrs-h1 dkrs-h1-sm">{title}</div> : null}
+                <div className="dkrs-h1 dkrs-h1-sm">{title || "Дашборд"}</div>
                 {subtitle ? <div className="dkrs-sub">{subtitle}</div> : null}
               </div>
             </div>
 
-            <div className="dkrs-topbar-right">{right}</div>
+            <div className="dkrs-topbar-right">
+              {right ? <div className="dkrs-right-slot">{right}</div> : null}
+
+              {/* Mobile menu button */}
+              <button
+                className="dkrs-mobile-menu"
+                onClick={() => setDrawerOpen(true)}
+                aria-label="Открыть меню"
+                title="Меню"
+              >
+                <NavIcon name="menu" />
+              </button>
+            </div>
           </div>
-        </div>
+        </header>
 
         <div className="dkrs-container dkrs-container-app">{children}</div>
-      </main>
+      </div>
+
+      {/* Mobile drawer */}
+      {drawerOpen ? (
+        <div className="dkrs-drawer-overlay" role="dialog" aria-modal="true">
+          <div className="dkrs-drawer">
+            <div className="dkrs-drawer-head">
+              <div className="dkrs-drawer-brand">DKRS</div>
+              <button className="dkrs-drawer-close" onClick={() => setDrawerOpen(false)} aria-label="Закрыть меню">
+                <NavIcon name="close" />
+              </button>
+            </div>
+
+            <div className="dkrs-drawer-section">Навигация</div>
+
+            <div className="dkrs-drawer-nav">
+              {items.map((it) => (
+                <Link key={it.href} href={it.href}>
+                  <a className={`dkrs-drawer-item ${isActive(it.href) ? "active" : ""}`}>
+                    <span className="dkrs-mini-ico">
+                      <NavIcon name={it.icon} />
+                    </span>
+                    <span style={{ fontWeight: 900 }}>{it.label}</span>
+                  </a>
+                </Link>
+              ))}
+            </div>
+
+            <button
+              className="dkrs-drawer-logout"
+              onClick={async () => {
+                await fetch("/api/auth/logout");
+                window.location.href = "/login";
+              }}
+            >
+              Выйти
+            </button>
+          </div>
+
+          {/* click outside */}
+          <button className="dkrs-drawer-backdrop" onClick={() => setDrawerOpen(false)} aria-label="Закрыть" />
+        </div>
+      ) : null}
     </div>
   );
 }
