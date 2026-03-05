@@ -821,6 +821,44 @@ img { max-width: 100%; }
 .detail-summary-item span { font-size: 11px; color: var(--dkrs-text-tertiary); text-transform: uppercase; letter-spacing: 0.5px; }
 .detail-summary-item strong { font-size: 16px; font-weight: 800; }
 
+/* ===== LEGACY TABLE (Summary anomalies) ===== */
+.projects-table-wrapper {
+  overflow-x: auto; border: 1px solid var(--dkrs-glass-border);
+  border-radius: var(--radius-lg); background: rgba(255,255,255,0.5);
+}
+.dkrs-table { width: 100%; border-collapse: collapse; font-size: 14px; }
+.dkrs-table th {
+  padding: 14px 20px; text-align: left; font-weight: 600;
+  color: var(--dkrs-text-secondary); font-size: 11px; text-transform: uppercase;
+  letter-spacing: 0.8px; border-bottom: 1px solid var(--dkrs-glass-border);
+  background: rgba(248,250,252,0.7); position: sticky; top: 0;
+  white-space: nowrap; user-select: none;
+}
+.dkrs-table td {
+  padding: 14px 20px; color: var(--dkrs-text-primary);
+  border-bottom: 1px solid rgba(226,232,240,0.6);
+  white-space: nowrap; font-variant-numeric: tabular-nums;
+}
+.dkrs-table tr:last-child td { border-bottom: none; }
+.table-row-animated { animation: slideInRow 0.4s ease both; transition: all 0.2s ease; }
+.table-row-animated:hover { background-color: rgba(0,191,166,0.04); }
+.project-name { font-weight: 600; color: var(--dkrs-text-primary); }
+.positive-value { color: var(--risk-low-color); font-weight: 600; }
+.negative-value { color: var(--risk-high-color); font-weight: 600; }
+.empty-state { text-align: center; padding: 48px 20px !important; color: var(--dkrs-text-tertiary); font-size: 15px; }
+.empty-icon { font-size: 40px; margin-bottom: 8px; }
+.anomaly-chip { display: inline-flex; align-items: center; gap: 4px; font-size: 13px; }
+
+/* month selector for summary */
+.month-select {
+  padding: 8px 16px; border-radius: var(--radius-md);
+  border: 1px solid var(--dkrs-glass-border);
+  background: #fff; font-size: 14px; font-weight: 500;
+  color: var(--dkrs-text-primary); cursor: pointer; outline: none;
+  transition: all 0.2s ease; font-family: var(--font-family);
+}
+.month-select:focus { border-color: var(--dkrs-primary); box-shadow: 0 0 0 3px rgba(0,191,166,0.15); }
+
 /* ===== RESPONSIVE ===== */
 @media (max-width: 1200px) { .kpi-grid { grid-template-columns: repeat(2, 1fr); } }
 @media (max-width: 900px) {
