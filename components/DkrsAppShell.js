@@ -33,6 +33,9 @@ const DkrsAppShell = ({ children }) => {
     return pageTitles[path] || 'DKRS AI Finance';
   };
   
+  // FIX: Using an inline SVG Data URI as a fallback to avoid 404 errors.
+  const fallbackAvatar = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%23a0aec0'%3E%3Cpath d='M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z'/%3E%3C/svg%3E";
+
   return (
     <div className="dkrs-app">
       <aside className={`sidebar ${isSidebarOpen ? 'open' : ''}`} onMouseEnter={() => setSidebarOpen(true)} onMouseLeave={() => setSidebarOpen(false)}>
@@ -64,7 +67,7 @@ const DkrsAppShell = ({ children }) => {
           <div className="topbar-right">
             {/* User Profile / Logout button can go here */}
             <div className="user-profile">
-              <img src="/user-avatar.png" alt="User" onError={(e) => { e.target.onerror = null; e.target.src='/fallback-avatar.png'; }} />
+              <img src="/user-avatar.png" alt="User" onError={(e) => { e.target.onerror = null; e.target.src=fallbackAvatar; }} />
             </div>
           </div>
         </header>
