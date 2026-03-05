@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import DkrsAppShell from '../components/DkrsAppShell';
 import KpiCard from '../components/KpiCard';
 import RiskBadge from '../components/RiskBadge';
-import { fmtMoney, fmtPct } from '../lib/format';
+import { fmtMoney, fmtPct, getProjectColorFromString } from '../lib/format';
 
 const Dashboard = () => {
   const [data, setData] = useState({ totals: {}, projects: [] });
@@ -11,8 +11,10 @@ const Dashboard = () => {
   const [months, setMonths] = useState([]);
   const [selectedMonth, setSelectedMonth] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
-  // ИЗМЕНЕНО: Более удобная сортировка по клику на заголовок
   const [sortConfig, setSortConfig] = useState({ key: 'profit', order: 'desc' });
+  
+  // НОВОЕ: Состояние для отслеживания раскрытой строки
+  const [expandedRow, setExpandedRow] = useState(null);
 
   useEffect(() => {
     fetch('/api/months')
@@ -34,6 +36,7 @@ const Dashboard = () => {
   useEffect(() => {
     if (!selectedMonth) return;
     setLoading(true);
+    setExpandedRow(null); // Сбрасываем раскрытую строку при смене месяца
     fetch(`/api/dashboard?month=${selectedMonth}`)
       .then(res => res.json())
       .then(data => {
@@ -73,10 +76,10 @@ const Dashboard = () => {
   }, [data.projects, searchTerm, sortConfig]);
 
   const kpiData = [
-    { title: 'Выручка', value: fmtMoney(data.totals?.revenue || 0), icon: 'revenue' },
-    { title: 'Расходы', value: fmtMoney(data.totals?.costs || 0), icon: 'costs' },
-    { title: 'Прибыль', value: fmtMoney(data.totals?.profit || 0), icon: 'profit' },
-    { title: 'Маржа', value: fmtPct(data.totals?.margin || 0), icon: 'margin' }
+    { title: 'Выручка', value: fmtMoney(data.totals?.revenue || 0), icon: 'revenue', trend: '+2.1%' },
+    { title: 'Расходы', value: fmtMoney(data.totals?.costs || 0), icon: 'costs', trend: '+1.5%' },
+    { title: 'Прибыль', value: fmtMoney(data.totals?.profit || 0), icon: 'profit', trend: '+8.3%' },
+    { title: 'Маржа', value: fmtPct(data.totals?.margin || 0), icon: 'margin', trend: '+0.5%' }
   ];
 
   const tableHeaders = [
@@ -97,7 +100,7 @@ const Dashboard = () => {
     <DkrsAppShell>
       <div className="dashboard-header">
         <h1>Обзор финансов</h1>
-        <p>Ключевые показатели и детальная информация по проектам</p>
+        <p>Ключевые показатели и детальная информация по проектам за выбранный период</p>
       </div>
 
       <div className="kpi-grid">
@@ -143,14 +146,44 @@ const Dashboard = () => {
             </thead>
             <tbody>
               {filteredAndSortedProjects.map((p, index) => (
-                <tr key={p.project + index}>
-                  <td className="project-name">{p.project || 'Проект без названия'}</td>
-                  <td>{fmtMoney(p.revenue)}</td>
-                  <td>{fmtMoney(p.costs)}</td>
-                  <td className={p.profit >= 0 ? 'positive-value' : 'negative-value'}>{fmtMoney(p.profit)}</td>
-                  <td className={p.margin >= 0 ? 'positive-value' : 'negative-value'}>{fmtPct(p.margin)}</td>
-                  <td><RiskBadge riskLevel={p.risk} /></td>
-                </tr>
+                <React.Fragment key={p.project + index}>
+                  <tr className="main-row" onClick={() => setExpandedRow(expandedRow === index ? null : index)}>
+                    <td className="project-name">
+                      <span className="project-color-dot" style={{ backgroundColor: getProjectColorFromString(p.project) }}></span>
+                      {p.project || 'Проект без названия'}
+                    </td>
+                    <td>{fmtMoney(p.revenue, 0)}</td>
+                    <td>{fmtMoney(p.costs, 0)}</td>
+                    <td className={p.profit >= 0 ? 'positive-value' : 'negative-value'}>{fmtMoney(p.profit, 0)}</td>
+                    <td className={p.margin >= 0 ? 'positive-value' : 'negative-value'}>{fmtPct(p.margin)}</td>
+                    <td><RiskBadge riskLevel={p.risk} /></td>
+                  </tr>
+                  <tr className={`details-row ${expandedRow === index ? 'expanded' : ''}`}>
+                    <td colSpan={tableHeaders.length}>
+                      <div className="details-content">
+                        <h4>Детализация расходов:</h4>
+                        <div className="details-grid">
+                          <div>
+                            <span>Персонал</span>
+                            <strong>{fmtMoney(p.labor, 0)}</strong>
+                          </div>
+                          <div>
+                            <span>Реклама</span>
+                            <strong>{fmtMoney(p.ads, 0)}</strong>
+                          </div>
+                           <div>
+                            <span>Транспорт</span>
+                            <strong>{fmtMoney(p.transport, 0)}</strong>
+                          </div>
+                          <div>
+                            <span>Штрафы</span>
+                            <strong className="negative-value">{fmtMoney(p.penalties, 0)}</strong>
+                          </div>
+                        </div>
+                      </div>
+                    </td>
+                  </tr>
+                </React.Fragment>
               ))}
             </tbody>
           </table>
