@@ -11,6 +11,7 @@
     "next": "14.2.29",
     "@neondatabase/serverless": "^0.10.4",
     "openai": "^4.98.0",
-    "cookie": "^0.7.2"
+    "cookie": "^0.7.2",
+    "jose": "^6.0.11"
   }
 }
