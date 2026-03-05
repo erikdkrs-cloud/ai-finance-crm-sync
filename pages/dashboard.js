@@ -12,8 +12,6 @@ const Dashboard = () => {
   const [selectedMonth, setSelectedMonth] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
   const [sortConfig, setSortConfig] = useState({ key: 'profit', order: 'desc' });
-  
-  // НОВОЕ: Состояние для отслеживания раскрытой строки
   const [expandedRow, setExpandedRow] = useState(null);
 
   useEffect(() => {
@@ -36,7 +34,7 @@ const Dashboard = () => {
   useEffect(() => {
     if (!selectedMonth) return;
     setLoading(true);
-    setExpandedRow(null); // Сбрасываем раскрытую строку при смене месяца
+    setExpandedRow(null);
     fetch(`/api/dashboard?month=${selectedMonth}`)
       .then(res => res.json())
       .then(data => {
