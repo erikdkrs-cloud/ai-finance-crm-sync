@@ -48,8 +48,6 @@ export default function DashboardPage() {
   const [sortField, setSortField] = useState("profit");
   const [sortDir, setSortDir] = useState("desc");
   const [expandedProject, setExpandedProject] = useState(null);
-  const [projectDetails, setProjectDetails] = useState({});
-  const [detailLoading, setDetailLoading] = useState({});
 
   const debouncedSearch = useDebounce(search, 200);
 
@@ -91,29 +89,9 @@ export default function DashboardPage() {
     return () => { alive = false; };
   }, [selectedMonth]);
 
-  const loadProjectDetails = useCallback(async (projectName) => {
-    if (projectDetails[projectName] || detailLoading[projectName]) return;
-    setDetailLoading((p) => ({ ...p, [projectName]: true }));
-    try {
-      const r = await fetch(
-        `/api/project_details?month=${encodeURIComponent(selectedMonth)}&project=${encodeURIComponent(projectName)}`
-      );
-      const d = await r.json();
-      if (d?.ok) {
-        setProjectDetails((p) => ({ ...p, [projectName]: d }));
-      }
-    } catch {}
-    setDetailLoading((p) => ({ ...p, [projectName]: false }));
-  }, [selectedMonth, projectDetails, detailLoading]);
-
   const toggleExpand = useCallback((name) => {
-    if (expandedProject === name) {
-      setExpandedProject(null);
-    } else {
-      setExpandedProject(name);
-      loadProjectDetails(name);
-    }
-  }, [expandedProject, loadProjectDetails]);
+    setExpandedProject((prev) => (prev === name ? null : name));
+  }, []);
 
   const filtered = useMemo(() => {
     let list = [...projects];
@@ -140,11 +118,10 @@ export default function DashboardPage() {
 
   const totalsSafe = useMemo(() => {
     if (!totals) return { revenue: 0, profit: 0, margin: 0, count: 0 };
-    const margin = Number(totals.margin || 0);
     return {
       revenue: Number(totals.revenue || 0),
       profit: Number(totals.profit || 0),
-      margin: margin <= 1.5 ? margin * 100 : margin,
+      margin: Number(totals.margin || 0),
       count: projects.length,
     };
   }, [totals, projects]);
@@ -179,8 +156,8 @@ export default function DashboardPage() {
         {/* KPI Cards */}
         <div className="kpi-grid">
           {[
-            { label: "ВЫРУЧКА", value: fmtMoney(totalsSafe.revenue, 0), icon: "💰", gradient: "linear-gradient(135deg, #00bfa6, #00e5cc)" },
-            { label: "ПРИБЫЛЬ", value: fmtMoney(totalsSafe.profit, 0), icon: "📈", gradient: "linear-gradient(135deg, #7c4dff, #a78bfa)" },
+            { label: "ВЫРУЧКА", value: fmtMoney(totalsSafe.revenue, 0) + " ₽", icon: "💰", gradient: "linear-gradient(135deg, #00bfa6, #00e5cc)" },
+            { label: "ПРИБЫЛЬ", value: fmtMoney(totalsSafe.profit, 0) + " ₽", icon: "📈", gradient: "linear-gradient(135deg, #7c4dff, #a78bfa)" },
             { label: "МАРЖА", value: fmtPct(totalsSafe.margin), icon: "📊", gradient: "linear-gradient(135deg, #f59e0b, #fbbf24)" },
             { label: "ПРОЕКТОВ", value: String(totalsSafe.count), icon: "🏗️", gradient: "linear-gradient(135deg, #f472b6, #fb7185)" },
           ].map((card, i) => (
@@ -280,10 +257,7 @@ export default function DashboardPage() {
                   filtered.map((p, i) => {
                     const name = p.project || "—";
                     const risk = riskLevel(p.margin);
-                    const marginPct = Number(p.margin) <= 1.5 ? Number(p.margin) * 100 : Number(p.margin);
                     const isExpanded = expandedProject === name;
-                    const details = projectDetails[name];
-                    const dLoading = detailLoading[name];
 
                     return (
                       <React.Fragment key={i}>
@@ -301,41 +275,37 @@ export default function DashboardPage() {
                           <td className="num">
                             <span className="revenue-value">{fmtMoney(p.revenue, 0)} ₽</span>
                             <div className="mini-bar">
-                              <div className="mini-bar-fill teal" style={{ width: `${Math.min(100, (Number(p.revenue) / (totalsSafe.revenue || 1)) * 100 * 3)}%` }} />
+                              <div
+                                className="mini-bar-fill teal"
+                                style={{ width: `${Math.min(100, (Number(p.revenue) / (totalsSafe.revenue || 1)) * 100 * 3)}%` }}
+                              />
                             </div>
                           </td>
                           <td className="num">{fmtMoney(p.costs, 0)} ₽</td>
                           <td className="num">{fmtMoney(p.profit, 0)} ₽</td>
-                          <td className="num">{fmtPct(marginPct)}</td>
+                          <td className="num">{fmtPct(p.margin)}</td>
                           <td><RiskBadge riskLevel={risk} /></td>
                         </tr>
                         {isExpanded && (
                           <tr className="detail-row">
                             <td colSpan={6}>
                               <div className="detail-content">
-                                {dLoading ? (
-                                  <div className="detail-loading"><div className="loader-spinner" /> Загрузка деталей...</div>
-                                ) : details ? (
-                                  <div className="detail-grid">
-                                    {[
-                                      { label: "ЗП рабочие", value: details.salary_workers, icon: "👷" },
-                                      { label: "ЗП менеджер", value: details.salary_manager, icon: "👔" },
-                                      { label: "ЗП рук-ль", value: details.salary_head, icon: "🎩" },
-                                      { label: "Реклама", value: details.ads, icon: "📢" },
-                                      { label: "Транспорт", value: details.transport, icon: "🚛" },
-                                      { label: "Штрафы", value: details.penalties, icon: "⚠️" },
-                                      { label: "Налоги", value: details.tax, icon: "🏛️" },
-                                    ].map((d, j) => (
-                                      <div key={j} className="detail-item">
-                                        <span className="detail-item-icon">{d.icon}</span>
-                                        <span className="detail-item-label">{d.label}</span>
-                                        <span className="detail-item-value">{fmtMoney(d.value || 0, 0)} ₽</span>
-                                      </div>
-                                    ))}
-                                  </div>
-                                ) : (
-                                  <div className="detail-loading">Нет данных</div>
-                                )}
+                                <div className="detail-grid">
+                                  {[
+                                    { label: "Выручка", value: p.revenue, icon: "💰" },
+                                    { label: "Расходы", value: p.costs, icon: "📉" },
+                                    { label: "Прибыль", value: p.profit, icon: "📈" },
+                                    { label: "Маржа", value: null, icon: "📊", display: fmtPct(p.margin) },
+                                  ].map((d, j) => (
+                                    <div key={j} className="detail-item">
+                                      <span className="detail-item-icon">{d.icon}</span>
+                                      <span className="detail-item-label">{d.label}</span>
+                                      <span className="detail-item-value">
+                                        {d.display || (fmtMoney(d.value || 0, 0) + " ₽")}
+                                      </span>
+                                    </div>
+                                  ))}
+                                </div>
                               </div>
                             </td>
                           </tr>
