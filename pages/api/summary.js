@@ -1,6 +1,9 @@
 import { neon } from "@neondatabase/serverless";
 
-const sql = neon(process.env.DATABASE_URL);
+function num(x) { return Number(x || 0); }
+function round2(x) { return Math.round(num(x) * 100) / 100; }
+
+const sql_conn = neon(process.env.DATABASE_URL);
 
 export default async function handler(req, res) {
   const { month } = req.query;
@@ -10,8 +13,7 @@ export default async function handler(req, res) {
   }
 
   try {
-    // Получаем period_id для указанного месяца
-    const periods = await sql`
+    const periods = await sql_conn`
       SELECT id FROM periods WHERE month = ${month} LIMIT 1
     `;
 
@@ -21,8 +23,7 @@ export default async function handler(req, res) {
 
     const periodId = periods[0].id;
 
-    // Получаем все финансовые строки за этот период с именами проектов
-    const rows = await sql`
+    const rows = await sql_conn`
       SELECT
         p.name AS project,
         f.revenue_no_vat,
@@ -38,84 +39,119 @@ export default async function handler(req, res) {
       WHERE f.period_id = ${periodId}
     `;
 
-    // Считаем costs, profit, margin для каждого проекта
     const projects = rows.map((r) => {
-      const revenue = Number(r.revenue_no_vat) || 0;
-      const costs =
-        (Number(r.salary_workers) || 0) +
-        (Number(r.salary_manager) || 0) +
-        (Number(r.salary_head) || 0) +
-        (Number(r.ads) || 0) +
-        (Number(r.transport) || 0) +
-        (Number(r.penalties) || 0) +
-        (Number(r.tax) || 0);
+      const revenue = num(r.revenue_no_vat);
+      const salary_workers = num(r.salary_workers);
+      const salary_manager = num(r.salary_manager);
+      const salary_head = num(r.salary_head);
+      const ads = num(r.ads);
+      const transport = num(r.transport);
+      const penalties = num(r.penalties);
+      const tax = num(r.tax);
+      const costs = salary_workers + salary_manager + salary_head + ads + transport + penalties + tax;
       const profit = revenue - costs;
       const margin = revenue > 0 ? profit / revenue : 0;
 
       return {
         project: r.project,
-        revenue,
-        costs,
-        profit,
-        margin,
-        penalties: Number(r.penalties) || 0,
-        ads: Number(r.ads) || 0,
+        revenue: round2(revenue),
+        costs: round2(costs),
+        profit: round2(profit),
+        margin: Math.round(margin * 10000) / 10000,
+        salary_workers: round2(salary_workers),
+        salary_manager: round2(salary_manager),
+        salary_head: round2(salary_head),
+        ads: round2(ads),
+        transport: round2(transport),
+        penalties: round2(penalties),
+        tax: round2(tax),
       };
     });
 
-    // 1. Топ-3 прибыльных
+    // Топ-3 прибыльных
     const top_profitable = [...projects]
       .sort((a, b) => b.profit - a.profit)
       .slice(0, 3);
 
-    // 2. Топ-3 убыточных
+    // Топ-3 убыточных (или наименее прибыльных)
     const top_unprofitable = [...projects]
-      .filter((p) => p.profit < 0)
       .sort((a, b) => a.profit - b.profit)
       .slice(0, 3);
 
-    // 3. Аномалии
+    // Аномалии
     const anomalies = projects
       .map((p) => {
-        const projectAnomalies = [];
-
-        if (p.penalties > 0) {
-          projectAnomalies.push({ type: "Штрафы", value: p.penalties });
-        }
-        if (p.revenue > 0 && p.ads / p.revenue > 0.05 && p.ads > 50000) {
-          projectAnomalies.push({
-            type: "Высокие расходы на рекламу",
-            value: p.ads,
-          });
-        }
-        if (p.margin < 0.1 && p.revenue > 100000) {
-          projectAnomalies.push({
-            type: "Низкая маржинальность",
-            value: p.margin,
-          });
-        }
-
-        return projectAnomalies.length > 0
-          ? { project: p.project, anomalies: projectAnomalies }
-          : null;
+        const items = [];
+        if (p.penalties > 0) items.push({ type: "Штрафы", value: p.penalties });
+        if (p.revenue > 0 && p.ads / p.revenue > 0.05 && p.ads > 50000) items.push({ type: "Высокие расходы на рекламу", value: p.ads });
+        if (p.margin < 0.1 && p.revenue > 100000) items.push({ type: "Низкая маржинальность", value: p.margin });
+        return items.length > 0 ? { project: p.project, anomalies: items } : null;
       })
-      .filter(Boolean);
+      .filter(Boolean)
+      .flatMap((item) =>
+        item.anomalies.map((a) => ({
+          project: item.project,
+          reason: a.type,
+          value: a.value,
+        }))
+      );
 
-    // Плоский список аномалий
-    const flatAnomalies = anomalies.flatMap((item) =>
-      item.anomalies.map((anomaly) => ({
-        project: item.project,
-        reason: anomaly.type,
-        value: anomaly.value,
-      }))
+    // Агрегаты для виджетов
+    const totals = projects.reduce(
+      (acc, p) => {
+        acc.revenue += p.revenue;
+        acc.costs += p.costs;
+        acc.profit += p.profit;
+        acc.salary_workers += p.salary_workers;
+        acc.salary_manager += p.salary_manager;
+        acc.salary_head += p.salary_head;
+        acc.ads += p.ads;
+        acc.transport += p.transport;
+        acc.penalties += p.penalties;
+        acc.tax += p.tax;
+        return acc;
+      },
+      { revenue: 0, costs: 0, profit: 0, salary_workers: 0, salary_manager: 0, salary_head: 0, ads: 0, transport: 0, penalties: 0, tax: 0 }
     );
+    totals.margin = totals.revenue > 0 ? totals.profit / totals.revenue : 0;
+
+    // Риск-распределение
+    const riskDistribution = { green: 0, yellow: 0, red: 0 };
+    projects.forEach((p) => {
+      if (p.revenue > 0 && p.margin < 0.1) riskDistribution.red++;
+      else if (p.revenue > 0 && p.margin < 0.2) riskDistribution.yellow++;
+      else riskDistribution.green++;
+    });
+
+    // Инсайты
+    const insights = [];
+    const bestMargin = [...projects].filter(p => p.revenue > 0).sort((a, b) => b.margin - a.margin)[0];
+    if (bestMargin) insights.push({ icon: "🏆", text: `Самая высокая маржа — ${bestMargin.project} (${(bestMargin.margin * 100).toFixed(1)}%)` });
+
+    const worstMargin = [...projects].filter(p => p.revenue > 0).sort((a, b) => a.margin - b.margin)[0];
+    if (worstMargin) insights.push({ icon: "📉", text: `Самая низкая маржа — ${worstMargin.project} (${(worstMargin.margin * 100).toFixed(1)}%)` });
+
+    const topAds = [...projects].sort((a, b) => b.ads - a.ads)[0];
+    if (topAds && topAds.ads > 0) insights.push({ icon: "📢", text: `Больше всего на рекламу — ${topAds.project} (${round2(topAds.ads).toLocaleString('ru-RU')} ₽)` });
+
+    const topPenalties = [...projects].sort((a, b) => b.penalties - a.penalties)[0];
+    if (topPenalties && topPenalties.penalties > 0) insights.push({ icon: "⚖️", text: `Максимум штрафов — ${topPenalties.project} (${round2(topPenalties.penalties).toLocaleString('ru-RU')} ₽)` });
+
+    if (totals.penalties > 0) insights.push({ icon: "⚠️", text: `Общая сумма штрафов за период — ${round2(totals.penalties).toLocaleString('ru-RU')} ₽` });
+
+    const profitableCount = projects.filter(p => p.profit > 0).length;
+    insights.push({ icon: "✅", text: `${profitableCount} из ${projects.length} проектов прибыльны` });
 
     res.status(200).json({
       ok: true,
       month,
       top_profitable,
       top_unprofitable,
-      anomalies: flatAnomalies,
+      anomalies,
+      totals,
+      projects,
+      riskDistribution,
+      insights,
     });
   } catch (error) {
     console.error("Summary API error:", error);
