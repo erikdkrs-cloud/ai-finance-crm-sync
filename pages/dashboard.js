@@ -18,20 +18,31 @@ const Dashboard = () => {
     fetch('/api/months')
       .then(res => res.json())
       .then(data => {
-        setMonths(data.months);
-        if (data.months.length > 0) {
-          setSelectedMonth(data.months[0]);
+        if (data && data.months) {
+          setMonths(data.months);
+          if (data.months.length > 0) {
+            setSelectedMonth(data.months[0]);
+          } else {
+            setLoading(false); // No months found, stop loading
+          }
         }
       })
       .catch(err => {
         console.error("Failed to fetch months:", err);
         setError('Не удалось загрузить список месяцев.');
+        setLoading(false);
       });
   }, []);
 
   // Fetch dashboard data when selectedMonth changes
   useEffect(() => {
-    if (!selectedMonth) return;
+    if (!selectedMonth) {
+      if (!months.length) { // Only set loading if months are actually being fetched
+        setLoading(false);
+      }
+      return;
+    }
+
 
     setLoading(true);
     fetch(`/api/dashboard?month=${selectedMonth}`)
@@ -53,7 +64,7 @@ const Dashboard = () => {
       .finally(() => {
         setLoading(false);
       });
-  }, [selectedMonth]);
+  }, [selectedMonth, months]); // Added months to dependency array
   
   const handleSort = (column) => {
     if (sortBy === column) {
@@ -65,7 +76,7 @@ const Dashboard = () => {
   };
 
   const filteredAndSortedProjects = useMemo(() => {
-    if (!data.projects) return [];
+    if (!data.projects || !Array.isArray(data.projects)) return [];
 
     let filtered = data.projects.filter(p => 
       p.name.toLowerCase().includes(searchTerm.toLowerCase())
@@ -81,10 +92,11 @@ const Dashboard = () => {
   }, [data.projects, searchTerm, sortBy, sortOrder]);
 
   const kpiData = [
-    { title: 'Выручка', value: fmtMoney(data.totals?.revenue_no_vat), icon: 'revenue' },
-    { title: 'Расходы', value: fmtMoney(data.totals?.total_costs), icon: 'costs' },
-    { title: 'Прибыль', value: fmtMoney(data.totals?.profit), icon: 'profit' },
-    { title: 'Маржа', value: fmtPct(data.totals?.margin), icon: 'margin' }
+    // FIX: Added `|| 0` to prevent passing `undefined` to formatters on initial render
+    { title: 'Выручка', value: fmtMoney(data.totals?.revenue_no_vat || 0), icon: 'revenue' },
+    { title: 'Расходы', value: fmtMoney(data.totals?.total_costs || 0), icon: 'costs' },
+    { title: 'Прибыль', value: fmtMoney(data.totals?.profit || 0), icon: 'profit' },
+    { title: 'Маржа', value: fmtPct(data.totals?.margin || 0), icon: 'margin' }
   ];
 
   const tableHeaders = [
@@ -116,8 +128,13 @@ const Dashboard = () => {
           className="dkrs-select"
           value={selectedMonth}
           onChange={(e) => setSelectedMonth(e.target.value)}
+          disabled={months.length === 0}
         >
-          {months.map(month => <option key={month} value={month}>{month}</option>)}
+          {months.length > 0 ? (
+             months.map(month => <option key={month} value={month}>{month}</option>)
+          ) : (
+            <option>Месяцы не найдены</option>
+          )}
         </select>
         <input 
           type="text"
@@ -152,19 +169,27 @@ const Dashboard = () => {
               </tr>
             </thead>
             <tbody>
-              {filteredAndSortedProjects.map(p => (
-                <tr key={p.id}>
-                  <td className="project-name">{p.name}</td>
-                  <td>{fmtMoney(p.revenue_no_vat)}</td>
-                  <td>{fmtMoney(p.total_costs)}</td>
-                  <td className={p.profit >= 0 ? 'positive-value' : 'negative-value'}>
-                    {fmtMoney(p.profit)}
-                  </td>
-                  <td className={p.margin >= 0 ? 'positive-value' : 'negative-value'}>
-                    {fmtPct(p.margin)}
+              {filteredAndSortedProjects.length > 0 ? (
+                filteredAndSortedProjects.map(p => (
+                  <tr key={p.id}>
+                    <td className="project-name">{p.name}</td>
+                    <td>{fmtMoney(p.revenue_no_vat)}</td>
+                    <td>{fmtMoney(p.total_costs)}</td>
+                    <td className={p.profit >= 0 ? 'positive-value' : 'negative-value'}>
+                      {fmtMoney(p.profit)}
+                    </td>
+                    <td className={p.margin >= 0 ? 'positive-value' : 'negative-value'}>
+                      {fmtPct(p.margin)}
+                    </td>
+                  </tr>
+                ))
+              ) : (
+                <tr>
+                  <td colSpan={tableHeaders.length} style={{ textAlign: 'center', padding: '40px' }}>
+                    Проекты за выбранный период не найдены.
                   </td>
                 </tr>
-              ))}
+              )}
             </tbody>
           </table>
         )}
