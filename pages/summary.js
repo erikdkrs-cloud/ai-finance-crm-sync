@@ -157,11 +157,14 @@ export default function Summary() {
             <h1 className="summary-title">📋 Сводка и аналитика</h1>
             <p className="summary-subtitle">Ключевые показатели, лидеры, аномалии и инсайты за период</p>
           </div>
-          {months.length > 1 && (
-            <select className="month-select" value={selectedMonth} onChange={(e) => setSelectedMonth(e.target.value)}>
-              {months.map((m) => <option key={m} value={m}>{m}</option>)}
-            </select>
-          )}
+          {months.length > 0 && (
+  <div className="dashboard-period-bar" style={{ margin: 0 }}>
+    <span className="dashboard-period-label">📅 Период:</span>
+    <select className="dkrs-select" value={selectedMonth} onChange={(e) => setSelectedMonth(e.target.value)}>
+      {months.map((m) => <option key={m} value={m}>{m}</option>)}
+    </select>
+  </div>
+)}
         </div>
 
         {loading ? (
