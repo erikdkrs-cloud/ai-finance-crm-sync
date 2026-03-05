@@ -689,7 +689,8 @@ img { max-width: 100%; }
 .assistant-composer textarea:focus { border-color: var(--dkrs-primary); box-shadow: 0 0 0 3px rgba(0,191,166,0.1); }
 .assistant-composer textarea::placeholder { color: var(--dkrs-text-tertiary); }
 .assistant-composer-actions { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-top: 12px; }
-.assistant-composer; font-family: var(--font-family);
+.assistant-composer-btn {
+  font-family: var(--font-family);
   cursor: pointer; transition: all 0.2s ease;
   border: 1px solid var(--dkrs-glass-border); background: rgba(255,255,255,0.8);
   color: var(--dkrs-text-secondary);
