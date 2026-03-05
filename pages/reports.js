@@ -1,29 +1,19 @@
-// pages/reports.js
 import React, { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import DkrsAppShell from "../components/DkrsAppShell";
 import RiskBadge from "../components/RiskBadge";
-import { fetchJson } from "../lib/dkrsClient";
+import AiFloatingButton from "../components/AiFloatingButton";
 
 function fmtDateTime(dt) {
   if (!dt) return "—";
   return String(dt).replace("T", " ").slice(0, 16);
 }
 
-function preview(text, n = 170) {
+function preview(text, n = 180) {
   const t = String(text || "").replace(/\s+/g, " ").trim();
   if (!t) return "—";
   if (t.length <= n) return t;
   return t.slice(0, n).trimEnd() + "…";
-}
-
-function MonthPill({ month }) {
-  return (
-    <span className="dkrs-pill" style={{ padding: "7px 10px", gap: 8 }}>
-      <span className="dot" style={{ background: "rgba(167,139,250,0.9)" }} />
-      <span style={{ fontWeight: 950, fontSize: 12 }}>{month}</span>
-    </span>
-  );
 }
 
 function normalizeRisk(r) {
@@ -33,14 +23,23 @@ function normalizeRisk(r) {
   return "low";
 }
 
+function riskToInternal(r) {
+  const n = normalizeRisk(r);
+  if (n === "high") return "red";
+  if (n === "medium") return "yellow";
+  return "green";
+}
+
 export default function ReportsPage() {
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState("");
-
+  const [mounted, setMounted] = useState(false);
   const [q, setQ] = useState("");
   const [risk, setRisk] = useState("all");
   const [sort, setSort] = useState("created_desc");
+
+  useEffect(() => { setMounted(true); }, []);
 
   useEffect(() => {
     let alive = true;
@@ -48,9 +47,10 @@ export default function ReportsPage() {
       setLoading(true);
       setErr("");
       try {
-        const data = await fetchJson("/api/reports_list");
+        const res = await fetch("/api/reports_list");
+        const data = await res.json();
         if (!alive) return;
-        if (!data?.ok) throw new Error(data?.error || "reports_list ok=false");
+        if (!data?.ok) throw new Error(data?.error || "Ошибка загрузки");
         setItems(Array.isArray(data.items) ? data.items : []);
       } catch (e) {
         if (!alive) return;
@@ -60,21 +60,29 @@ export default function ReportsPage() {
         if (alive) setLoading(false);
       }
     })();
-    return () => (alive = false);
+    return () => { alive = false; };
   }, []);
+
+  const riskCounts = useMemo(() => {
+    const c = { all: 0, low: 0, medium: 0, high: 0 };
+    items.forEach((x) => {
+      c.all++;
+      c[normalizeRisk(x.risk_level)]++;
+    });
+    return c;
+  }, [items]);
 
   const view = useMemo(() => {
     let arr = [...items];
-
     if (q.trim()) {
       const qq = q.trim().toLowerCase();
-      arr = arr.filter((x) => `${x.month} ${x.summary_text} ${x.id}`.toLowerCase().includes(qq));
+      arr = arr.filter((x) =>
+        `${x.month} ${x.summary_text} ${x.id}`.toLowerCase().includes(qq)
+      );
     }
-
     if (risk !== "all") {
       arr = arr.filter((x) => normalizeRisk(x.risk_level) === risk);
     }
-
     const sorters = {
       created_desc: (a, b) => String(b.created_at || "").localeCompare(String(a.created_at || "")),
       created_asc: (a, b) => String(a.created_at || "").localeCompare(String(b.created_at || "")),
@@ -82,156 +90,125 @@ export default function ReportsPage() {
       month_asc: (a, b) => String(a.month || "").localeCompare(String(b.month || "")),
     };
     arr.sort(sorters[sort] || sorters.created_desc);
-
     return arr;
   }, [items, q, risk, sort]);
 
   return (
-    <DkrsAppShell
-      title="Отчёты"
-      subtitle="Список AI отчётов по периодам"
-      rightSlot={
-        <>
-          <input
-            className="input"
-            style={{ width: 280 }}
-            placeholder="Поиск по summary / месяцу / id…"
-            value={q}
-            onChange={(e) => setQ(e.target.value)}
-          />
-          <button className="btn" onClick={() => location.assign("/assistant")}>
-            Сформировать отчёт
-          </button>
-        </>
-      }
-    >
-      <div className="glass strong" style={{ padding: 16 }}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
+    <DkrsAppShell>
+      <div className={`reports-page ${mounted ? "mounted" : ""}`}>
+        {/* Header */}
+        <div className="reports-page-header">
           <div>
-            <div style={{ fontWeight: 950, letterSpacing: "-0.02em" }}>Список отчётов</div>
-            <div className="dkrs-sub" style={{ marginTop: 6 }}>
-              Поиск • фильтр риска • сортировка • светлый glass UI
-            </div>
+            <h1 className="reports-title">📄 Отчёты</h1>
+            <p className="reports-subtitle">AI-отчёты по финансовым периодам</p>
           </div>
+          <Link href="/assistant" className="reports-generate-btn">
+            ✨ Сформировать отчёт
+          </Link>
+        </div>
 
-          <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-            <select className="select" value={sort} onChange={(e) => setSort(e.target.value)}>
+        {/* Main card */}
+        <div className="reports-card glass-card">
+          {/* Controls */}
+          <div className="reports-controls">
+            <div className="search-wrapper">
+              <span className="search-icon">🔍</span>
+              <input
+                type="text"
+                className="dkrs-input search-input"
+                placeholder="Поиск по месяцу, тексту, ID..."
+                value={q}
+                onChange={(e) => setQ(e.target.value)}
+              />
+            </div>
+
+            <div className="filter-buttons">
+              {[
+                { key: "all", label: "Все" },
+                { key: "low", label: "Низкий" },
+                { key: "medium", label: "Средний" },
+                { key: "high", label: "Высокий" },
+              ].map((f) => (
+                <button
+                  key={f.key}
+                  className={`filter-btn ${risk === f.key ? "active" : ""} ${f.key !== "all" ? "risk-" + (f.key === "low" ? "green" : f.key === "medium" ? "yellow" : "red") : ""}`}
+                  onClick={() => setRisk(f.key)}
+                >
+                  {f.label}
+                  <span className="filter-count">{riskCounts[f.key]}</span>
+                </button>
+              ))}
+            </div>
+
+            <select
+              className="dkrs-select sort-select"
+              value={sort}
+              onChange={(e) => setSort(e.target.value)}
+            >
               <option value="created_desc">Дата ↓</option>
               <option value="created_asc">Дата ↑</option>
               <option value="month_desc">Месяц ↓</option>
               <option value="month_asc">Месяц ↑</option>
             </select>
+          </div>
 
-            <select className="select" value={risk} onChange={(e) => setRisk(e.target.value)}>
-              <option value="all">Все риски</option>
-              <option value="low">LOW</option>
-              <option value="medium">MED</option>
-              <option value="high">HIGH</option>
-            </select>
+          {/* List */}
+          <div className="reports-list">
+            {loading ? (
+              <div className="centered-message">
+                <div className="loader-spinner" />
+                <span>Загрузка отчётов...</span>
+              </div>
+            ) : err ? (
+              <div className="centered-message error">{err}</div>
+            ) : view.length === 0 ? (
+              <div className="centered-message">
+                <div className="empty-icon">📭</div>
+                Отчёты не найдены
+              </div>
+            ) : (
+              view.map((r, i) => (
+                <Link
+                  key={r.id}
+                  href={`/reports/${encodeURIComponent(r.id)}`}
+                  className="report-card-link"
+                >
+                  <div
+                    className="report-card table-row-animated"
+                    style={{ animationDelay: `${i * 50}ms` }}
+                  >
+                    <div className="report-card-top">
+                      <div className="report-card-left">
+                        <div className="report-card-icon">📊</div>
+                        <div className="report-card-info">
+                          <div className="report-card-title">
+                            Отчёт #{r.id}
+                          </div>
+                          <div className="report-card-date">
+                            {fmtDateTime(r.created_at)}
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="report-card-right">
+                        <span className="report-month-pill">{r.month}</span>
+                        <RiskBadge riskLevel={riskToInternal(r.risk_level)} />
+                        <span className="report-card-arrow">→</span>
+                      </div>
+                    </div>
+
+                    <div className="report-card-preview">
+                      {preview(r.summary_text, 200)}
+                    </div>
+                  </div>
+                </Link>
+              ))
+            )}
           </div>
         </div>
-
-        {/* “Cards list” like reference */}
-        <div style={{ marginTop: 12, display: "grid", gap: 10 }}>
-          {loading ? (
-            <div className="dkrs-sub" style={{ fontWeight: 900 }}>Загрузка…</div>
-          ) : err ? (
-            <div style={{ fontWeight: 900, color: "rgba(251,113,133,0.95)" }}>{err}</div>
-          ) : view.length === 0 ? (
-            <div className="dkrs-sub" style={{ fontWeight: 900 }}>Ничего не найдено</div>
-          ) : (
-            view.map((r) => (
-              <Link
-                key={r.id}
-                href={`/reports/${encodeURIComponent(r.id)}`}
-                style={{ display: "block" }}
-              >
-                <div
-                  style={{
-                    borderRadius: 18,
-                    border: "1px solid rgba(148,163,184,0.22)",
-                    background: "rgba(255,255,255,0.58)",
-                    boxShadow: "0 14px 34px rgba(15,23,42,0.08)",
-                    padding: 12,
-                    transition: "transform .14s ease, background .14s ease, border-color .14s ease",
-                  }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.transform = "translateY(-1px)";
-                    e.currentTarget.style.background = "rgba(255,255,255,0.66)";
-                    e.currentTarget.style.borderColor = "rgba(20,184,166,0.22)";
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.transform = "translateY(0px)";
-                    e.currentTarget.style.background = "rgba(255,255,255,0.58)";
-                    e.currentTarget.style.borderColor = "rgba(148,163,184,0.22)";
-                  }}
-                >
-                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
-                      <div
-                        style={{
-                          width: 38,
-                          height: 38,
-                          borderRadius: 16,
-                          border: "1px solid rgba(148,163,184,0.28)",
-                          background:
-                            "radial-gradient(18px 18px at 30% 30%, rgba(255,255,255,0.95), rgba(255,255,255,0.15))," +
-                            "linear-gradient(135deg, rgba(20,184,166,1), rgba(167,139,250,0.90))",
-                          boxShadow: "0 14px 28px rgba(20,184,166,0.18)",
-                        }}
-                      />
-                      <div style={{ minWidth: 0 }}>
-                        <div style={{ fontWeight: 950, letterSpacing: "-0.02em" }}>
-                          Отчёт #{r.id}
-                        </div>
-                        <div className="dkrs-sub" style={{ marginTop: 4 }}>
-                          {fmtDateTime(r.created_at)}
-                        </div>
-                      </div>
-                    </div>
-
-                    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                      <MonthPill month={r.month} />
-                      <RiskBadge risk={r.risk_level} />
-                      <div
-                        style={{
-                          width: 34,
-                          height: 34,
-                          borderRadius: 14,
-                          border: "1px solid rgba(148,163,184,0.22)",
-                          background: "rgba(255,255,255,0.64)",
-                          display: "grid",
-                          placeItems: "center",
-                          boxShadow: "0 10px 24px rgba(15,23,42,0.06)",
-                          color: "rgba(100,116,139,0.9)",
-                          fontWeight: 900,
-                        }}
-                        aria-hidden
-                      >
-                        →
-                      </div>
-                    </div>
-                  </div>
-
-                  <div
-                    style={{
-                      marginTop: 10,
-                      borderRadius: 16,
-                      border: "1px solid rgba(148,163,184,0.18)",
-                      background: "rgba(255,255,255,0.52)",
-                      padding: 10,
-                    }}
-                  >
-                    <div className="dkrs-sub" style={{ marginTop: 0 }}>
-                      {preview(r.summary_text, 210)}
-                    </div>
-                  </div>
-                </div>
-              </Link>
-            ))
-          )}
-        </div>
       </div>
+
+      <AiFloatingButton />
     </DkrsAppShell>
   );
 }
