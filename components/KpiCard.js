@@ -6,19 +6,22 @@ const Icon = ({ path, className }) => (
   </svg>
 );
 
-const KpiCard = ({ title, value, icon }) => {
+const KpiCard = ({ title, value, icon, trend }) => {
   const icons = {
-    revenue: <Icon path="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 14h2v-6h-2v6zm0-8h2V6h-2v2z" className="kpi-card-icon kpi-icon-revenue" />,
-    costs: <Icon path="M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zM12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm-5-9h10v2H7v-2z" className="kpi-card-icon kpi-icon-costs" />,
-    profit: <Icon path="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 14.5h-2V15c0-.55.45-1 1-1s1 .45 1 1v1.5zm0-4.5h-2V8c0-.55.45-1 1-1s1 .45 1 1v3z" className="kpi-card-icon kpi-icon-profit" />,
-    margin: <Icon path="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2zm0 18a8 8 0 1 1 8-8 8 8 0 0 1-8 8zm-4-4h8v-2H8v2zm0-4h8V8H8v2z" className="kpi-card-icon kpi-icon-margin" />,
+    revenue: <Icon path="M16 6l2.29 2.29-4.88 4.88-4-4L2 16.59 3.41 18l6-6 4 4 6.3-6.29L22 12V6h-6z" className="kpi-card-icon kpi-icon-revenue" />,
+    costs: <Icon path="M16 18l2.29-2.29-4.88-4.88-4 4L2 7.41 3.41 6l6 6 4-4 6.3 6.29L22 12v6h-6z" className="kpi-card-icon kpi-icon-costs" />,
+    profit: <Icon path="M3.5 18.49l6-6.01 4 4L22 6.92l-1.41-1.41-7.09 7.97-4-4L2 16.99l1.5 1.5z" className="kpi-card-icon kpi-icon-profit" />,
+    margin: <Icon path="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zM7 11h10v2H7z" className="kpi-card-icon kpi-icon-margin" />,
   };
+  
+  const isPositive = trend?.startsWith('+');
 
   return (
     <div className="kpi-card glass-card">
       <div className="kpi-card-content">
         <p className="kpi-card-title">{title}</p>
         <h3 className="kpi-card-value">{value}</h3>
+        {trend && <span className={`kpi-trend ${isPositive ? 'positive' : 'negative'}`}>{trend}</span>}
       </div>
       <div className="kpi-card-icon-wrapper">
         {icons[icon] || null}
