@@ -27,5 +27,4 @@ const RiskBadge = ({ riskLevel }) => {
     </span>
   );
 };
-
 export default RiskBadge;
