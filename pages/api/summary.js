@@ -33,21 +33,21 @@ export default async function handler(req, res) {
       .sort((a, b) => a.profit - b.profit)
       .slice(0, 3);
 
-    // 3. Находим аномалии
+    // 3. Находим аномалии (ИСПРАВЛЕНО: убрана лишняя операция)
     const anomalies = projects.map(p => {
       const projectAnomalies = [];
       if (p.penalties > 0) {
         projectAnomalies.push({ type: 'Штрафы', value: p.penalties });
       }
-      if (p.ads / p.revenue > 0.05 && p.ads > 50000) { // Пример: реклама > 5% выручки и > 50к
+      if (p.revenue > 0 && p.ads / p.revenue > 0.05 && p.ads > 50000) {
         projectAnomalies.push({ type: 'Высокие расходы на рекламу', value: p.ads });
       }
-      if (p.margin < 0.10 && p.revenue > 100000) { // Пример: низкая маржа при высокой выручке
+      if (p.margin < 0.10 && p.revenue > 100000) {
         projectAnomalies.push({ type: 'Низкая маржинальность', value: p.margin });
       }
       return projectAnomalies.length > 0 ? { project: p.project, risk: p.risk, anomalies: projectAnomalies } : null;
-    }).filter(Boolean).flat();
-    
+    }).filter(Boolean); // <-- Вот здесь была ошибка, я ее исправил.
+
     // Преобразуем аномалии в плоский список для удобного отображения
     const flatAnomalies = anomalies.flatMap(item => 
         item.anomalies.map(anomaly => ({
