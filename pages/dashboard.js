@@ -13,53 +13,38 @@ const Dashboard = () => {
   const [sortBy, setSortBy] = useState('profit');
   const [sortOrder, setSortOrder] = useState('desc');
 
-  // --- DEBUG ---
-  console.log('--- Component Render ---');
-  console.log('State: loading:', loading);
-  console.log('State: selectedMonth:', selectedMonth);
-  console.log('State: months:', months);
-  console.log('State: error:', error);
-  // --- END DEBUG ---
-
-  // Fetch available months on mount
+  // Effect 1: Fetch available months only once on component mount
   useEffect(() => {
-    console.log('--- useEffect: Fetching months ---');
     fetch('/api/months')
       .then(res => {
         if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
         return res.json();
       })
       .then(data => {
-        console.log('✅ SUCCESS /api/months response:', data);
         if (data && data.months) {
           setMonths(data.months);
           if (data.months.length > 0) {
             setSelectedMonth(data.months[0]);
-            console.log(`Setting selected month to: ${data.months[0]}`);
           } else {
-            console.log('No months found from API.');
+            // No months found, stop initial loading
             setLoading(false);
           }
         }
       })
       .catch(err => {
-        console.error('❌ ERROR fetching /api/months:', err);
+        console.error('Failed to fetch months:', err);
         setError('Не удалось загрузить список месяцев.');
         setLoading(false);
       });
-  }, []);
+  }, []); // Empty dependency array means this runs only once
 
-  // Fetch dashboard data when selectedMonth changes
+  // Effect 2: Fetch dashboard data whenever selectedMonth changes
   useEffect(() => {
+    // Don't fetch if no month is selected
     if (!selectedMonth) {
-      console.log('--- useEffect: Skipping dashboard fetch because selectedMonth is empty. ---');
-      if (months.length === 0 && !loading) {
-         // This case is handled by the other useEffect
-      }
       return;
     }
 
-    console.log(`--- useEffect: Fetching dashboard data for month: ${selectedMonth} ---`);
     setLoading(true);
     fetch(`/api/dashboard?month=${selectedMonth}`)
       .then(res => {
@@ -67,20 +52,18 @@ const Dashboard = () => {
         return res.json();
       })
       .then(data => {
-        console.log('✅ SUCCESS /api/dashboard response:', data);
         setData(data);
         setError(null);
       })
       .catch(err => {
-        console.error(`❌ ERROR fetching /api/dashboard for month ${selectedMonth}:`, err);
+        console.error(`Failed to fetch dashboard data for month ${selectedMonth}:`, err);
         setError('Не удалось загрузить данные для выбранного месяца.');
         setData({ totals: {}, projects: [] });
       })
       .finally(() => {
-        console.log('Setting loading to false.');
         setLoading(false);
       });
-  }, [selectedMonth]); // Removed 'months' from dependency array to simplify logic
+  }, [selectedMonth]); // This effect correctly depends only on selectedMonth
   
   const handleSort = (column) => {
     if (sortBy === column) {
@@ -93,9 +76,11 @@ const Dashboard = () => {
 
   const filteredAndSortedProjects = useMemo(() => {
     if (!data.projects || !Array.isArray(data.projects)) return [];
+
     let filtered = data.projects.filter(p => 
       (p.name || '').toLowerCase().includes(searchTerm.toLowerCase())
     );
+
     return filtered.sort((a, b) => {
       const aVal = a[sortBy] || 0;
       const bVal = b[sortBy] || 0;
@@ -144,7 +129,7 @@ const Dashboard = () => {
           {months.length > 0 ? (
              months.map(month => <option key={month} value={month}>{month}</option>)
           ) : (
-            <option>Загрузка месяцев...</option>
+            <option>Загрузка...</option>
           )}
         </select>
         <input 
@@ -182,4 +167,26 @@ const Dashboard = () => {
               {filteredAndSortedProjects.length > 0 ? (
                 filteredAndSortedProjects.map(p => (
                   <tr key={p.id}>
-                    <td className="project
+                    <td className="project-name">{p.name || 'Проект без названия'}</td>
+                    <td>{fmtMoney(p.revenue_no_vat)}</td>
+                    <td>{fmtMoney(p.total_costs)}</td>
+                    <td className={p.profit >= 0 ? 'positive-value' : 'negative-value'}>{fmtMoney(p.profit)}</td>
+                    <td className={p.margin >= 0 ? 'positive-value' : 'negative-value'}>{fmtPct(p.margin)}</td>
+                  </tr>
+                ))
+              ) : (
+                <tr>
+                  <td colSpan={tableHeaders.length} style={{ textAlign: 'center', padding: '40px' }}>
+                    Проекты за выбранный период не найдены.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        )}
+      </div>
+    </DkrsAppShell>
+  );
+};
+
+export default Dashboard;
