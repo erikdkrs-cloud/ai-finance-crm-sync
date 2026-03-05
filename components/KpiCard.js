@@ -29,5 +29,4 @@ const KpiCard = ({ title, value, icon, trend }) => {
     </div>
   );
 };
-
 export default KpiCard;
