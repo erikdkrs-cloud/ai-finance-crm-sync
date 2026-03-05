@@ -136,6 +136,22 @@ export default function DashboardPage() {
     return sortDir === "asc" ? " ↑" : " ↓";
   };
 
+  function buildDetails(p) {
+    const costs = Number(p.costs) || 1;
+    const items = [
+      { label: "ЗП рабочие", value: p.labor, icon: "👷" },
+      { label: "ЗП менеджмент", value: p.team_payroll, icon: "👔" },
+      { label: "Реклама", value: p.ads, icon: "📢" },
+      { label: "Транспорт", value: p.transport, icon: "🚛" },
+      { label: "Штрафы", value: p.penalties, icon: "⚠️" },
+    ];
+    return items.map((item) => {
+      const v = Number(item.value) || 0;
+      const pct = costs > 0 ? ((v / costs) * 100).toFixed(1) : "0.0";
+      return { ...item, numValue: v, pct };
+    });
+  }
+
   return (
     <DkrsAppShell>
       <div className={`dashboard-page ${mounted ? "mounted" : ""}`}>
@@ -258,6 +274,7 @@ export default function DashboardPage() {
                     const name = p.project || "—";
                     const risk = riskLevel(p.margin);
                     const isExpanded = expandedProject === name;
+                    const details = buildDetails(p);
 
                     return (
                       <React.Fragment key={i}>
@@ -291,20 +308,40 @@ export default function DashboardPage() {
                             <td colSpan={6}>
                               <div className="detail-content">
                                 <div className="detail-grid">
-                                  {[
-                                    { label: "Выручка", value: p.revenue, icon: "💰" },
-                                    { label: "Расходы", value: p.costs, icon: "📉" },
-                                    { label: "Прибыль", value: p.profit, icon: "📈" },
-                                    { label: "Маржа", value: null, icon: "📊", display: fmtPct(p.margin) },
-                                  ].map((d, j) => (
-                                    <div key={j} className="detail-item">
+                                  {details.map((d, j) => (
+                                    <div key={j} className="detail-item" style={{ animationDelay: `${j * 50}ms` }}>
                                       <span className="detail-item-icon">{d.icon}</span>
-                                      <span className="detail-item-label">{d.label}</span>
-                                      <span className="detail-item-value">
-                                        {d.display || (fmtMoney(d.value || 0, 0) + " ₽")}
-                                      </span>
+                                      <div className="detail-item-body">
+                                        <span className="detail-item-label">{d.label}</span>
+                                        <div className="detail-item-bar-track">
+                                          <div
+                                            className="detail-item-bar-fill"
+                                            style={{ width: `${Math.min(100, Number(d.pct))}%` }}
+                                          />
+                                        </div>
+                                      </div>
+                                      <div className="detail-item-right">
+                                        <span className="detail-item-value">{fmtMoney(d.numValue, 0)} ₽</span>
+                                        <span className="detail-item-pct">{d.pct}%</span>
+                                      </div>
                                     </div>
                                   ))}
+                                </div>
+                                <div className="detail-summary">
+                                  <div className="detail-summary-item">
+                                    <span>Итого расходы</span>
+                                    <strong>{fmtMoney(p.costs, 0)} ₽</strong>
+                                  </div>
+                                  <div className="detail-summary-item">
+                                    <span>Прибыль</span>
+                                    <strong style={{ color: Number(p.profit) >= 0 ? "var(--risk-low-color)" : "var(--risk-high-color)" }}>
+                                      {fmtMoney(p.profit, 0)} ₽
+                                    </strong>
+                                  </div>
+                                  <div className="detail-summary-item">
+                                    <span>Маржа</span>
+                                    <strong>{fmtPct(p.margin)}</strong>
+                                  </div>
                                 </div>
                               </div>
                             </td>
