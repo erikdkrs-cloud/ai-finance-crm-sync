@@ -1,21 +1,27 @@
-// components/RiskBadge.js
-import React from "react";
-import { clampRisk } from "../lib/format";
+import React from 'react';
 
-function ruRisk(r) {
-  if (r === "high") return "ВЫСОКИЙ";
-  if (r === "medium") return "СРЕДНИЙ";
-  return "НИЗКИЙ";
-}
+const RiskBadge = ({ riskLevel }) => {
+  const getRiskDetails = (level) => {
+    switch (level?.toUpperCase()) {
+      case 'LOW':
+        return { text: 'НИЗКИЙ', className: 'risk-low' };
+      case 'MEDIUM':
+      case 'MED':
+        return { text: 'СРЕДНИЙ', className: 'risk-medium' };
+      case 'HIGH':
+        return { text: 'ВЫСОКИЙ', className: 'risk-high' };
+      default:
+        return { text: 'НЕОПРЕДЕЛЕН', className: 'risk-unknown' };
+    }
+  };
 
-export default function RiskBadge({ risk }) {
-  const r = clampRisk(risk);
-  const cls = r === "high" ? "danger" : r === "medium" ? "warn" : "ok";
+  const { text, className } = getRiskDetails(riskLevel);
 
   return (
-    <span className={`badge ${cls}`}>
-      <span className="dot" />
-      {ruRisk(r)}
+    <span className={`risk-badge ${className}`}>
+      {text}
     </span>
   );
-}
+};
+
+export default RiskBadge;
