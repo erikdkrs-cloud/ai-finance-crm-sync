@@ -37,14 +37,28 @@ body {
 
 /* LAYOUT */
 .main-wrapper { flex-grow: 1; display: flex; flex-direction: column; }
-.topbar { height: 80px; display: flex; justify-content: space-between; align-items: center; padding: 0 40px; flex-shrink: 0; }
-.page-title { font-size: 28px; font-weight: 700; color: var(--dkrs-text-primary); }
+
+/* ИЗМЕНЕНО: Topbar теперь проще и меньше */
+.topbar {
+  height: 64px;
+  display: flex;
+  justify-content: flex-end; /* Только элементы справа */
+  align-items: center;
+  padding: 0 40px;
+  flex-shrink: 0;
+  width: 100%;
+}
 .user-profile img { width: 40px; height: 40px; border-radius: 50%; object-fit: cover; }
-/* ИСПРАВЛЕНО: Уменьшен верхний отступ */
-.main-content { flex-grow: 1; padding: 0 40px 40px; overflow-y: auto; }
+
+/* ИСПРАВЛЕНО: Правильные отступы для основного контента */
+.main-content {
+  flex-grow: 1;
+  padding: 24px 40px 40px; /* Добавлен контролируемый отступ сверху */
+  overflow-y: auto;
+}
 
 /* SIDEBAR (без изменений) */
-.sidebar { width: 80px; background: var(--dkrs-glass-bg); backdrop-filter: blur(20px) saturate(180%); border-right: 1px solid var(--dkrs-glass-border); transition: width 0.3s ease; flex-shrink: 0; display: flex; flex-direction: column; padding: 16px 0; }
+.sidebar { width: 80px; background: var(--dkrs-glass-bg); backdrop-filter: blur(20px) saturate(180%); border-right: 1px solid var(--dkrs-glass-border); transition: width 0.3s ease; flex-shrink: 0; display: flex; flex-direction: column; padding: 16px 0; z-index: 10; }
 .sidebar:hover { width: 240px; }
 .sidebar-logo { padding: 0 24px; margin-bottom: 32px; height: 64px; display: flex; align-items: center; }
 .sidebar-logo a { display: flex; align-items: center; text-decoration: none; color: var(--dkrs-text-primary); font-weight: 700; font-size: 24px; }
@@ -58,11 +72,11 @@ body {
 .nav-text { margin-left: 20px; opacity: 0; transition: opacity 0.3s ease; font-weight: 500; }
 .sidebar:hover .nav-text { opacity: 1; }
 
-/* --- NEW DASHBOARD STYLES --- */
+/* --- DASHBOARD STYLES --- */
 .glass-card { background: var(--dkrs-glass-bg); backdrop-filter: blur(12px) saturate(180%); -webkit-backdrop-filter: blur(12px) saturate(180%); border-radius: var(--border-radius-lg); border: 1px solid var(--dkrs-glass-border); box-shadow: 0 8px 32px 0 var(--dkrs-glass-shadow); padding: 24px; }
 .dashboard-header { margin-bottom: 24px; }
-.dashboard-header h1 { font-size: 2rem; font-weight: 700; margin: 0; }
-.dashboard-header p { color: var(--dkrs-text-secondary); font-size: 1rem; margin-top: 4px; }
+.dashboard-header h1 { font-size: 2.25rem; font-weight: 700; margin: 0; line-height: 1.2; }
+.dashboard-header p { color: var(--dkrs-text-secondary); font-size: 1rem; margin-top: 8px; max-width: 600px; }
 .centered-message { display: flex; justify-content: center; align-items: center; min-height: 200px; font-size: 1.2rem; color: var(--dkrs-text-secondary); }
 
 /* KPI CARDS */
@@ -71,7 +85,7 @@ body {
 .kpi-card:hover { transform: translateY(-5px); box-shadow: 0 12px 32px 0 var(--dkrs-glass-shadow); }
 .kpi-card-title { font-size: 1rem; color: var(--dkrs-text-secondary); margin: 0 0 4px 0; }
 .kpi-card-value { font-size: 2rem; font-weight: 700; color: var(--dkrs-text-primary); margin: 0; line-height: 1.2; }
-.kpi-trend { font-size: 0.9rem; font-weight: 600; padding: 2px 6px; border-radius: var(--border-radius-sm); margin-top: 8px; }
+.kpi-trend { font-size: 0.9rem; font-weight: 600; padding: 2px 6px; border-radius: var(--border-radius-sm); margin-top: 8px; display: inline-block; }
 .kpi-trend.positive { color: var(--risk-low-text); background-color: var(--risk-low-bg); }
 .kpi-trend.negative { color: var(--risk-high-text); background-color: var(--risk-high-bg); }
 .kpi-card-icon-wrapper { width: 48px; height: 48px; border-radius: 50%; display: grid; place-items: center; flex-shrink: 0; }
