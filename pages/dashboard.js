@@ -13,7 +13,6 @@ const Dashboard = () => {
   const [sortBy, setSortBy] = useState('profit');
   const [sortOrder, setSortOrder] = useState('desc');
 
-  // Effect 1: Fetch available months only once on component mount
   useEffect(() => {
     fetch('/api/months')
       .then(res => {
@@ -26,7 +25,6 @@ const Dashboard = () => {
           if (data.months.length > 0) {
             setSelectedMonth(data.months[0]);
           } else {
-            // No months found, stop initial loading
             setLoading(false);
           }
         }
@@ -36,15 +34,10 @@ const Dashboard = () => {
         setError('Не удалось загрузить список месяцев.');
         setLoading(false);
       });
-  }, []); // Empty dependency array means this runs only once
+  }, []);
 
-  // Effect 2: Fetch dashboard data whenever selectedMonth changes
   useEffect(() => {
-    // Don't fetch if no month is selected
-    if (!selectedMonth) {
-      return;
-    }
-
+    if (!selectedMonth) return;
     setLoading(true);
     fetch(`/api/dashboard?month=${selectedMonth}`)
       .then(res => {
@@ -63,7 +56,7 @@ const Dashboard = () => {
       .finally(() => {
         setLoading(false);
       });
-  }, [selectedMonth]); // This effect correctly depends only on selectedMonth
+  }, [selectedMonth]);
   
   const handleSort = (column) => {
     if (sortBy === column) {
@@ -78,7 +71,8 @@ const Dashboard = () => {
     if (!data.projects || !Array.isArray(data.projects)) return [];
 
     let filtered = data.projects.filter(p => 
-      (p.name || '').toLowerCase().includes(searchTerm.toLowerCase())
+      // ИЗМЕНЕНО: p.name -> p.project
+      (p.project || '').toLowerCase().includes(searchTerm.toLowerCase())
     );
 
     return filtered.sort((a, b) => {
@@ -90,17 +84,19 @@ const Dashboard = () => {
     });
   }, [data.projects, searchTerm, sortBy, sortOrder]);
 
+  // ИЗМЕНЕНО: Имена полей в totals
   const kpiData = [
-    { title: 'Выручка', value: fmtMoney(data.totals?.revenue_no_vat || 0), icon: 'revenue' },
-    { title: 'Расходы', value: fmtMoney(data.totals?.total_costs || 0), icon: 'costs' },
+    { title: 'Выручка', value: fmtMoney(data.totals?.revenue || 0), icon: 'revenue' },
+    { title: 'Расходы', value: fmtMoney(data.totals?.costs || 0), icon: 'costs' },
     { title: 'Прибыль', value: fmtMoney(data.totals?.profit || 0), icon: 'profit' },
     { title: 'Маржа', value: fmtPct(data.totals?.margin || 0), icon: 'margin' }
   ];
 
+  // ИЗМЕНЕНО: Имена ключей (key) для соответствия данным API
   const tableHeaders = [
-    { key: 'name', label: 'Проект' },
-    { key: 'revenue_no_vat', label: 'Выручка' },
-    { key: 'total_costs', label: 'Расходы' },
+    { key: 'project', label: 'Проект' },
+    { key: 'revenue', label: 'Выручка' },
+    { key: 'costs', label: 'Расходы' },
     { key: 'profit', label: 'Прибыль' },
     { key: 'margin', label: 'Маржа' }
   ];
@@ -165,11 +161,12 @@ const Dashboard = () => {
             </thead>
             <tbody>
               {filteredAndSortedProjects.length > 0 ? (
-                filteredAndSortedProjects.map(p => (
-                  <tr key={p.id}>
-                    <td className="project-name">{p.name || 'Проект без названия'}</td>
-                    <td>{fmtMoney(p.revenue_no_vat)}</td>
-                    <td>{fmtMoney(p.total_costs)}</td>
+                filteredAndSortedProjects.map((p, index) => (
+                  // ИЗМЕНЕНО: p.id -> index, и имена полей для отображения
+                  <tr key={p.project + index}>
+                    <td className="project-name">{p.project || 'Проект без названия'}</td>
+                    <td>{fmtMoney(p.revenue)}</td>
+                    <td>{fmtMoney(p.costs)}</td>
                     <td className={p.profit >= 0 ? 'positive-value' : 'negative-value'}>{fmtMoney(p.profit)}</td>
                     <td className={p.margin >= 0 ? 'positive-value' : 'negative-value'}>{fmtPct(p.margin)}</td>
                   </tr>
