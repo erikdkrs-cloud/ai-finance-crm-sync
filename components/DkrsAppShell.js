@@ -11,7 +11,8 @@ const ReportsIcon = () => <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 2
 
 const DkrsAppShell = ({ children }) => {
   const router = useRouter();
-  const [isSidebarOpen, setSidebarOpen] = useState(false);
+  // ИЗМЕНЕНО: Упрощаем логику. Сайдбар будет расширяться только при наведении.
+  // Это убирает необходимость в стейте isSidebarOpen и делает поведение предсказуемым.
 
   const navLinks = [
     { href: '/dashboard', icon: <DashboardIcon />, label: 'Дашборд' },
@@ -22,22 +23,9 @@ const DkrsAppShell = ({ children }) => {
 
   const fallbackAvatar = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%23a0aec0'%3E%3Cpath d='M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z'/%3E%3C/svg%3E";
 
-  // ИЗМЕНЕНО: Заголовок страницы вынесен из Topbar и будет рендериться в main-content
-  // Поэтому на странице /dashboard мы удаляем дублирующий заголовок
-  const pageComponent = React.Children.map(children, child => {
-    if (React.isValidElement(child) && child.type.name === 'Dashboard') {
-      // Клонируем компонент дашборда, удаляя из него собственный заголовок,
-      // так как он теперь генерируется здесь, в AppShell.
-      const { children: pageChildren, ...props } = child.props;
-      const filteredChildren = React.Children.toArray(pageChildren).filter(c => c.props.className !== 'dashboard-header');
-      return React.cloneElement(child, props, filteredChildren);
-    }
-    return child;
-  });
-
   return (
     <div className="dkrs-app">
-      <aside className={`sidebar ${isSidebarOpen ? 'open' : ''}`} onMouseEnter={() => setSidebarOpen(true)} onMouseLeave={() => setSidebarOpen(false)}>
+      <aside className="sidebar">
         <div className="sidebar-logo">
           <Link href="/dashboard">
              <span className="logo-icon">D</span>
@@ -60,7 +48,6 @@ const DkrsAppShell = ({ children }) => {
 
       <div className="main-wrapper">
         <header className="topbar">
-          {/* Topbar теперь чистый - только для действий и профиля */}
           <div className="topbar-right">
             <div className="user-profile">
               <img src="/user-avatar.png" alt="User" onError={(e) => { e.target.onerror = null; e.target.src=fallbackAvatar; }} />
@@ -69,7 +56,7 @@ const DkrsAppShell = ({ children }) => {
         </header>
 
         <main className="main-content">
-          {/* Здесь рендерится всё содержимое страницы, включая заголовок, который был в dashboard.js */}
+          {/* ИЗМЕНЕНО: Просто рендерим дочерние компоненты. Никакой сложной логики. */}
           {children}
         </main>
       </div>
