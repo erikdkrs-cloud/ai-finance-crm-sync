@@ -37,12 +37,11 @@ const Dashboard = () => {
   // Fetch dashboard data when selectedMonth changes
   useEffect(() => {
     if (!selectedMonth) {
-      if (!months.length) { // Only set loading if months are actually being fetched
+      if (!months.length) {
         setLoading(false);
       }
       return;
     }
-
 
     setLoading(true);
     fetch(`/api/dashboard?month=${selectedMonth}`)
@@ -64,7 +63,7 @@ const Dashboard = () => {
       .finally(() => {
         setLoading(false);
       });
-  }, [selectedMonth, months]); // Added months to dependency array
+  }, [selectedMonth, months]);
   
   const handleSort = (column) => {
     if (sortBy === column) {
@@ -79,7 +78,8 @@ const Dashboard = () => {
     if (!data.projects || !Array.isArray(data.projects)) return [];
 
     let filtered = data.projects.filter(p => 
-      p.name.toLowerCase().includes(searchTerm.toLowerCase())
+      // FIX: Added `(p.name || '')` to prevent crash if name is undefined
+      (p.name || '').toLowerCase().includes(searchTerm.toLowerCase())
     );
 
     return filtered.sort((a, b) => {
@@ -92,7 +92,6 @@ const Dashboard = () => {
   }, [data.projects, searchTerm, sortBy, sortOrder]);
 
   const kpiData = [
-    // FIX: Added `|| 0` to prevent passing `undefined` to formatters on initial render
     { title: 'Выручка', value: fmtMoney(data.totals?.revenue_no_vat || 0), icon: 'revenue' },
     { title: 'Расходы', value: fmtMoney(data.totals?.total_costs || 0), icon: 'costs' },
     { title: 'Прибыль', value: fmtMoney(data.totals?.profit || 0), icon: 'profit' },
@@ -172,7 +171,7 @@ const Dashboard = () => {
               {filteredAndSortedProjects.length > 0 ? (
                 filteredAndSortedProjects.map(p => (
                   <tr key={p.id}>
-                    <td className="project-name">{p.name}</td>
+                    <td className="project-name">{p.name || 'Проект без названия'}</td>
                     <td>{fmtMoney(p.revenue_no_vat)}</td>
                     <td>{fmtMoney(p.total_costs)}</td>
                     <td className={p.profit >= 0 ? 'positive-value' : 'negative-value'}>
