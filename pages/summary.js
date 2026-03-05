@@ -1,33 +1,11 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
 import DkrsAppShell from '../components/DkrsAppShell';
-import RiskBadge from '../components/RiskBadge';
 import AiFloatingButton from '../components/AiFloatingButton';
 import { fmtMoney, fmtPct } from '../lib/format';
 
-/* ===== Медали ===== */
 const MEDALS = ['🥇', '🥈', '🥉'];
 
-/* ===== Подъёмный счётчик ===== */
-function useCounter(target, dur = 800) {
-  const [v, setV] = useState(0);
-  useEffect(() => {
-    const t = Number(target) || 0;
-    const s = performance.now();
-    let raf;
-    function tick(now) {
-      const p = Math.min((now - s) / dur, 1);
-      const e = 1 - Math.pow(1 - p, 3);
-      setV(t * e);
-      if (p < 1) raf = requestAnimationFrame(tick);
-    }
-    raf = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(raf);
-  }, [target]);
-  return v;
-}
-
-/* ===== Profit/Loss Card ===== */
 function TopCard({ project, index, variant }) {
   const isProfit = variant === 'profit';
   const profit = Number(project.profit) || 0;
@@ -44,28 +22,27 @@ function TopCard({ project, index, variant }) {
       <div className="top-card-info">
         <div className="top-card-name">{project.project}</div>
         <div className="top-card-meta">
-          <span>Выручка: {fmtMoney(project.revenue, 0)}</span>
+          <span>Выручка: {fmtMoney(project.revenue, 0)} ₽</span>
           <span>Маржа: {fmtPct(margin)}</span>
         </div>
       </div>
       <div className={`top-card-value ${isProfit ? 'positive-value' : 'negative-value'}`}>
-        {profit >= 0 ? '+' : ''}{fmtMoney(profit, 0)}
+        {profit >= 0 ? '+' : ''}{fmtMoney(profit, 0)} ₽
       </div>
     </div>
   );
 }
 
-/* ===== Expense Stacked Bar ===== */
 function ExpenseBar({ totals }) {
   if (!totals || totals.costs <= 0) return null;
   const items = [
-    { label: 'ЗП сотрудников', value: totals.salary_workers, color: '#667eea' },
-    { label: 'ЗП менеджеров', value: totals.salary_manager, color: '#7c4dff' },
-    { label: 'ЗП руководителей', value: totals.salary_head, color: '#a78bfa' },
-    { label: 'Реклама', value: totals.ads, color: '#f59e0b' },
-    { label: 'Транспорт', value: totals.transport, color: '#06b6d4' },
-    { label: 'Штрафы', value: totals.penalties, color: '#ef4444' },
-    { label: 'Налоги', value: totals.tax, color: '#64748b' },
+    { label: 'ЗП сотрудников', value: Number(totals.salary_workers || totals.labor || 0), color: '#667eea' },
+    { label: 'ЗП менеджмент', value: Number(totals.salary_manager || totals.team_payroll || 0), color: '#7c4dff' },
+    { label: 'ЗП руководители', value: Number(totals.salary_head || 0), color: '#a78bfa' },
+    { label: 'Реклама', value: Number(totals.ads || 0), color: '#f59e0b' },
+    { label: 'Транспорт', value: Number(totals.transport || 0), color: '#06b6d4' },
+    { label: 'Штрафы', value: Number(totals.penalties || 0), color: '#ef4444' },
+    { label: 'Налоги', value: Number(totals.tax || 0), color: '#64748b' },
   ];
   const total = items.reduce((s, i) => s + i.value, 0);
 
@@ -80,7 +57,7 @@ function ExpenseBar({ totals }) {
               key={i}
               className="expense-bar-segment"
               style={{ width: `${pct}%`, background: item.color }}
-              title={`${item.label}: ${fmtMoney(item.value, 0)} (${pct.toFixed(1)}%)`}
+              title={`${item.label}: ${fmtMoney(item.value, 0)} ₽ (${pct.toFixed(1)}%)`}
             />
           );
         })}
@@ -90,7 +67,7 @@ function ExpenseBar({ totals }) {
           <div key={i} className="expense-legend-item" style={{ animationDelay: `${i * 60}ms` }}>
             <span className="expense-legend-dot" style={{ background: item.color }} />
             <span className="expense-legend-label">{item.label}</span>
-            <span className="expense-legend-value">{fmtMoney(item.value, 0)}</span>
+            <span className="expense-legend-value">{fmtMoney(item.value, 0)} ₽</span>
             <span className="expense-legend-pct">{((item.value / total) * 100).toFixed(1)}%</span>
           </div>
         ))}
@@ -99,7 +76,6 @@ function ExpenseBar({ totals }) {
   );
 }
 
-/* ===== Risk Ring ===== */
 function RiskRing({ count, total, color, label }) {
   const pct = total > 0 ? (count / total) * 100 : 0;
   const circumference = 2 * Math.PI * 36;
@@ -111,12 +87,9 @@ function RiskRing({ count, total, color, label }) {
         <circle cx="44" cy="44" r="36" fill="none" stroke="rgba(0,0,0,0.05)" strokeWidth="8" />
         <circle
           cx="44" cy="44" r="36" fill="none"
-          stroke={color} strokeWidth="8"
-          strokeLinecap="round"
-          strokeDasharray={circumference}
-          strokeDashoffset={offset}
-          transform="rotate(-90 44 44)"
-          className="risk-ring-progress"
+          stroke={color} strokeWidth="8" strokeLinecap="round"
+          strokeDasharray={circumference} strokeDashoffset={offset}
+          transform="rotate(-90 44 44)" className="risk-ring-progress"
         />
         <text x="44" y="40" textAnchor="middle" fontSize="18" fontWeight="800" fill={color}>{count}</text>
         <text x="44" y="56" textAnchor="middle" fontSize="10" fill="#94a3b8">{pct.toFixed(0)}%</text>
@@ -126,8 +99,16 @@ function RiskRing({ count, total, color, label }) {
   );
 }
 
-/* ===== Main Summary Page ===== */
-const Summary = () => {
+function formatAnomalyValue(item) {
+  if (!item) return '';
+  const val = Number(item.value) || 0;
+  if (item.reason && item.reason.includes('маржинальность')) {
+    return fmtPct(val);
+  }
+  return fmtMoney(val, 0) + ' ₽';
+}
+
+export default function Summary() {
   const router = useRouter();
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -171,8 +152,6 @@ const Summary = () => {
   return (
     <DkrsAppShell>
       <div className={`summary-page ${mounted ? 'mounted' : ''}`}>
-
-        {/* Header */}
         <div className="summary-page-header">
           <div>
             <h1 className="summary-title">📋 Сводка и аналитика</h1>
@@ -191,7 +170,6 @@ const Summary = () => {
           <div className="centered-message error">{error}</div>
         ) : data ? (
           <>
-            {/* Row 1: Top Profitable + Top Unprofitable */}
             <div className="summary-two-cols">
               <div className="summary-widget glass-card">
                 <div className="widget-header">
@@ -199,24 +177,22 @@ const Summary = () => {
                   <span className="widget-badge green">Лидеры</span>
                 </div>
                 <div className="top-cards-list">
-                  {data.top_profitable.map((p, i) => <TopCard key={p.project} project={p} index={i} variant="profit" />)}
-                  {data.top_profitable.length === 0 && <div className="empty-widget">Нет данных</div>}
+                  {(data.top_profitable || []).map((p, i) => <TopCard key={p.project} project={p} index={i} variant="profit" />)}
+                  {(!data.top_profitable || data.top_profitable.length === 0) && <div className="empty-widget">Нет данных</div>}
                 </div>
               </div>
-
               <div className="summary-widget glass-card">
                 <div className="widget-header">
                   <h3>📉 Топ-3 убыточных</h3>
                   <span className="widget-badge red">Внимание</span>
                 </div>
                 <div className="top-cards-list">
-                  {data.top_unprofitable.map((p, i) => <TopCard key={p.project} project={p} index={i} variant="loss" />)}
-                  {data.top_unprofitable.length === 0 && <div className="empty-widget">Нет убыточных</div>}
+                  {(data.top_unprofitable || []).map((p, i) => <TopCard key={p.project} project={p} index={i} variant="loss" />)}
+                  {(!data.top_unprofitable || data.top_unprofitable.length === 0) && <div className="empty-widget">Нет убыточных</div>}
                 </div>
               </div>
             </div>
 
-            {/* Row 2: Risk Distribution + Expense Structure */}
             <div className="summary-two-cols">
               <div className="summary-widget glass-card">
                 <div className="widget-header">
@@ -229,17 +205,15 @@ const Summary = () => {
                   <RiskRing count={riskDist.red} total={totalProjects} color="#ef4444" label="Высокий" />
                 </div>
               </div>
-
               <div className="summary-widget glass-card">
                 <div className="widget-header">
                   <h3>📊 Структура расходов</h3>
-                  <span className="widget-badge neutral">{fmtMoney(data.totals?.costs || 0, 0)}</span>
+                  <span className="widget-badge neutral">{fmtMoney(data.totals?.costs || 0, 0)} ₽</span>
                 </div>
                 <ExpenseBar totals={data.totals} />
               </div>
             </div>
 
-            {/* Row 3: Anomalies */}
             <div className="summary-widget glass-card full-width">
               <div className="widget-header">
                 <h3>⚠️ Зона внимания: Аномалии</h3>
@@ -248,11 +222,7 @@ const Summary = () => {
               <div className="projects-table-wrapper">
                 <table className="dkrs-table">
                   <thead>
-                    <tr>
-                      <th>Проект</th>
-                      <th>Причина</th>
-                      <th>Значение</th>
-                    </tr>
+                    <tr><th>Проект</th><th>Причина</th><th>Значение</th></tr>
                   </thead>
                   <tbody>
                     {data.anomalies && data.anomalies.length > 0 ? (
@@ -263,29 +233,26 @@ const Summary = () => {
                             <span className="anomaly-chip">
                               {item.reason === 'Штрафы' && '⚖️'}
                               {item.reason === 'Высокие расходы на рекламу' && '📢'}
-                              {item.reason === 'Низкая маржинальность' && '📉'}
+                              {item.reason && item.reason.includes('маржинальность') && '📉'}
                               {' '}{item.reason}
                             </span>
                           </td>
-                          <td className={item.reason.includes('Низкая') ? 'negative-value' : ''}>
-                            {item.reason.includes('Низкая') ? fmtPct(item.value) : fmtMoney(item.value, 0)}
+                          <td className={item.reason && item.reason.includes('маржинальность') ? 'negative-value' : ''}>
+                            {formatAnomalyValue(item)}
                           </td>
                         </tr>
                       ))
                     ) : (
-                      <tr><td colSpan="3" className="empty-state"><div className="empty-icon">🎉</div>Аномалий не найдено. Отличная работа!</td></tr>
+                      <tr><td colSpan="3" className="empty-state"><div className="empty-icon">🎉</div>Аномалий не найдено!</td></tr>
                     )}
                   </tbody>
                 </table>
               </div>
             </div>
 
-            {/* Row 4: Insights + AI Prompts */}
             <div className="summary-two-cols">
               <div className="summary-widget glass-card">
-                <div className="widget-header">
-                  <h3>💡 Быстрые инсайты</h3>
-                </div>
+                <div className="widget-header"><h3>💡 Быстрые инсайты</h3></div>
                 <div className="insights-list">
                   {(data.insights || []).map((ins, i) => (
                     <div key={i} className="insight-item" style={{ animationDelay: `${i * 80}ms` }}>
@@ -295,11 +262,8 @@ const Summary = () => {
                   ))}
                 </div>
               </div>
-
               <div className="summary-widget glass-card">
-                <div className="widget-header">
-                  <h3>🤖 Спросите AI</h3>
-                </div>
+                <div className="widget-header"><h3>🤖 Спросите AI</h3></div>
                 <p className="ai-prompts-desc">Быстрые вопросы по периоду <strong>{selectedMonth}</strong></p>
                 <div className="prompts-grid">
                   {[
@@ -310,12 +274,7 @@ const Summary = () => {
                     'Какие проекты самые рискованные?',
                     'Сравни расходы на рекламу',
                   ].map((q, i) => (
-                    <button
-                      key={i}
-                      className="prompt-tag"
-                      onClick={() => router.push('/assistant')}
-                      style={{ animationDelay: `${i * 60}ms` }}
-                    >
+                    <button key={i} className="prompt-tag" onClick={() => router.push('/assistant')} style={{ animationDelay: `${i * 60}ms` }}>
                       {q}
                     </button>
                   ))}
@@ -325,10 +284,7 @@ const Summary = () => {
           </>
         ) : null}
       </div>
-
       <AiFloatingButton />
     </DkrsAppShell>
   );
-};
-
-export default Summary;
+}
