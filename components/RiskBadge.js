@@ -1,30 +1,21 @@
 import React from 'react';
 
-const RiskBadge = ({ riskLevel }) => {
-  const getRiskDetails = (level) => {
-    switch (level?.toUpperCase()) {
-      case 'LOW':
-      case 'GREEN':
-        return { text: 'НИЗКИЙ', className: 'risk-low' };
-      case 'MEDIUM':
-      case 'MED':
-      case 'YELLOW':
-        return { text: 'СРЕДНИЙ', className: 'risk-medium' };
-      case 'HIGH':
-      case 'RED':
-        return { text: 'ВЫСОКИЙ', className: 'risk-high' };
-      default:
-        return { text: 'НЕИЗВЕСТНО', className: 'risk-unknown' };
-    }
-  };
+const RISK_MAP = {
+  green:  { className: 'risk-low',     label: 'НИЗКИЙ' },
+  yellow: { className: 'risk-medium',  label: 'СРЕДНИЙ' },
+  red:    { className: 'risk-high',    label: 'ВЫСОКИЙ' },
+};
 
-  const { text, className } = getRiskDetails(riskLevel);
+const RiskBadge = ({ riskLevel }) => {
+  const key = (riskLevel || '').toLowerCase();
+  const config = RISK_MAP[key] || { className: 'risk-unknown', label: '—' };
 
   return (
-    <span className={`risk-badge ${className}`}>
-      <span className="dot"></span>
-      {text}
+    <span className={`risk-badge ${config.className}`}>
+      <span className="dot" />
+      {config.label}
     </span>
   );
 };
+
 export default RiskBadge;
