@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import DkrsAppShell from '../components/DkrsAppShell';
 import KpiCard from '../components/KpiCard';
+import RiskBadge from '../components/RiskBadge';
 import { fmtMoney, fmtPct } from '../lib/format';
 
 const Dashboard = () => {
@@ -10,27 +11,21 @@ const Dashboard = () => {
   const [months, setMonths] = useState([]);
   const [selectedMonth, setSelectedMonth] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
-  const [sortBy, setSortBy] = useState('profit');
-  const [sortOrder, setSortOrder] = useState('desc');
+  // ИЗМЕНЕНО: Более удобная сортировка по клику на заголовок
+  const [sortConfig, setSortConfig] = useState({ key: 'profit', order: 'desc' });
 
   useEffect(() => {
     fetch('/api/months')
-      .then(res => {
-        if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
-        return res.json();
-      })
+      .then(res => res.json())
       .then(data => {
         if (data && data.months) {
           setMonths(data.months);
           if (data.months.length > 0) {
             setSelectedMonth(data.months[0]);
-          } else {
-            setLoading(false);
-          }
+          } else { setLoading(false); }
         }
       })
       .catch(err => {
-        console.error('Failed to fetch months:', err);
         setError('Не удалось загрузить список месяцев.');
         setLoading(false);
       });
@@ -40,51 +35,43 @@ const Dashboard = () => {
     if (!selectedMonth) return;
     setLoading(true);
     fetch(`/api/dashboard?month=${selectedMonth}`)
-      .then(res => {
-        if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
-        return res.json();
-      })
+      .then(res => res.json())
       .then(data => {
         setData(data);
         setError(null);
       })
       .catch(err => {
-        console.error(`Failed to fetch dashboard data for month ${selectedMonth}:`, err);
-        setError('Не удалось загрузить данные для выбранного месяца.');
+        setError('Не удалось загрузить данные.');
         setData({ totals: {}, projects: [] });
       })
-      .finally(() => {
-        setLoading(false);
-      });
+      .finally(() => setLoading(false));
   }, [selectedMonth]);
   
-  const handleSort = (column) => {
-    if (sortBy === column) {
-      setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
-    } else {
-      setSortBy(column);
-      setSortOrder('desc');
+  const handleSort = (key) => {
+    let order = 'desc';
+    if (sortConfig.key === key && sortConfig.order === 'desc') {
+      order = 'asc';
     }
+    setSortConfig({ key, order });
   };
-
+  
   const filteredAndSortedProjects = useMemo(() => {
     if (!data.projects || !Array.isArray(data.projects)) return [];
+    
+    let processedProjects = [...data.projects]
+      .filter(p => (p.project || '').toLowerCase().includes(searchTerm.toLowerCase()));
 
-    let filtered = data.projects.filter(p => 
-      // ИЗМЕНЕНО: p.name -> p.project
-      (p.project || '').toLowerCase().includes(searchTerm.toLowerCase())
-    );
-
-    return filtered.sort((a, b) => {
-      const aVal = a[sortBy] || 0;
-      const bVal = b[sortBy] || 0;
-      if (aVal < bVal) return sortOrder === 'asc' ? -1 : 1;
-      if (aVal > bVal) return sortOrder === 'asc' ? 1 : -1;
+    processedProjects.sort((a, b) => {
+      const aVal = a[sortConfig.key] || 0;
+      const bVal = b[sortConfig.key] || 0;
+      if (aVal < bVal) return sortConfig.order === 'asc' ? -1 : 1;
+      if (aVal > bVal) return sortConfig.order === 'asc' ? 1 : -1;
       return 0;
     });
-  }, [data.projects, searchTerm, sortBy, sortOrder]);
 
-  // ИЗМЕНЕНО: Имена полей в totals
+    return processedProjects;
+  }, [data.projects, searchTerm, sortConfig]);
+
   const kpiData = [
     { title: 'Выручка', value: fmtMoney(data.totals?.revenue || 0), icon: 'revenue' },
     { title: 'Расходы', value: fmtMoney(data.totals?.costs || 0), icon: 'costs' },
@@ -92,18 +79,18 @@ const Dashboard = () => {
     { title: 'Маржа', value: fmtPct(data.totals?.margin || 0), icon: 'margin' }
   ];
 
-  // ИЗМЕНЕНО: Имена ключей (key) для соответствия данным API
   const tableHeaders = [
     { key: 'project', label: 'Проект' },
     { key: 'revenue', label: 'Выручка' },
     { key: 'costs', label: 'Расходы' },
     { key: 'profit', label: 'Прибыль' },
-    { key: 'margin', label: 'Маржа' }
+    { key: 'margin', label: 'Маржа' },
+    { key: 'risk', label: 'Риск' }
   ];
 
   const renderSortIcon = (columnKey) => {
-    if (sortBy !== columnKey) return <span className="sort-icon">▲▼</span>;
-    return <span className="sort-icon">{sortOrder === 'asc' ? '▲' : '▼'}</span>;
+    if (sortConfig.key !== columnKey) return <span className="sort-icon">▲▼</span>;
+    return <span className="sort-icon">{sortConfig.order === 'asc' ? '▲' : '▼'}</span>;
   };
 
   return (
@@ -112,9 +99,11 @@ const Dashboard = () => {
         <h1>Обзор финансов</h1>
         <p>Ключевые показатели и детальная информация по проектам</p>
       </div>
+
       <div className="kpi-grid">
         {kpiData.map(kpi => <KpiCard key={kpi.title} {...kpi} />)}
       </div>
+
       <div className="controls-bar">
         <select 
           className="dkrs-select"
@@ -124,9 +113,7 @@ const Dashboard = () => {
         >
           {months.length > 0 ? (
              months.map(month => <option key={month} value={month}>{month}</option>)
-          ) : (
-            <option>Загрузка...</option>
-          )}
+          ) : ( <option>Загрузка...</option> )}
         </select>
         <input 
           type="text"
@@ -136,13 +123,8 @@ const Dashboard = () => {
           onChange={(e) => setSearchTerm(e.target.value)}
           style={{ flexGrow: 1, minWidth: '250px' }}
         />
-        <button 
-          className="dkrs-button secondary" 
-          onClick={() => { setSearchTerm(''); setSortBy('profit'); setSortOrder('desc'); }}
-        >
-          Сбросить
-        </button>
       </div>
+
       <div className="glass-card table-container">
         {loading ? (
           <div className="centered-message">Загрузка данных...</div>
@@ -153,31 +135,23 @@ const Dashboard = () => {
             <thead>
               <tr>
                 {tableHeaders.map(({ key, label }) => (
-                  <th key={key} onClick={() => handleSort(key)} className={sortBy === key ? 'active' : ''}>
+                  <th key={key} onClick={() => handleSort(key)} className={sortConfig.key === key ? 'active' : ''}>
                     {label} {renderSortIcon(key)}
                   </th>
                 ))}
               </tr>
             </thead>
             <tbody>
-              {filteredAndSortedProjects.length > 0 ? (
-                filteredAndSortedProjects.map((p, index) => (
-                  // ИЗМЕНЕНО: p.id -> index, и имена полей для отображения
-                  <tr key={p.project + index}>
-                    <td className="project-name">{p.project || 'Проект без названия'}</td>
-                    <td>{fmtMoney(p.revenue)}</td>
-                    <td>{fmtMoney(p.costs)}</td>
-                    <td className={p.profit >= 0 ? 'positive-value' : 'negative-value'}>{fmtMoney(p.profit)}</td>
-                    <td className={p.margin >= 0 ? 'positive-value' : 'negative-value'}>{fmtPct(p.margin)}</td>
-                  </tr>
-                ))
-              ) : (
-                <tr>
-                  <td colSpan={tableHeaders.length} style={{ textAlign: 'center', padding: '40px' }}>
-                    Проекты за выбранный период не найдены.
-                  </td>
+              {filteredAndSortedProjects.map((p, index) => (
+                <tr key={p.project + index}>
+                  <td className="project-name">{p.project || 'Проект без названия'}</td>
+                  <td>{fmtMoney(p.revenue)}</td>
+                  <td>{fmtMoney(p.costs)}</td>
+                  <td className={p.profit >= 0 ? 'positive-value' : 'negative-value'}>{fmtMoney(p.profit)}</td>
+                  <td className={p.margin >= 0 ? 'positive-value' : 'negative-value'}>{fmtPct(p.margin)}</td>
+                  <td><RiskBadge riskLevel={p.risk} /></td>
                 </tr>
-              )}
+              ))}
             </tbody>
           </table>
         )}
