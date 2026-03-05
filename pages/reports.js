@@ -44,8 +44,7 @@ export default function ReportsPage() {
   useEffect(() => {
     let alive = true;
     (async () => {
-      setLoading(true);
-      setErr("");
+      setLoading(true); setErr("");
       try {
         const res = await fetch("/api/reports_list");
         const data = await res.json();
@@ -65,10 +64,7 @@ export default function ReportsPage() {
 
   const riskCounts = useMemo(() => {
     const c = { all: 0, low: 0, medium: 0, high: 0 };
-    items.forEach((x) => {
-      c.all++;
-      c[normalizeRisk(x.risk_level)]++;
-    });
+    items.forEach((x) => { c.all++; c[normalizeRisk(x.risk_level)]++; });
     return c;
   }, [items]);
 
@@ -76,9 +72,7 @@ export default function ReportsPage() {
     let arr = [...items];
     if (q.trim()) {
       const qq = q.trim().toLowerCase();
-      arr = arr.filter((x) =>
-        `${x.month} ${x.summary_text} ${x.id}`.toLowerCase().includes(qq)
-      );
+      arr = arr.filter((x) => `${x.month} ${x.summary_text} ${x.id}`.toLowerCase().includes(qq));
     }
     if (risk !== "all") {
       arr = arr.filter((x) => normalizeRisk(x.risk_level) === risk);
@@ -96,55 +90,45 @@ export default function ReportsPage() {
   return (
     <DkrsAppShell>
       <div className={`reports-page ${mounted ? "mounted" : ""}`}>
-        {/* Header */}
         <div className="reports-page-header">
           <div>
             <h1 className="reports-title">📄 Отчёты</h1>
             <p className="reports-subtitle">AI-отчёты по финансовым периодам</p>
           </div>
-          <Link href="/assistant" className="reports-generate-btn">
-            ✨ Сформировать отчёт
-          </Link>
+          <Link href="/assistant" className="reports-generate-btn">✨ Сформировать отчёт</Link>
         </div>
 
-        {/* Main card */}
         <div className="reports-card glass-card">
-          {/* Controls */}
           <div className="reports-controls">
-            <div className="search-wrapper">
+            <div className="dashboard-search">
               <span className="search-icon">🔍</span>
               <input
                 type="text"
-                className="dkrs-input search-input"
+                className="dkrs-input"
                 placeholder="Поиск по месяцу, тексту, ID..."
                 value={q}
                 onChange={(e) => setQ(e.target.value)}
               />
             </div>
 
-            <div className="filter-buttons">
+            <div className="dashboard-risk-filters">
               {[
                 { key: "all", label: "Все" },
-                { key: "low", label: "Низкий" },
-                { key: "medium", label: "Средний" },
-                { key: "high", label: "Высокий" },
+                { key: "low", label: "Низкий", color: "green" },
+                { key: "medium", label: "Средний", color: "yellow" },
+                { key: "high", label: "Высокий", color: "red" },
               ].map((f) => (
                 <button
                   key={f.key}
-                  className={`filter-btn ${risk === f.key ? "active" : ""} ${f.key !== "all" ? "risk-" + (f.key === "low" ? "green" : f.key === "medium" ? "yellow" : "red") : ""}`}
+                  className={`risk-filter-btn ${risk === f.key ? "active" : ""} ${f.color || ""}`}
                   onClick={() => setRisk(f.key)}
                 >
-                  {f.label}
-                  <span className="filter-count">{riskCounts[f.key]}</span>
+                  {f.label} <span className="risk-count">{riskCounts[f.key]}</span>
                 </button>
               ))}
             </div>
 
-            <select
-              className="dkrs-select sort-select"
-              value={sort}
-              onChange={(e) => setSort(e.target.value)}
-            >
+            <select className="dkrs-select" value={sort} onChange={(e) => setSort(e.target.value)}>
               <option value="created_desc">Дата ↓</option>
               <option value="created_asc">Дата ↑</option>
               <option value="month_desc">Месяц ↓</option>
@@ -152,54 +136,32 @@ export default function ReportsPage() {
             </select>
           </div>
 
-          {/* List */}
           <div className="reports-list">
             {loading ? (
-              <div className="centered-message">
-                <div className="loader-spinner" />
-                <span>Загрузка отчётов...</span>
-              </div>
+              <div className="centered-message"><div className="loader-spinner" /><span>Загрузка отчётов...</span></div>
             ) : err ? (
               <div className="centered-message error">{err}</div>
             ) : view.length === 0 ? (
-              <div className="centered-message">
-                <div className="empty-icon">📭</div>
-                Отчёты не найдены
-              </div>
+              <div className="centered-message"><div style={{ fontSize: 40 }}>📭</div>Отчёты не найдены</div>
             ) : (
               view.map((r, i) => (
-                <Link
-                  key={r.id}
-                  href={`/reports/${encodeURIComponent(r.id)}`}
-                  className="report-card-link"
-                >
-                  <div
-                    className="report-card table-row-animated"
-                    style={{ animationDelay: `${i * 50}ms` }}
-                  >
+                <Link key={r.id} href={`/reports/${encodeURIComponent(r.id)}`} className="report-card-link">
+                  <div className="report-card" style={{ animationDelay: `${i * 50}ms` }}>
                     <div className="report-card-top">
                       <div className="report-card-left">
                         <div className="report-card-icon">📊</div>
                         <div className="report-card-info">
-                          <div className="report-card-title">
-                            Отчёт #{r.id}
-                          </div>
-                          <div className="report-card-date">
-                            {fmtDateTime(r.created_at)}
-                          </div>
+                          <div className="report-card-title">Отчёт #{r.id}</div>
+                          <div className="report-card-date">{fmtDateTime(r.created_at)}</div>
                         </div>
                       </div>
-
                       <div className="report-card-right">
                         <span className="report-month-pill">{r.month}</span>
                         <RiskBadge riskLevel={riskToInternal(r.risk_level)} />
                         <span className="report-card-arrow">→</span>
                       </div>
                     </div>
-
-                    <div className="report-card-preview">
-                      {preview(r.summary_text, 200)}
-                    </div>
+                    <div className="report-card-preview">{preview(r.summary_text, 200)}</div>
                   </div>
                 </Link>
               ))
@@ -207,7 +169,6 @@ export default function ReportsPage() {
           </div>
         </div>
       </div>
-
       <AiFloatingButton />
     </DkrsAppShell>
   );
