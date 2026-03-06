@@ -5,7 +5,7 @@ export default async function handler(req, res) {
   if (!OPENAI_KEY) return res.status(500).json({ error: "No API key" });
 
   try {
-    const { text } = req.body;
+    const { text, voice = "onyx" } = req.body;
     if (!text) return res.status(400).json({ error: "No text" });
 
     const clean = text
@@ -21,10 +21,10 @@ export default async function handler(req, res) {
         Authorization: `Bearer ${OPENAI_KEY}`,
       },
       body: JSON.stringify({
-        model: "tts-1",
-        voice: "nova",
+        model: "tts-1-hd",
+        voice: voice,
         input: clean,
-        speed: 1.05,
+        speed: 1.0,
       }),
     });
 
