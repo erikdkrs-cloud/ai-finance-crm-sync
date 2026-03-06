@@ -1,51 +1,55 @@
-import { createClient } from "@supabase/supabase-js";
+import { neon } from "@neondatabase/serverless";
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY
-);
-
+const sql = neon(process.env.DATABASE_URL);
 const OPENAI_KEY = process.env.OPENAI_API_KEY;
 
 async function getFinancialContext(month) {
   const ctx = { month, projects: [], totals: {}, anomalies: [], reports: [] };
 
   try {
-    let q = supabase.from("projects").select("*");
-    if (month) q = q.eq("month", month);
-    const { data: projects } = await q.order("revenue", { ascending: false });
+    const projects = month
+      ? await sql`SELECT * FROM projects WHERE month = ${month} ORDER BY revenue DESC`
+      : await sql`SELECT * FROM projects ORDER BY revenue DESC`;
     ctx.projects = projects || [];
 
     if (ctx.projects.length) {
-      const totalRev = ctx.projects.reduce((s, p) => s + (p.revenue || 0), 0);
-      const totalExp = ctx.projects.reduce((s, p) => s + (p.expense || 0), 0);
+      const totalRev = ctx.projects.reduce((s, p) => s + Number(p.revenue || 0), 0);
+      const totalExp = ctx.projects.reduce((s, p) => s + Number(p.expense || 0), 0);
       const totalProfit = totalRev - totalExp;
       const margin = totalRev > 0 ? ((totalProfit / totalRev) * 100).toFixed(1) : 0;
       ctx.totals = { revenue: totalRev, expense: totalExp, profit: totalProfit, margin, count: ctx.projects.length };
 
       ctx.top3profit = ctx.projects
-        .map((p) => ({ name: p.project_name, profit: (p.revenue || 0) - (p.expense || 0), margin: p.revenue > 0 ? (((p.revenue - p.expense) / p.revenue) * 100).toFixed(1) : 0 }))
+        .map((p) => ({
+          name: p.project_name,
+          profit: Number(p.revenue || 0) - Number(p.expense || 0),
+          margin: p.revenue > 0 ? (((p.revenue - p.expense) / p.revenue) * 100).toFixed(1) : 0,
+        }))
         .sort((a, b) => b.profit - a.profit)
         .slice(0, 3);
 
       ctx.bottom3 = ctx.projects
-        .map((p) => ({ name: p.project_name, profit: (p.revenue || 0) - (p.expense || 0), margin: p.revenue > 0 ? (((p.revenue - p.expense) / p.revenue) * 100).toFixed(1) : 0 }))
+        .map((p) => ({
+          name: p.project_name,
+          profit: Number(p.revenue || 0) - Number(p.expense || 0),
+          margin: p.revenue > 0 ? (((p.revenue - p.expense) / p.revenue) * 100).toFixed(1) : 0,
+        }))
         .sort((a, b) => a.profit - b.profit)
         .slice(0, 3);
     }
 
-    let aq = supabase.from("anomalies").select("*");
-    if (month) aq = aq.eq("month", month);
-    const { data: anomalies } = await aq;
+    const anomalies = month
+      ? await sql`SELECT * FROM anomalies WHERE month = ${month}`
+      : await sql`SELECT * FROM anomalies`;
     ctx.anomalies = anomalies || [];
 
-    let rq = supabase.from("reports").select("id, month, risk_level, summary_text, created_at");
-    if (month) rq = rq.eq("month", month);
-    const { data: reports } = await rq.order("created_at", { ascending: false }).limit(3);
+    const reports = month
+      ? await sql`SELECT id, month, risk_level, summary_text, created_at FROM reports WHERE month = ${month} ORDER BY created_at DESC LIMIT 3`
+      : await sql`SELECT id, month, risk_level, summary_text, created_at FROM reports ORDER BY created_at DESC LIMIT 3`;
     ctx.reports = reports || [];
 
-    const { data: months } = await supabase.from("projects").select("month").order("month", { ascending: false });
-    ctx.availableMonths = [...new Set((months || []).map((m) => m.month))];
+    const monthsRes = await sql`SELECT DISTINCT month FROM projects ORDER BY month DESC`;
+    ctx.availableMonths = monthsRes.map((m) => m.month);
   } catch (e) {
     ctx.error = e.message;
   }
@@ -104,7 +108,7 @@ function buildSystemPrompt(ctx) {
   if (ctx.projects?.length) {
     prompt += `\n📋 ВСЕ ПРОЕКТЫ:\n`;
     ctx.projects.forEach((p) => {
-      const profit = (p.revenue || 0) - (p.expense || 0);
+      const profit = Number(p.revenue || 0) - Number(p.expense || 0);
       const margin = p.revenue > 0 ? (((p.revenue - p.expense) / p.revenue) * 100).toFixed(1) : 0;
       prompt += `- ${p.project_name}: выручка ${fmt(p.revenue)}, расход ${fmt(p.expense)}, прибыль ${fmt(profit)}, маржа ${margin}%, риск: ${p.risk_level || "—"}\n`;
     });
