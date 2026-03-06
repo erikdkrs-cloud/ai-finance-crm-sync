@@ -894,213 +894,150 @@ img { max-width: 100%; }
   .user-avatar-name { display: block; }
 }
 
-/* ===== DARK THEME ===== */
-[data-theme="dark"] {
-  --dkrs-bg-primary: #0f172a;
-  --dkrs-bg-secondary: #1e293b;
-  --dkrs-bg-tertiary: #334155;
-  --dkrs-text-primary: #f1f5f9;
-  --dkrs-text-secondary: #94a3b8;
-  --dkrs-text-tertiary: #64748b;
-  --dkrs-glass-border: rgba(148,163,184,0.15);
-  --dkrs-glass-bg: rgba(30,41,59,0.8);
-  --dkrs-glass-shadow: 0 8px 32px rgba(0,0,0,0.3);
+/* ===== Dark: Dashboard Table — FULL FIX ===== */
+[data-theme="dark"] .dashboard-table-card {
+  background: rgba(15,23,42,0.6) !important;
+  border-color: rgba(148,163,184,0.1) !important;
 }
-
-[data-theme="dark"] body { background: var(--dkrs-bg-primary); color: var(--dkrs-text-primary); }
-
-[data-theme="dark"] .sidebar {
-  background: linear-gradient(180deg, #1e293b 0%, #0f172a 100%);
-  border-right-color: rgba(148,163,184,0.1);
-}
-
-[data-theme="dark"] .topbar {
-  background: rgba(15,23,42,0.85); backdrop-filter: blur(20px);
-  border-bottom-color: rgba(148,163,184,0.1);
-}
-
-[data-theme="dark"] .glass-card {
-  background: rgba(30,41,59,0.7) !important;
-  border-color: rgba(148,163,184,0.12) !important;
-  box-shadow: 0 4px 20px rgba(0,0,0,0.2) !important;
-}
-
-[data-theme="dark"] .kpi-card { background: rgba(30,41,59,0.8) !important; }
-[data-theme="dark"] .kpi-label { color: var(--dkrs-text-secondary); }
-[data-theme="dark"] .kpi-value { color: var(--dkrs-text-primary); }
-
 [data-theme="dark"] .dashboard-table th {
-  background: rgba(30,41,59,0.9); color: var(--dkrs-text-secondary);
-  border-bottom-color: rgba(148,163,184,0.15);
+  background: rgba(15,23,42,0.95) !important;
+  color: #94a3b8 !important;
+  border-bottom: 1px solid rgba(148,163,184,0.12) !important;
 }
 [data-theme="dark"] .dashboard-table td {
-  color: var(--dkrs-text-primary); border-bottom-color: rgba(148,163,184,0.08);
+  background: transparent !important;
+  color: #e2e8f0 !important;
+  border-bottom: 1px solid rgba(148,163,184,0.06) !important;
 }
-[data-theme="dark"] .project-row:hover { background: rgba(0,191,166,0.06); }
-[data-theme="dark"] .project-row.expanded { background: rgba(0,191,166,0.08); }
+[data-theme="dark"] .project-row {
+  background: transparent !important;
+}
+[data-theme="dark"] .project-row:nth-child(even) {
+  background: rgba(30,41,59,0.3) !important;
+}
+[data-theme="dark"] .project-row:hover {
+  background: rgba(0,191,166,0.08) !important;
+}
+[data-theme="dark"] .project-row.expanded {
+  background: rgba(0,191,166,0.1) !important;
+}
 
-[data-theme="dark"] .detail-content { background: rgba(15,23,42,0.6); }
+/* Dark: Revenue value — make readable */
+[data-theme="dark"] .revenue-value {
+  color: #00e5cc !important;
+}
+[data-theme="dark"] .mini-bar {
+  background: rgba(148,163,184,0.08) !important;
+}
+[data-theme="dark"] .mini-bar-fill {
+  opacity: 0.9;
+}
+
+/* Dark: Profit column */
+[data-theme="dark"] .profit-positive { color: #34d399 !important; }
+[data-theme="dark"] .profit-negative { color: #f87171 !important; }
+
+/* Dark: Margin column */
+[data-theme="dark"] .margin-value { color: #e2e8f0 !important; }
+
+/* Dark: Expand arrow */
+[data-theme="dark"] .expand-arrow { color: #64748b !important; }
+[data-theme="dark"] .project-row:hover .expand-arrow { color: #00bfa6 !important; }
+
+/* Dark: Project name */
+[data-theme="dark"] .project-name-text { color: #f1f5f9 !important; }
+
+/* Dark: Risk badges in table */
+[data-theme="dark"] .risk-badge.risk-low {
+  background: rgba(16,185,129,0.15) !important;
+  color: #34d399 !important;
+}
+[data-theme="dark"] .risk-badge.risk-medium {
+  background: rgba(245,158,11,0.15) !important;
+  color: #fbbf24 !important;
+}
+[data-theme="dark"] .risk-badge.risk-high {
+  background: rgba(239,68,68,0.15) !important;
+  color: #f87171 !important;
+}
+
+/* Dark: Detail expansion panel */
+[data-theme="dark"] .detail-content {
+  background: rgba(15,23,42,0.8) !important;
+  border-top: 1px solid rgba(148,163,184,0.08) !important;
+}
 [data-theme="dark"] .detail-item {
-  background: rgba(30,41,59,0.8); border-color: rgba(148,163,184,0.1);
-}
-[data-theme="dark"] .detail-item:hover {
-  background: rgba(30,41,59,1); border-color: rgba(0,191,166,0.2);
-}
-[data-theme="dark"] .detail-item-value { color: var(--dkrs-text-primary); }
-[data-theme="dark"] .detail-item-bar-track { background: rgba(148,163,184,0.15); }
-[data-theme="dark"] .detail-summary { border-top-color: rgba(148,163,184,0.12); }
-
-[data-theme="dark"] .dkrs-input,
-[data-theme="dark"] .dkrs-select {
-  background: rgba(30,41,59,0.8); color: var(--dkrs-text-primary);
-  border-color: rgba(148,163,184,0.15);
-}
-[data-theme="dark"] .dkrs-input::placeholder { color: var(--dkrs-text-tertiary); }
-[data-theme="dark"] .dkrs-input:focus,
-[data-theme="dark"] .dkrs-select:focus { border-color: var(--dkrs-primary); }
-
-[data-theme="dark"] .risk-filter-btn {
-  background: rgba(30,41,59,0.8); color: var(--dkrs-text-secondary);
-  border-color: rgba(148,163,184,0.15);
-}
-[data-theme="dark"] .risk-filter-btn.active { color: #fff; }
-
-[data-theme="dark"] .mini-bar { background: rgba(148,163,184,0.12); }
-[data-theme="dark"] .kpi-bar-bg { background: rgba(148,163,184,0.12); }
-
-/* Dark: Summary widgets */
-[data-theme="dark"] .summary-widget { background: rgba(30,41,59,0.7); }
-[data-theme="dark"] .widget-header h3 { color: var(--dkrs-text-primary); }
-[data-theme="dark"] .top-card {
-  background: rgba(15,23,42,0.6); border-color: rgba(148,163,184,0.1);
-}
-[data-theme="dark"] .top-card:hover { background: rgba(15,23,42,0.8); }
-[data-theme="dark"] .top-card-name { color: var(--dkrs-text-primary); }
-[data-theme="dark"] .top-card-meta span { color: var(--dkrs-text-secondary); }
-
-[data-theme="dark"] .expense-legend-label { color: var(--dkrs-text-secondary); }
-[data-theme="dark"] .expense-legend-value { color: var(--dkrs-text-primary); }
-[data-theme="dark"] .expense-legend-pct { color: var(--dkrs-text-tertiary); }
-
-[data-theme="dark"] .insight-item {
-  background: rgba(15,23,42,0.6); border-color: rgba(148,163,184,0.1);
-}
-[data-theme="dark"] .insight-text { color: var(--dkrs-text-primary); }
-
-[data-theme="dark"] .prompt-tag {
-  background: rgba(30,41,59,0.8); color: var(--dkrs-text-secondary);
-  border-color: rgba(148,163,184,0.15);
-}
-[data-theme="dark"] .prompt-tag:hover {
-  background: var(--dkrs-primary); color: #fff; border-color: var(--dkrs-primary);
-}
-
-/* Dark: Anomalies table */
-[data-theme="dark"] .dkrs-table th {
-  background: rgba(30,41,59,0.9); color: var(--dkrs-text-secondary);
-  border-bottom-color: rgba(148,163,184,0.15);
-}
-[data-theme="dark"] .dkrs-table td {
-  color: var(--dkrs-text-primary); border-bottom-color: rgba(148,163,184,0.08);
-}
-[data-theme="dark"] .table-row-animated:hover { background: rgba(0,191,166,0.06); }
-[data-theme="dark"] .projects-table-wrapper {
-  background: rgba(30,41,59,0.5); border-color: rgba(148,163,184,0.12);
-}
-
-/* Dark: Reports — FULL FIX */
-[data-theme="dark"] .reports-card {
   background: rgba(30,41,59,0.6) !important;
-  border-color: rgba(148,163,184,0.1) !important;
-}
-[data-theme="dark"] .report-card {
-  background: rgba(30,41,59,0.7) !important;
-  border-color: rgba(148,163,184,0.12) !important;
-}
-[data-theme="dark"] .report-card:hover {
-  background: rgba(30,41,59,0.95) !important;
-  border-color: rgba(0,191,166,0.25) !important;
-}
-[data-theme="dark"] .report-card-title { color: #f1f5f9 !important; }
-[data-theme="dark"] .report-card-date { color: #64748b !important; }
-[data-theme="dark"] .report-card-preview {
-  color: #94a3b8 !important;
-  background: rgba(15,23,42,0.4) !important;
   border-color: rgba(148,163,184,0.08) !important;
 }
-[data-theme="dark"] .report-card-arrow { color: #64748b !important; }
-[data-theme="dark"] .report-card-icon {
-  background: rgba(0,191,166,0.15) !important;
+[data-theme="dark"] .detail-item:hover {
+  background: rgba(30,41,59,0.9) !important;
+  border-color: rgba(0,191,166,0.15) !important;
 }
-[data-theme="dark"] .report-month-pill {
-  background: rgba(0,191,166,0.12) !important;
-  color: #00bfa6 !important; border-color: rgba(0,191,166,0.2) !important;
+[data-theme="dark"] .detail-item-label { color: #94a3b8 !important; }
+[data-theme="dark"] .detail-item-value { color: #f1f5f9 !important; }
+[data-theme="dark"] .detail-item-pct { color: #64748b !important; }
+[data-theme="dark"] .detail-item-bar-track { background: rgba(148,163,184,0.1) !important; }
+[data-theme="dark"] .detail-summary {
+  border-top-color: rgba(148,163,184,0.1) !important;
 }
-[data-theme="dark"] .report-card-link { text-decoration: none; }
-[data-theme="dark"] .reports-generate-btn {
-  box-shadow: 0 4px 15px rgba(245,158,11,0.3) !important;
-}
+[data-theme="dark"] .detail-summary-label { color: #94a3b8 !important; }
+[data-theme="dark"] .detail-summary-value { color: #f1f5f9 !important; }
 
-/* Dark: Dashboard gray fixes */
-[data-theme="dark"] .dashboard-table-card {
-  background: rgba(30,41,59,0.6) !important;
+/* Dark: Totals pills (top-right of table) */
+[data-theme="dark"] .totals-pill {
+  background: rgba(15,23,42,0.8) !important;
+  border: 1px solid rgba(148,163,184,0.15) !important;
+  color: #e2e8f0 !important;
+  backdrop-filter: blur(10px);
 }
-[data-theme="dark"] .dashboard-table-header { color: #f1f5f9; }
-[data-theme="dark"] .dashboard-table-title { color: #f1f5f9 !important; }
-[data-theme="dark"] .dashboard-table-subtitle { color: #64748b !important; }
+[data-theme="dark"] .totals-pill .totals-pill-label { color: #94a3b8 !important; }
+[data-theme="dark"] .totals-pill .totals-pill-value { color: #f1f5f9 !important; }
+
+/* Dark: Filters area */
 [data-theme="dark"] .dashboard-filters {
-  background: transparent !important;
-  border-color: rgba(148,163,184,0.1) !important;
+  background: rgba(15,23,42,0.4) !important;
+  border: 1px solid rgba(148,163,184,0.08) !important;
+  border-radius: 16px;
 }
 [data-theme="dark"] .dashboard-search {
-  background: rgba(15,23,42,0.5) !important;
-  border-color: rgba(148,163,184,0.15) !important;
+  background: rgba(30,41,59,0.6) !important;
+  border-color: rgba(148,163,184,0.12) !important;
 }
-[data-theme="dark"] .revenue-value { color: #00e5cc !important; }
-[data-theme="dark"] .expand-arrow { color: #64748b !important; }
+[data-theme="dark"] .dashboard-search:focus-within {
+  border-color: rgba(0,191,166,0.3) !important;
+  background: rgba(30,41,59,0.8) !important;
+}
+[data-theme="dark"] .search-icon { color: #64748b !important; }
 
-/* Dark: Charts card background */
-[data-theme="dark"] .charts-grid .glass-card,
-[data-theme="dark"] .chart-card {
-  background: rgba(30,41,59,0.7) !important;
+[data-theme="dark"] .risk-filter-btn {
+  background: rgba(30,41,59,0.6) !important;
+  color: #94a3b8 !important;
   border-color: rgba(148,163,184,0.1) !important;
 }
-[data-theme="dark"] .chart-card-title { color: #f1f5f9 !important; }
-[data-theme="dark"] .chart-card-subtitle { color: #64748b !important; }
-[data-theme="dark"] .chart-type-btn {
-  background: rgba(15,23,42,0.5) !important;
-  color: #94a3b8 !important; border-color: rgba(148,163,184,0.12) !important;
+[data-theme="dark"] .risk-filter-btn:hover {
+  background: rgba(30,41,59,0.9) !important;
+  color: #e2e8f0 !important;
 }
-[data-theme="dark"] .chart-type-btn.active {
-  background: var(--dkrs-primary) !important; color: #fff !important;
+[data-theme="dark"] .risk-filter-btn.active {
+  color: #fff !important;
 }
-
-/* Dark: Recharts tooltip */
-[data-theme="dark"] .recharts-default-tooltip {
-  background: #1e293b !important;
-  border-color: rgba(148,163,184,0.2) !important;
-  color: #f1f5f9 !important;
+[data-theme="dark"] .risk-filter-btn .risk-count {
+  background: rgba(148,163,184,0.15) !important;
+  color: #94a3b8 !important;
 }
-[data-theme="dark"] .recharts-tooltip-label { color: #f1f5f9 !important; }
-
-/* Dark: period bar */
-[data-theme="dark"] .dashboard-period-bar {
-  background: rgba(30,41,59,0.5) !important;
-  border-color: rgba(148,163,184,0.1) !important;
-}
-[data-theme="dark"] .dashboard-period-label { color: #94a3b8 !important; }
-
-/* Dark: KPI card borders */
-[data-theme="dark"] .kpi-card {
-  border-color: rgba(148,163,184,0.1) !important;
+[data-theme="dark"] .risk-filter-btn.active .risk-count {
+  background: rgba(255,255,255,0.2) !important;
+  color: #fff !important;
 }
 
-/* Dark: scrollbar for reports list */
-[data-theme="dark"] .reports-list { scrollbar-color: #334155 #1e293b; }
-
-/* Dark: AI floating button */
-[data-theme="dark"] .ai-float-btn {
-  box-shadow: 0 4px 20px rgba(0,0,0,0.4) !important;
+[data-theme="dark"] .dkrs-select {
+  background: rgba(30,41,59,0.6) !important;
+  color: #e2e8f0 !important;
+  border-color: rgba(148,163,184,0.12) !important;
+}
+[data-theme="dark"] .dkrs-select:focus {
+  border-color: rgba(0,191,166,0.3) !important;
 }
 
 /* ===== RESPONSIVE ===== */
