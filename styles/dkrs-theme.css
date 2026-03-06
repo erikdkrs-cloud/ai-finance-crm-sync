@@ -1297,6 +1297,51 @@ img { max-width: 100%; }
 [data-theme="dark"] .msg-speak-btn { color: #94a3b8; }
 [data-theme="dark"] .msg-speak-btn.active { color: #00e5cc; }
 
+/* ===== JARVIS THEME ===== */
+.assistant-hero-icon.jarvis {
+  background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%) !important;
+  color: #00d4ff !important; font-weight: 900; font-size: 28px;
+  text-shadow: 0 0 20px rgba(0,212,255,0.5), 0 0 40px rgba(0,212,255,0.2);
+  box-shadow: 0 0 30px rgba(0,212,255,0.2), 0 4px 16px rgba(0,0,0,0.3);
+  border: 1px solid rgba(0,212,255,0.3);
+  animation: jarvisPulse 3s ease-in-out infinite;
+}
+@keyframes jarvisPulse {
+  0%, 100% { box-shadow: 0 0 20px rgba(0,212,255,0.15), 0 4px 16px rgba(0,0,0,0.3); }
+  50% { box-shadow: 0 0 40px rgba(0,212,255,0.3), 0 4px 16px rgba(0,0,0,0.3); }
+}
+.jarvis-sub {
+  font-size: 14px; font-weight: 500; color: var(--dkrs-text-tertiary);
+  margin-left: 8px; vertical-align: middle;
+}
+.empty-robot.jarvis-logo {
+  font-size: 48px; width: 80px; height: 80px; margin: 0 auto 12px;
+  border-radius: 50%; display: grid; place-items: center;
+  background: linear-gradient(135deg, #1a1a2e, #0f3460);
+  color: #00d4ff; font-weight: 900;
+  text-shadow: 0 0 20px rgba(0,212,255,0.5);
+  box-shadow: 0 0 30px rgba(0,212,255,0.2);
+  border: 2px solid rgba(0,212,255,0.3);
+  animation: jarvisPulse 3s ease-in-out infinite, floatBounce 3s ease-in-out infinite;
+}
+.jarvis-mini {
+  display: inline-flex; width: 22px; height: 22px; border-radius: 50%;
+  background: linear-gradient(135deg, #1a1a2e, #0f3460);
+  color: #00d4ff; font-weight: 900; font-size: 12px;
+  align-items: center; justify-content: center;
+  text-shadow: 0 0 8px rgba(0,212,255,0.5);
+  box-shadow: 0 0 8px rgba(0,212,255,0.15);
+}
+
+/* Dark: Jarvis */
+[data-theme="dark"] .jarvis-sub { color: #64748b !important; }
+[data-theme="dark"] .assistant-hero-icon.jarvis {
+  box-shadow: 0 0 40px rgba(0,212,255,0.25), 0 4px 16px rgba(0,0,0,0.5) !important;
+}
+[data-theme="dark"] .empty-robot.jarvis-logo {
+  box-shadow: 0 0 40px rgba(0,212,255,0.25) !important;
+}
+
 /* ===== DARK THEME — COMPLETE ===== */
 [data-theme="dark"] body {
   background: #0f172a !important;
