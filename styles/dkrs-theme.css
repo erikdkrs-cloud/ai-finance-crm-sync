@@ -1008,50 +1008,100 @@ img { max-width: 100%; }
   background: rgba(30,41,59,0.5); border-color: rgba(148,163,184,0.12);
 }
 
-/* Dark: Reports */
+/* Dark: Reports — FULL FIX */
+[data-theme="dark"] .reports-card {
+  background: rgba(30,41,59,0.6) !important;
+  border-color: rgba(148,163,184,0.1) !important;
+}
 [data-theme="dark"] .report-card {
-  background: rgba(30,41,59,0.7); border-color: rgba(148,163,184,0.12);
+  background: rgba(30,41,59,0.7) !important;
+  border-color: rgba(148,163,184,0.12) !important;
 }
 [data-theme="dark"] .report-card:hover {
-  background: rgba(30,41,59,0.9); border-color: rgba(0,191,166,0.2);
+  background: rgba(30,41,59,0.95) !important;
+  border-color: rgba(0,191,166,0.25) !important;
 }
-[data-theme="dark"] .report-card-title { color: var(--dkrs-text-primary); }
-[data-theme="dark"] .report-card-date { color: var(--dkrs-text-tertiary); }
-[data-theme="dark"] .report-card-preview { color: var(--dkrs-text-secondary); }
-[data-theme="dark"] .report-card-arrow { color: var(--dkrs-text-tertiary); }
-
-/* Dark: Assistant */
-[data-theme="dark"] .assistant-composer {
-  background: rgba(30,41,59,0.8); border-color: rgba(148,163,184,0.12);
+[data-theme="dark"] .report-card-title { color: #f1f5f9 !important; }
+[data-theme="dark"] .report-card-date { color: #64748b !important; }
+[data-theme="dark"] .report-card-preview {
+  color: #94a3b8 !important;
+  background: rgba(15,23,42,0.4) !important;
+  border-color: rgba(148,163,184,0.08) !important;
 }
-[data-theme="dark"] .assistant-message.assistant {
-  background: rgba(30,41,59,0.7); border-color: rgba(148,163,184,0.1);
+[data-theme="dark"] .report-card-arrow { color: #64748b !important; }
+[data-theme="dark"] .report-card-icon {
+  background: rgba(0,191,166,0.15) !important;
 }
-[data-theme="dark"] .assistant-message.user {
-  background: rgba(0,191,166,0.15); border-color: rgba(0,191,166,0.2);
+[data-theme="dark"] .report-month-pill {
+  background: rgba(0,191,166,0.12) !important;
+  color: #00bfa6 !important; border-color: rgba(0,191,166,0.2) !important;
+}
+[data-theme="dark"] .report-card-link { text-decoration: none; }
+[data-theme="dark"] .reports-generate-btn {
+  box-shadow: 0 4px 15px rgba(245,158,11,0.3) !important;
 }
 
-/* Dark: Scrollbar */
-[data-theme="dark"] ::-webkit-scrollbar-track { background: var(--dkrs-bg-secondary); }
-[data-theme="dark"] ::-webkit-scrollbar-thumb { background: var(--dkrs-bg-tertiary); }
-[data-theme="dark"] ::-webkit-scrollbar-thumb:hover { background: #475569; }
-
-/* Dark: Charts labels */
-[data-theme="dark"] .recharts-cartesian-axis-tick-value { fill: var(--dkrs-text-secondary) !important; }
-[data-theme="dark"] .recharts-legend-item-text { color: var(--dkrs-text-secondary) !important; }
-
-/* Dark: theme toggle */
-[data-theme="dark"] .theme-toggle {
-  background: rgba(30,41,59,0.8); border-color: rgba(148,163,184,0.15);
-  color: #fbbf24;
+/* Dark: Dashboard gray fixes */
+[data-theme="dark"] .dashboard-table-card {
+  background: rgba(30,41,59,0.6) !important;
 }
-[data-theme="dark"] .theme-toggle:hover { background: #fbbf24; color: #0f172a; border-color: #fbbf24; }
+[data-theme="dark"] .dashboard-table-header { color: #f1f5f9; }
+[data-theme="dark"] .dashboard-table-title { color: #f1f5f9 !important; }
+[data-theme="dark"] .dashboard-table-subtitle { color: #64748b !important; }
+[data-theme="dark"] .dashboard-filters {
+  background: transparent !important;
+  border-color: rgba(148,163,184,0.1) !important;
+}
+[data-theme="dark"] .dashboard-search {
+  background: rgba(15,23,42,0.5) !important;
+  border-color: rgba(148,163,184,0.15) !important;
+}
+[data-theme="dark"] .revenue-value { color: #00e5cc !important; }
+[data-theme="dark"] .expand-arrow { color: #64748b !important; }
 
-/* Dark: totals pills */
-[data-theme="dark"] .totals-pill { background: rgba(30,41,59,0.8); color: var(--dkrs-text-secondary); }
+/* Dark: Charts card background */
+[data-theme="dark"] .charts-grid .glass-card,
+[data-theme="dark"] .chart-card {
+  background: rgba(30,41,59,0.7) !important;
+  border-color: rgba(148,163,184,0.1) !important;
+}
+[data-theme="dark"] .chart-card-title { color: #f1f5f9 !important; }
+[data-theme="dark"] .chart-card-subtitle { color: #64748b !important; }
+[data-theme="dark"] .chart-type-btn {
+  background: rgba(15,23,42,0.5) !important;
+  color: #94a3b8 !important; border-color: rgba(148,163,184,0.12) !important;
+}
+[data-theme="dark"] .chart-type-btn.active {
+  background: var(--dkrs-primary) !important; color: #fff !important;
+}
+
+/* Dark: Recharts tooltip */
+[data-theme="dark"] .recharts-default-tooltip {
+  background: #1e293b !important;
+  border-color: rgba(148,163,184,0.2) !important;
+  color: #f1f5f9 !important;
+}
+[data-theme="dark"] .recharts-tooltip-label { color: #f1f5f9 !important; }
 
 /* Dark: period bar */
-[data-theme="dark"] .dashboard-period-bar { background: rgba(30,41,59,0.5); border-color: rgba(148,163,184,0.12); }
+[data-theme="dark"] .dashboard-period-bar {
+  background: rgba(30,41,59,0.5) !important;
+  border-color: rgba(148,163,184,0.1) !important;
+}
+[data-theme="dark"] .dashboard-period-label { color: #94a3b8 !important; }
+
+/* Dark: KPI card borders */
+[data-theme="dark"] .kpi-card {
+  border-color: rgba(148,163,184,0.1) !important;
+}
+
+/* Dark: scrollbar for reports list */
+[data-theme="dark"] .reports-list { scrollbar-color: #334155 #1e293b; }
+
+/* Dark: AI floating button */
+[data-theme="dark"] .ai-float-btn {
+  box-shadow: 0 4px 20px rgba(0,0,0,0.4) !important;
+}
 
 /* ===== RESPONSIVE ===== */
 @media (max-width: 1200px) { .kpi-grid { grid-template-columns: repeat(2, 1fr); } }
