@@ -4,59 +4,84 @@ const sql = neon(process.env.DATABASE_URL);
 const OPENAI_KEY = process.env.OPENAI_API_KEY;
 
 async function getFinancialContext(month) {
-  const ctx = { month, projects: [], totals: {}, anomalies: [], reports: [] };
+  const ctx = { month, projects: [], totals: {}, issues: [], reports: [] };
 
   try {
-    const allProjects = await sql`SELECT * FROM projects ORDER BY month DESC, revenue DESC`;
+    // 1. Все периоды
+    const periods = await sql`SELECT id, month FROM periods ORDER BY id DESC`;
+    ctx.availableMonths = periods.map((p) => ({ id: p.id, month: p.month }));
 
-    const filtered = month
-      ? allProjects.filter((p) => p.month === month)
-      : allProjects;
-
-    ctx.projects = allProjects;
-    ctx.filteredProjects = filtered;
-
-    if (filtered.length) {
-      const totalRev = filtered.reduce((s, p) => s + Number(p.revenue || 0), 0);
-      const totalExp = filtered.reduce((s, p) => s + Number(p.expense || 0), 0);
-      const totalProfit = totalRev - totalExp;
-      const margin = totalRev > 0 ? ((totalProfit / totalRev) * 100).toFixed(1) : 0;
-      ctx.totals = { revenue: totalRev, expense: totalExp, profit: totalProfit, margin, count: filtered.length };
+    // Определяем period_id по выбранному месяцу
+    let periodId = null;
+    if (month) {
+      const found = periods.find((p) => p.month === month || p.id.toString() === month);
+      if (found) periodId = found.id;
     }
 
-    ctx.top3profit = filtered
-      .map((p) => ({
-        name: p.project_name,
-        profit: Number(p.revenue || 0) - Number(p.expense || 0),
-        margin: p.revenue > 0 ? (((p.revenue - p.expense) / p.revenue) * 100).toFixed(1) : 0,
-      }))
-      .sort((a, b) => b.profit - a.profit)
+    // 2. Финансовые данные из VIEW
+    const allData = await sql`SELECT * FROM v_financial_calc ORDER BY revenue_no_vat DESC`;
+    ctx.allProjects = allData;
+
+    const filtered = month
+      ? allData.filter((p) => p.month === month)
+      : allData;
+    ctx.projects = filtered;
+
+    if (filtered.length) {
+      const totalRev = filtered.reduce((s, p) => s + Number(p.revenue_no_vat || 0), 0);
+      const totalExpense = filtered.reduce((s, p) => {
+        return s + Number(p.salary_workers || 0) + Number(p.salary_manager || 0) +
+          Number(p.salary_head || 0) + Number(p.ads || 0) + Number(p.transport || 0) +
+          Number(p.penalties || 0) + Number(p.tax || 0);
+      }, 0);
+      const totalProfit = filtered.reduce((s, p) => s + Number(p.profit || 0), 0);
+      const margin = totalRev > 0 ? ((totalProfit / totalRev) * 100).toFixed(1) : 0;
+
+      ctx.totals = {
+        revenue: totalRev,
+        expense: totalExpense,
+        profit: totalProfit,
+        margin,
+        count: filtered.length,
+      };
+    }
+
+    // 3. Top / Bottom проекты
+    ctx.top3 = [...filtered]
+      .sort((a, b) => Number(b.profit || 0) - Number(a.profit || 0))
       .slice(0, 3);
 
-    ctx.bottom3 = filtered
-      .map((p) => ({
-        name: p.project_name,
-        profit: Number(p.revenue || 0) - Number(p.expense || 0),
-        margin: p.revenue > 0 ? (((p.revenue - p.expense) / p.revenue) * 100).toFixed(1) : 0,
-      }))
-      .sort((a, b) => a.profit - b.profit)
+    ctx.bottom3 = [...filtered]
+      .sort((a, b) => Number(a.profit || 0) - Number(b.profit || 0))
       .slice(0, 3);
 
-    const anomalies = await sql`SELECT * FROM anomalies ORDER BY month DESC`;
-    ctx.anomalies = month ? anomalies.filter((a) => a.month === month) : anomalies;
-
-    const reports = await sql`SELECT id, month, risk_level, summary_text, created_at FROM reports ORDER BY created_at DESC LIMIT 5`;
+    // 4. AI отчёты + issues (вместо anomalies)
+    const reports = periodId
+      ? await sql`SELECT * FROM ai_reports WHERE period_id = ${periodId} ORDER BY created_at DESC LIMIT 3`
+      : await sql`SELECT * FROM ai_reports ORDER BY created_at DESC LIMIT 3`;
     ctx.reports = reports || [];
 
-    const monthsSet = new Set(allProjects.map((p) => p.month).filter(Boolean));
-    ctx.availableMonths = [...monthsSet].sort().reverse();
+    // Извлекаем issues из отчётов
+    const allIssues = [];
+    reports.forEach((r) => {
+      if (r.issues && Array.isArray(r.issues)) {
+        r.issues.forEach((iss) => {
+          allIssues.push({ ...iss, report_id: r.id, risk_level: r.risk_level });
+        });
+      }
+    });
+    ctx.issues = allIssues;
 
+    // 5. Агрегация по месяцам для сравнения
     const byMonth = {};
-    allProjects.forEach((p) => {
+    allData.forEach((p) => {
       const m = p.month || "unknown";
-      if (!byMonth[m]) byMonth[m] = { revenue: 0, expense: 0, count: 0 };
-      byMonth[m].revenue += Number(p.revenue || 0);
-      byMonth[m].expense += Number(p.expense || 0);
+      if (!byMonth[m]) byMonth[m] = { revenue: 0, expense: 0, profit: 0, count: 0 };
+      byMonth[m].revenue += Number(p.revenue_no_vat || 0);
+      byMonth[m].profit += Number(p.profit || 0);
+      byMonth[m].expense += Number(p.salary_workers || 0) + Number(p.salary_manager || 0) +
+        Number(p.salary_head || 0) + Number(p.ads || 0) + Number(p.transport || 0) +
+        Number(p.penalties || 0) + Number(p.tax || 0);
       byMonth[m].count++;
     });
     ctx.monthlyTotals = byMonth;
@@ -69,6 +94,7 @@ async function getFinancialContext(month) {
 
 function buildSystemPrompt(ctx, isVoice) {
   const fmt = (n) => Number(n || 0).toLocaleString("ru-RU");
+  const pct = (n) => (Number(n || 0) * 100).toFixed(1);
 
   let prompt = `Ты — J.A.R.V.I.S. (DKRS Edition) — продвинутый AI-ассистент финансовой аналитики.
 Твой характер: вежливый, интеллигентный, слегка ироничный, как дворецкий Тони Старка.
@@ -79,88 +105,86 @@ function buildSystemPrompt(ctx, isVoice) {
 
   if (isVoice) {
     prompt += `ВАЖНО — РЕЖИМ ГОЛОСА:
-- Отвечай КОРОТКО и ЧЁТКО — максимум 3-5 предложений
-- Не используй markdown форматирование (##, **, - списки)
-- Говори как в живом разговоре — просто и понятно
-- Цифры округляй до миллионов (вместо "31 156 970" скажи "31 миллион")
-- Не перечисляй все проекты — только ключевые 2-3
+- Отвечай КОРОТКО — максимум 3-5 предложений
+- Не используй markdown (##, **, - списки)
+- Говори просто и понятно, как в разговоре
+- Цифры округляй (вместо "1 221 697" скажи "1.2 миллиона")
+- Упоминай только ключевые 2-3 проекта
 
 `;
   } else {
     prompt += `РЕЖИМ ТЕКСТА:
 - Давай РАЗВЁРНУТЫЕ ответы с конкретными цифрами
 - Используй форматирование: ## заголовки, - списки, **жирный**, эмодзи
-- Если спрашивают "что если" — моделируй сценарии с числами
-- Давай конкретные рекомендации с приоритетами
+- Моделируй сценарии "что если" с числами
+- Давай рекомендации с приоритетами
 
 `;
   }
 
-  prompt += `ТВОИ ВОЗМОЖНОСТИ:
-- Анализ финансовых данных (выручка, расходы, прибыль, маржа)
-- Сравнение проектов и периодов
-- Выявление рисков и аномалий
-- Прогнозирование и моделирование
-- Рекомендации по оптимизации
-- Ответы на ЛЮБЫЕ вопросы
-
-КРИТИЧЕСКИ ВАЖНО:
+  prompt += `КРИТИЧЕСКИ ВАЖНО:
 - У тебя УЖЕ ЕСТЬ все финансовые данные ниже
 - НИКОГДА не проси пользователя предоставить данные
-- ВСЕГДА используй цифры из данных ниже
+- ВСЕГДА используй реальные цифры и названия проектов из данных
 - Отвечай на русском языке
-- Будь в образе J.A.R.V.I.S.
+
+СТРУКТУРА РАСХОДОВ каждого проекта:
+- salary_workers — зарплата подработчиков
+- salary_manager — зарплата менеджера
+- salary_head — зарплата руководителя
+- ads — реклама
+- transport — транспорт
+- penalties — штрафы
+- tax — налоги
 
 `;
 
   if (ctx.totals?.revenue) {
-    prompt += `\n📊 ТЕКУЩИЕ ДАННЫЕ (${ctx.month || "все периоды"}):\n`;
-    prompt += `- Общая выручка: ${fmt(ctx.totals.revenue)} ₽\n`;
-    prompt += `- Общие расходы: ${fmt(ctx.totals.expense)} ₽\n`;
-    prompt += `- Общая прибыль: ${fmt(ctx.totals.profit)} ₽\n`;
-    prompt += `- Средняя маржа: ${ctx.totals.margin}%\n`;
-    prompt += `- Количество проектов: ${ctx.totals.count}\n`;
+    prompt += `\n📊 ИТОГИ (${ctx.month || "все периоды"}):\n`;
+    prompt += `- Выручка (без НДС): ${fmt(ctx.totals.revenue)} ₽\n`;
+    prompt += `- Расходы: ${fmt(ctx.totals.expense)} ₽\n`;
+    prompt += `- Прибыль: ${fmt(ctx.totals.profit)} ₽\n`;
+    prompt += `- Маржа: ${ctx.totals.margin}%\n`;
+    prompt += `- Проектов: ${ctx.totals.count}\n`;
   }
 
-  if (ctx.top3profit?.length) {
+  if (ctx.top3?.length) {
     prompt += `\n🏆 ТОП-3 по прибыли:\n`;
-    ctx.top3profit.forEach((p, i) => {
-      prompt += `${i + 1}. ${p.name} — прибыль ${fmt(p.profit)} ₽, маржа ${p.margin}%\n`;
+    ctx.top3.forEach((p, i) => {
+      prompt += `${i + 1}. ${p.project} — выручка ${fmt(p.revenue_no_vat)} ₽, прибыль ${fmt(p.profit)} ₽, маржа ${pct(p.margin)}%\n`;
     });
   }
 
   if (ctx.bottom3?.length) {
     prompt += `\n⚠️ Худшие 3 проекта:\n`;
     ctx.bottom3.forEach((p, i) => {
-      prompt += `${i + 1}. ${p.name} — прибыль ${fmt(p.profit)} ₽, маржа ${p.margin}%\n`;
+      prompt += `${i + 1}. ${p.project} — выручка ${fmt(p.revenue_no_vat)} ₽, прибыль ${fmt(p.profit)} ₽, маржа ${pct(p.margin)}%\n`;
     });
   }
 
   if (ctx.projects?.length) {
     prompt += `\n📋 ВСЕ ПРОЕКТЫ (${ctx.projects.length} шт.):\n`;
     ctx.projects.forEach((p) => {
-      const profit = Number(p.revenue || 0) - Number(p.expense || 0);
-      const margin = p.revenue > 0 ? (((p.revenue - p.expense) / p.revenue) * 100).toFixed(1) : 0;
-      prompt += `- ${p.project_name} [${p.month || "—"}]: выр ${fmt(p.revenue)}, расх ${fmt(p.expense)}, приб ${fmt(profit)}, маржа ${margin}%, риск: ${p.risk_level || "—"}\n`;
+      prompt += `- ${p.project} [${p.month || "—"}]: выручка ${fmt(p.revenue_no_vat)} ₽, `;
+      prompt += `ЗП подр. ${fmt(p.salary_workers)} ₽, ЗП менедж. ${fmt(p.salary_manager)} ₽, `;
+      prompt += `ЗП рук. ${fmt(p.salary_head)} ₽, реклама ${fmt(p.ads)} ₽, `;
+      prompt += `транспорт ${fmt(p.transport)} ₽, штрафы ${fmt(p.penalties)} ₽, налог ${fmt(p.tax)} ₽, `;
+      prompt += `прибыль ${fmt(p.profit)} ₽, маржа ${pct(p.margin)}%\n`;
     });
   }
 
-  if (ctx.anomalies?.length) {
-    prompt += `\n🔴 АНОМАЛИИ (${ctx.anomalies.length} шт.):\n`;
-    ctx.anomalies.forEach((a) => {
-      prompt += `- ${a.project_name} [${a.month || "—"}]: ${a.anomaly_type} — отклонение ${a.deviation}% (${a.direction || ""})\n`;
+  if (ctx.issues?.length) {
+    prompt += `\n🔴 ПРОБЛЕМЫ И РИСКИ (${ctx.issues.length} шт.):\n`;
+    ctx.issues.forEach((iss) => {
+      prompt += `- ${iss.project}: ${iss.msg} [${iss.severity}]\n`;
     });
   }
 
   if (ctx.reports?.length) {
-    prompt += `\n📄 ПОСЛЕДНИЕ ОТЧЁТЫ:\n`;
+    prompt += `\n📄 AI ОТЧЁТЫ:\n`;
     ctx.reports.forEach((r) => {
-      prompt += `- #${r.id} (${r.month}): риск ${r.risk_level}. ${(r.summary_text || "").slice(0, 200)}\n`;
+      prompt += `- Отчёт #${r.id}: риск ${r.risk_level}. ${(r.summary_text || "").slice(0, 300)}\n`;
     });
-  }
-
-  if (ctx.availableMonths?.length) {
-    prompt += `\n📅 Доступные периоды: ${ctx.availableMonths.join(", ")}\n`;
   }
 
   if (ctx.monthlyTotals && Object.keys(ctx.monthlyTotals).length > 1) {
@@ -168,10 +192,13 @@ function buildSystemPrompt(ctx, isVoice) {
     Object.entries(ctx.monthlyTotals)
       .sort(([a], [b]) => b.localeCompare(a))
       .forEach(([m, d]) => {
-        const profit = d.revenue - d.expense;
-        const margin = d.revenue > 0 ? ((profit / d.revenue) * 100).toFixed(1) : 0;
-        prompt += `- ${m}: выр ${fmt(d.revenue)}, расх ${fmt(d.expense)}, приб ${fmt(profit)}, маржа ${margin}%, проектов: ${d.count}\n`;
+        const margin = d.revenue > 0 ? ((d.profit / d.revenue) * 100).toFixed(1) : 0;
+        prompt += `- ${m}: выручка ${fmt(d.revenue)} ₽, расход ${fmt(d.expense)} ₽, прибыль ${fmt(d.profit)} ₽, маржа ${margin}%, проектов: ${d.count}\n`;
       });
+  }
+
+  if (ctx.availableMonths?.length) {
+    prompt += `\n📅 Доступные периоды: ${ctx.availableMonths.map((m) => m.month).join(", ")}\n`;
   }
 
   return prompt;
