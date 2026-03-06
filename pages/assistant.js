@@ -214,10 +214,10 @@ export default function AssistantPage() {
       <div className={`assistant-page ${mounted ? "mounted" : ""}`}>
         {/* Hero */}
         <div className="assistant-hero glass-card">
-          <div className="assistant-hero-icon">🤖</div>
+          <div className="assistant-hero-icon jarvis">J</div>
           <div className="assistant-hero-text">
-            <h2>AI Финансовый Аналитик</h2>
-            <p>Текст и голос • OpenAI Whisper + TTS • Работает на всех устройствах и браузерах</p>
+            <h2>J.A.R.V.I.S. <span className="jarvis-sub">DKRS Edition</span></h2>
+<p>Продвинутый AI-ассистент • Голос Onyx HD • Whisper распознавание • Все устройства</p>
           </div>
         </div>
 
@@ -269,17 +269,17 @@ export default function AssistantPage() {
             <div className="assistant-chat-messages" ref={chatRef}>
               {messages.length === 0 && !loading ? (
                 <div className="assistant-chat-empty">
-                  <div className="empty-robot">🤖</div>
-                  <div className="empty-title">Привет! Я AI-аналитик DKRS</div>
-                  <div className="empty-desc">Задай вопрос текстом или нажми 🎙️ — голос работает везде!</div>
+                  <div className="empty-robot jarvis-logo">J</div>
+<div className="empty-title">Добрый день, сэр. J.A.R.V.I.S. к вашим услугам.</div>
+<div className="empty-desc">Задайте вопрос текстом или нажмите 🎙️ для голосового общения</div>
                 </div>
               ) : (
                 messages.map((m, i) => (
                   <div key={i} className={`assistant-message ${m.role}`}>
                     <div className="assistant-message-bubble">
                       <div className="assistant-message-header">
-                        <span className="assistant-message-avatar">{m.role === "user" ? "👤" : "🤖"}</span>
-                        <span className="assistant-message-role">{m.role === "user" ? "Вы" : "AI Аналитик"}</span>
+                       <span className="assistant-message-avatar">{m.role === "user" ? "👤" : <span className="jarvis-mini">J</span>}</span>
+<span className="assistant-message-role">{m.role === "user" ? "Вы" : "J.A.R.V.I.S."}</span>
                         <span className="assistant-message-time">
                           {m.ts ? new Date(m.ts).toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" }) : ""}
                         </span>
@@ -302,8 +302,8 @@ export default function AssistantPage() {
                 <div className="assistant-message assistant">
                   <div className="assistant-message-bubble">
                     <div className="assistant-message-header">
-                      <span className="assistant-message-avatar">🤖</span>
-                      <span className="assistant-message-role">AI Аналитик</span>
+                     <span className="assistant-message-avatar"><span className="jarvis-mini">J</span></span>
+<span className="assistant-message-role">J.A.R.V.I.S.</span>
                     </div>
                     <div className="assistant-typing"><span /><span /><span /></div>
                   </div>
