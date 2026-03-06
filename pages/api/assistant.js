@@ -67,44 +67,49 @@ async function getFinancialContext(month) {
   return ctx;
 }
 
-function buildSystemPrompt(ctx) {
+function buildSystemPrompt(ctx, isVoice) {
   const fmt = (n) => Number(n || 0).toLocaleString("ru-RU");
 
   let prompt = `Ты — J.A.R.V.I.S. (DKRS Edition) — продвинутый AI-ассистент финансовой аналитики.
 Твой характер: вежливый, интеллигентный, слегка ироничный, как дворецкий Тони Старка.
-Обращайся к пользователю "сэр". Если пользователь попросит обращаться иначе или скажет что он/она девушка — переключись на "мэм" или другое обращение.
+Обращайся к пользователю "сэр". Если пользователь попросит обращаться иначе или скажет что он/она девушка — переключись на "мэм".
 Можешь вставлять лёгкий юмор в стиле Джарвиса когда уместно.
 
-Примеры фраз в твоём стиле:
-- "Разумеется, сэр. Вот что я обнаружил..."
-- "Анализ завершён. Результаты, прямо скажем, любопытные."
-- "Позвольте обратить ваше внимание на следующее..."
-- "Если позволите моё мнение, сэр..."
-- "Данные обработаны. Как всегда, к вашим услугам."
+`;
 
-ТВОИ ВОЗМОЖНОСТИ:
-- Анализ финансовых данных компании (выручка, расходы, прибыль, маржа)
-- Сравнение проектов между собой
+  if (isVoice) {
+    prompt += `ВАЖНО — РЕЖИМ ГОЛОСА:
+- Отвечай КОРОТКО и ЧЁТКО — максимум 3-5 предложений
+- Не используй markdown форматирование (##, **, - списки)
+- Говори как в живом разговоре — просто и понятно
+- Цифры округляй до миллионов (вместо "31 156 970" скажи "31 миллион")
+- Не перечисляй все проекты — только ключевые 2-3
+
+`;
+  } else {
+    prompt += `РЕЖИМ ТЕКСТА:
+- Давай РАЗВЁРНУТЫЕ ответы с конкретными цифрами
+- Используй форматирование: ## заголовки, - списки, **жирный**, эмодзи
+- Если спрашивают "что если" — моделируй сценарии с числами
+- Давай конкретные рекомендации с приоритетами
+
+`;
+  }
+
+  prompt += `ТВОИ ВОЗМОЖНОСТИ:
+- Анализ финансовых данных (выручка, расходы, прибыль, маржа)
+- Сравнение проектов и периодов
 - Выявление рисков и аномалий
-- Прогнозирование и моделирование ("что если...")
+- Прогнозирование и моделирование
 - Рекомендации по оптимизации
-- Ответы на ЛЮБЫЕ вопросы — если не про финансы, отвечай как умный помощник
-- Создание примеров с цифрами, расчётами
+- Ответы на ЛЮБЫЕ вопросы
 
 КРИТИЧЕСКИ ВАЖНО:
-- У тебя УЖЕ ЕСТЬ все финансовые данные — они перечислены ниже
-- НИКОГДА не проси пользователя предоставить данные — они у тебя есть
-- Если просят сравнить периоды — сравни те что есть в данных ниже
-- Если данных за какой-то период нет — скажи "данные за этот период отсутствуют" и работай с тем что есть
-- ВСЕГДА используй конкретные цифры из данных ниже в ответах
-
-ПРАВИЛА ОТВЕТОВ:
-1. Давай РАЗВЁРНУТЫЕ ответы с конкретными цифрами из данных
-2. Используй форматирование: ## заголовки, - списки, **жирный**, эмодзи
-3. Если спрашивают "что если" — моделируй сценарии с числами
-4. Давай конкретные рекомендации с приоритетами
-5. Отвечай на русском языке
-6. Будь в образе J.A.R.V.I.S. — элегантно, точно, с лёгкой иронией
+- У тебя УЖЕ ЕСТЬ все финансовые данные ниже
+- НИКОГДА не проси пользователя предоставить данные
+- ВСЕГДА используй цифры из данных ниже
+- Отвечай на русском языке
+- Будь в образе J.A.R.V.I.S.
 
 `;
 
@@ -125,18 +130,18 @@ function buildSystemPrompt(ctx) {
   }
 
   if (ctx.bottom3?.length) {
-    prompt += `\n⚠️ Худшие 3 проекта по прибыли:\n`;
+    prompt += `\n⚠️ Худшие 3 проекта:\n`;
     ctx.bottom3.forEach((p, i) => {
       prompt += `${i + 1}. ${p.name} — прибыль ${fmt(p.profit)} ₽, маржа ${p.margin}%\n`;
     });
   }
 
   if (ctx.projects?.length) {
-    prompt += `\n📋 ПОЛНЫЙ СПИСОК ПРОЕКТОВ (${ctx.projects.length} шт.):\n`;
+    prompt += `\n📋 ВСЕ ПРОЕКТЫ (${ctx.projects.length} шт.):\n`;
     ctx.projects.forEach((p) => {
       const profit = Number(p.revenue || 0) - Number(p.expense || 0);
       const margin = p.revenue > 0 ? (((p.revenue - p.expense) / p.revenue) * 100).toFixed(1) : 0;
-      prompt += `- ${p.project_name} [${p.month || "—"}]: выручка ${fmt(p.revenue)} ₽, расход ${fmt(p.expense)} ₽, прибыль ${fmt(profit)} ₽, маржа ${margin}%, риск: ${p.risk_level || "—"}\n`;
+      prompt += `- ${p.project_name} [${p.month || "—"}]: выр ${fmt(p.revenue)}, расх ${fmt(p.expense)}, приб ${fmt(profit)}, маржа ${margin}%, риск: ${p.risk_level || "—"}\n`;
     });
   }
 
@@ -150,26 +155,24 @@ function buildSystemPrompt(ctx) {
   if (ctx.reports?.length) {
     prompt += `\n📄 ПОСЛЕДНИЕ ОТЧЁТЫ:\n`;
     ctx.reports.forEach((r) => {
-      prompt += `- Отчёт #${r.id} (${r.month}): риск ${r.risk_level}. ${(r.summary_text || "").slice(0, 300)}\n`;
+      prompt += `- #${r.id} (${r.month}): риск ${r.risk_level}. ${(r.summary_text || "").slice(0, 200)}\n`;
     });
   }
 
   if (ctx.availableMonths?.length) {
-    prompt += `\n📅 Доступные периоды в базе: ${ctx.availableMonths.join(", ")}\n`;
+    prompt += `\n📅 Доступные периоды: ${ctx.availableMonths.join(", ")}\n`;
   }
 
   if (ctx.monthlyTotals && Object.keys(ctx.monthlyTotals).length > 1) {
-    prompt += `\n📅 СВОДКА ПО МЕСЯЦАМ (для сравнения):\n`;
+    prompt += `\n📅 СВОДКА ПО МЕСЯЦАМ:\n`;
     Object.entries(ctx.monthlyTotals)
       .sort(([a], [b]) => b.localeCompare(a))
       .forEach(([m, d]) => {
         const profit = d.revenue - d.expense;
         const margin = d.revenue > 0 ? ((profit / d.revenue) * 100).toFixed(1) : 0;
-        prompt += `- ${m}: выручка ${fmt(d.revenue)} ₽, расход ${fmt(d.expense)} ₽, прибыль ${fmt(profit)} ₽, маржа ${margin}%, проектов: ${d.count}\n`;
+        prompt += `- ${m}: выр ${fmt(d.revenue)}, расх ${fmt(d.expense)}, приб ${fmt(profit)}, маржа ${margin}%, проектов: ${d.count}\n`;
       });
   }
-
-  prompt += `\n⚡ ПОМНИ: Все данные выше — это РЕАЛЬНЫЕ данные компании. Используй их напрямую. Не проси пользователя ничего предоставлять.\n`;
 
   return prompt;
 }
@@ -177,7 +180,7 @@ function buildSystemPrompt(ctx) {
 export default async function handler(req, res) {
   if (req.method !== "POST") return res.status(405).json({ error: "POST only" });
 
-  const { messages, month } = req.body || {};
+  const { messages, month, isVoice } = req.body || {};
   if (!Array.isArray(messages) || !messages.length) {
     return res.status(400).json({ error: "messages required" });
   }
@@ -187,7 +190,7 @@ export default async function handler(req, res) {
 
   try {
     const ctx = await getFinancialContext(month);
-    const systemPrompt = buildSystemPrompt(ctx);
+    const systemPrompt = buildSystemPrompt(ctx, isVoice);
 
     const apiMessages = [
       { role: "system", content: systemPrompt },
@@ -207,7 +210,7 @@ export default async function handler(req, res) {
         model: "gpt-4o-mini",
         messages: apiMessages,
         temperature: 0.7,
-        max_tokens: 4000,
+        max_tokens: isVoice ? 500 : 4000,
       }),
     });
 
