@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState, useCallback } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import DkrsAppShell from "../components/DkrsAppShell";
 import AiFloatingButton from "../components/AiFloatingButton";
 
@@ -22,7 +22,7 @@ const TOOL_ACTIONS = [
 
 const TOOL_PROMPTS = {
   summary: "Сделай краткую сводку: 1) Ключевые показатели 2) Топ проекты 3) Риски 4) Рекомендация.",
-  compare: "Сравни доступные периоды. Динамика выручки, расходов, прибыли, маржи.",
+  compare: "Сравни все доступные периоды между собой. Покажи динамику выручки, расходов, прибыли, маржи по каждому месяцу. Какой период лучший?",
   forecast: "Прогноз на следующий месяц. Ожидаемая выручка, расходы, прибыль с учётом трендов.",
   calculator: "Покажи текущие данные в формате таблицы и предложи что можно посчитать.",
 };
@@ -61,7 +61,9 @@ export default function AssistantPage() {
   const chunksRef = useRef([]);
   const audioRef = useRef(null);
 
-  useEffect(() => { setMounted(true); }, []);
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   useEffect(() => {
     (async () => {
@@ -80,6 +82,41 @@ export default function AssistantPage() {
   useEffect(() => {
     if (chatRef.current) chatRef.current.scrollTop = chatRef.current.scrollHeight;
   }, [messages, loading]);
+
+  const stopAudio = () => {
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current = null;
+    }
+    setPlayingId(null);
+  };
+
+  const autoSpeak = async (text, msgId) => {
+    setTtsLoading(msgId);
+    try {
+      const res = await fetch("/api/text-to-speech", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text }),
+      });
+      const data = await res.json();
+      if (data.ok && data.audio) {
+        const audio = new Audio(data.audio);
+        audio.onended = () => {
+          setPlayingId(null);
+          audioRef.current = null;
+        };
+        audio.onerror = () => {
+          setPlayingId(null);
+          audioRef.current = null;
+        };
+        audioRef.current = audio;
+        setPlayingId(msgId);
+        audio.play();
+      }
+    } catch {}
+    setTtsLoading(null);
+  };
 
   const sendMessage = async (text) => {
     const trimmed = (text || input).trim();
@@ -111,20 +148,57 @@ export default function AssistantPage() {
     }
   };
 
-  const handleKeyDown = (e) => {
-    if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendMessage(); }
+  const sendMessageWithVoice = async (text) => {
+    const trimmed = (text || "").trim();
+    if (!trimmed || loading) return;
+    stopAudio();
+
+    const userMsg = { role: "user", content: trimmed, ts: Date.now() };
+    const next = [...messages, userMsg];
+    setMessages(next);
+    setInput("");
+    setError("");
+    setLoading(true);
+
+    try {
+      const res = await fetch("/api/assistant", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ messages: next, month }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.ok) throw new Error(data.error || "Ошибка AI");
+      const aiMsg = { role: "assistant", content: data.reply, ts: Date.now(), id: Date.now() };
+      setMessages((prev) => [...prev, aiMsg]);
+      if (data.usage?.total_tokens) setTokens((t) => t + data.usage.total_tokens);
+      setLoading(false);
+      await autoSpeak(data.reply, aiMsg.id);
+      return;
+    } catch (e) {
+      setError(e.message);
+    }
+    setLoading(false);
   };
 
-  // --- VOICE RECORDING (MediaRecorder → Whisper) ---
+  const handleKeyDown = (e) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      sendMessage();
+    }
+  };
+
   const startRecording = async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const mediaRecorder = new MediaRecorder(stream, { mimeType: MediaRecorder.isTypeSupported("audio/webm") ? "audio/webm" : "audio/mp4" });
+      const mimeType = MediaRecorder.isTypeSupported("audio/webm") ? "audio/webm" : "audio/mp4";
+      const mediaRecorder = new MediaRecorder(stream, { mimeType });
       chunksRef.current = [];
-      mediaRecorder.ondataavailable = (e) => { if (e.data.size > 0) chunksRef.current.push(e.data); };
+      mediaRecorder.ondataavailable = (e) => {
+        if (e.data.size > 0) chunksRef.current.push(e.data);
+      };
       mediaRecorder.onstop = async () => {
         stream.getTracks().forEach((t) => t.stop());
-        const blob = new Blob(chunksRef.current, { type: "audio/webm" });
+        const blob = new Blob(chunksRef.current, { type: mimeType });
         await transcribeAudio(blob);
       };
       mediaRecorder.start();
@@ -143,7 +217,8 @@ export default function AssistantPage() {
   };
 
   const toggleRecording = () => {
-    if (recording) stopRecording(); else startRecording();
+    if (recording) stopRecording();
+    else startRecording();
   };
 
   const transcribeAudio = async (blob) => {
@@ -163,7 +238,7 @@ export default function AssistantPage() {
       if (!res.ok || !data.ok) throw new Error(data.error || "Ошибка распознавания");
       if (data.text) {
         setInput("");
-        await sendMessage(data.text);
+        await sendMessageWithVoice(data.text);
       }
     } catch (e) {
       setError("Распознавание: " + e.message);
@@ -172,14 +247,11 @@ export default function AssistantPage() {
     }
   };
 
-  // --- TTS (OpenAI) ---
-  const stopAudio = () => {
-    if (audioRef.current) { audioRef.current.pause(); audioRef.current = null; }
-    setPlayingId(null);
-  };
-
   const speakMessage = async (msg) => {
-    if (playingId === msg.id) { stopAudio(); return; }
+    if (playingId === msg.id) {
+      stopAudio();
+      return;
+    }
     stopAudio();
     setTtsLoading(msg.id);
     try {
@@ -191,8 +263,14 @@ export default function AssistantPage() {
       const data = await res.json();
       if (!res.ok || !data.ok) throw new Error(data.error || "Ошибка озвучки");
       const audio = new Audio(data.audio);
-      audio.onended = () => { setPlayingId(null); audioRef.current = null; };
-      audio.onerror = () => { setPlayingId(null); audioRef.current = null; };
+      audio.onended = () => {
+        setPlayingId(null);
+        audioRef.current = null;
+      };
+      audio.onerror = () => {
+        setPlayingId(null);
+        audioRef.current = null;
+      };
       audioRef.current = audio;
       setPlayingId(msg.id);
       audio.play();
@@ -203,11 +281,42 @@ export default function AssistantPage() {
     }
   };
 
-  const clearChat = () => { setMessages([]); setError(""); setTokens(0); stopAudio(); };
+  const clearChat = () => {
+    setMessages([]);
+    setError("");
+    setTokens(0);
+    stopAudio();
+  };
 
-  const voiceStatus = recording ? "recording" : transcribing ? "transcribing" : loading ? "thinking" : playingId ? "speaking" : messages.length ? "ready" : "idle";
-  const statusLabels = { idle: "Ожидание", ready: "Готов", recording: "🎙️ Запись...", transcribing: "✍️ Распознаю...", thinking: "🧠 Думает...", speaking: "🔊 Говорит..." };
-  const statusClass = { idle: "idle", ready: "listening", recording: "listening", transcribing: "thinking", thinking: "thinking", speaking: "speaking" };
+  const voiceStatus = recording
+    ? "recording"
+    : transcribing
+    ? "transcribing"
+    : loading
+    ? "thinking"
+    : playingId
+    ? "speaking"
+    : messages.length
+    ? "ready"
+    : "idle";
+
+  const statusLabels = {
+    idle: "Ожидание",
+    ready: "Готов",
+    recording: "🎙️ Запись...",
+    transcribing: "✍️ Распознаю...",
+    thinking: "🧠 Думает...",
+    speaking: "🔊 Говорит...",
+  };
+
+  const statusClass = {
+    idle: "idle",
+    ready: "listening",
+    recording: "listening",
+    transcribing: "thinking",
+    thinking: "thinking",
+    speaking: "speaking",
+  };
 
   return (
     <DkrsAppShell>
@@ -216,8 +325,10 @@ export default function AssistantPage() {
         <div className="assistant-hero glass-card">
           <div className="assistant-hero-icon jarvis">J</div>
           <div className="assistant-hero-text">
-            <h2>J.A.R.V.I.S. <span className="jarvis-sub">DKRS Edition</span></h2>
-<p>Продвинутый AI-ассистент • Голос Onyx HD • Whisper распознавание • Все устройства</p>
+            <h2>
+              J.A.R.V.I.S. <span className="jarvis-sub">DKRS Edition</span>
+            </h2>
+            <p>Продвинутый AI-ассистент • Голос Onyx HD • Whisper распознавание • Все устройства</p>
           </div>
         </div>
 
@@ -227,20 +338,34 @@ export default function AssistantPage() {
             <div className="assistant-control-icon">📅</div>
             <select className="dkrs-select" value={month} onChange={(e) => setMonth(e.target.value)}>
               <option value="">Все периоды</option>
-              {months.map((m) => <option key={m} value={m}>{m}</option>)}
+              {months.map((m) => (
+                <option key={m} value={m}>
+                  {m}
+                </option>
+              ))}
             </select>
             <span className="assistant-control-arrow">→</span>
             <div className="assistant-status-badges">
               <span className={`assistant-status-badge ${statusClass[voiceStatus]}`}>
-                <span className="dot" />{statusLabels[voiceStatus]}
+                <span className="dot" />
+                {statusLabels[voiceStatus]}
               </span>
-              {tokens > 0 && <span className="assistant-status-badge idle">🔢 {tokens.toLocaleString()}</span>}
+              {tokens > 0 && (
+                <span className="assistant-status-badge idle">🔢 {tokens.toLocaleString()}</span>
+              )}
             </div>
           </div>
           <div className="assistant-controls-right">
             {TOOL_ACTIONS.map((t) => (
-              <button key={t.action} className="assistant-tool-btn" onClick={() => sendMessage(TOOL_PROMPTS[t.action])} disabled={loading || recording} title={t.label}>
-                <span>{t.icon}</span><span className="tool-btn-label">{t.label}</span>
+              <button
+                key={t.action}
+                className="assistant-tool-btn"
+                onClick={() => sendMessage(TOOL_PROMPTS[t.action])}
+                disabled={loading || recording}
+                title={t.label}
+              >
+                <span>{t.icon}</span>
+                <span className="tool-btn-label">{t.label}</span>
               </button>
             ))}
           </div>
@@ -250,47 +375,82 @@ export default function AssistantPage() {
         <div className="assistant-widget glass-card">
           <div className="assistant-widget-header">
             <div>
-              <div className="assistant-widget-title">💬 Чат с AI</div>
-              <div className="assistant-widget-subtitle">{messages.length} сообщений • Период: {month || "все"} • 🎙️ Голос на всех браузерах</div>
+              <div className="assistant-widget-title">💬 Чат с J.A.R.V.I.S.</div>
+              <div className="assistant-widget-subtitle">
+                {messages.length} сообщений • Период: {month || "все"} • 🎙️ Голос на всех браузерах
+              </div>
             </div>
-            <button className="assistant-clear-btn" onClick={clearChat} disabled={!messages.length && !error}>🗑️ Очистить</button>
+            <button className="assistant-clear-btn" onClick={clearChat} disabled={!messages.length && !error}>
+              🗑️ Очистить
+            </button>
           </div>
 
+          {/* Quick prompts */}
           <div className="assistant-prompts-grid">
             {QUICK_PROMPTS.map((p, i) => (
-              <button key={i} className="assistant-prompt-card" onClick={() => sendMessage(p.prompt)} disabled={loading || recording}>
+              <button
+                key={i}
+                className="assistant-prompt-card"
+                onClick={() => sendMessage(p.prompt)}
+                disabled={loading || recording}
+              >
                 <span className="prompt-card-icon">{p.icon}</span>
                 <span className="prompt-card-label">{p.label}</span>
               </button>
             ))}
           </div>
 
+          {/* Chat box */}
           <div className="assistant-chat-box">
             <div className="assistant-chat-messages" ref={chatRef}>
               {messages.length === 0 && !loading ? (
                 <div className="assistant-chat-empty">
                   <div className="empty-robot jarvis-logo">J</div>
-<div className="empty-title">Добрый день, сэр. J.A.R.V.I.S. к вашим услугам.</div>
-<div className="empty-desc">Задайте вопрос текстом или нажмите 🎙️ для голосового общения</div>
+                  <div className="empty-title">Добрый день, сэр. J.A.R.V.I.S. к вашим услугам.</div>
+                  <div className="empty-desc">
+                    Задайте вопрос текстом или нажмите 🎙️ для голосового общения
+                  </div>
                 </div>
               ) : (
                 messages.map((m, i) => (
                   <div key={i} className={`assistant-message ${m.role}`}>
                     <div className="assistant-message-bubble">
                       <div className="assistant-message-header">
-                       <span className="assistant-message-avatar">{m.role === "user" ? "👤" : <span className="jarvis-mini">J</span>}</span>
-<span className="assistant-message-role">{m.role === "user" ? "Вы" : "J.A.R.V.I.S."}</span>
+                        <span className="assistant-message-avatar">
+                          {m.role === "user" ? "👤" : <span className="jarvis-mini">J</span>}
+                        </span>
+                        <span className="assistant-message-role">
+                          {m.role === "user" ? "Вы" : "J.A.R.V.I.S."}
+                        </span>
                         <span className="assistant-message-time">
-                          {m.ts ? new Date(m.ts).toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" }) : ""}
+                          {m.ts
+                            ? new Date(m.ts).toLocaleTimeString("ru-RU", {
+                                hour: "2-digit",
+                                minute: "2-digit",
+                              })
+                            : ""}
                         </span>
                         {m.role === "assistant" && (
-                          <button className={`msg-speak-btn ${playingId === m.id ? "active" : ""}`} onClick={() => speakMessage(m)} disabled={ttsLoading === m.id}>
-                            {ttsLoading === m.id ? <span className="mini-spin" /> : playingId === m.id ? "⏹️" : "🔊"}
+                          <button
+                            className={`msg-speak-btn ${playingId === m.id ? "active" : ""}`}
+                            onClick={() => speakMessage(m)}
+                            disabled={ttsLoading === m.id}
+                          >
+                            {ttsLoading === m.id ? (
+                              <span className="mini-spin" />
+                            ) : playingId === m.id ? (
+                              "⏹️"
+                            ) : (
+                              "🔊"
+                            )}
                           </button>
                         )}
                       </div>
                       {m.role === "assistant" ? (
-                        <div className="assistant-message-content" dangerouslySetInnerHTML={{ __html: formatMessage(m.content) }} />
+                        <div
+                          className="assistant-message-content"
+                          dangerouslySetInnerHTML={{ __html: formatMessage(m.content) }}
+                        />
                       ) : (
                         <div className="assistant-message-content">{m.content}</div>
                       )}
@@ -302,20 +462,29 @@ export default function AssistantPage() {
                 <div className="assistant-message assistant">
                   <div className="assistant-message-bubble">
                     <div className="assistant-message-header">
-                     <span className="assistant-message-avatar"><span className="jarvis-mini">J</span></span>
-<span className="assistant-message-role">J.A.R.V.I.S.</span>
+                      <span className="assistant-message-avatar">
+                        <span className="jarvis-mini">J</span>
+                      </span>
+                      <span className="assistant-message-role">J.A.R.V.I.S.</span>
                     </div>
-                    <div className="assistant-typing"><span /><span /><span /></div>
+                    <div className="assistant-typing">
+                      <span />
+                      <span />
+                      <span />
+                    </div>
                   </div>
                 </div>
               )}
             </div>
 
+            {/* Composer */}
             <div className="assistant-composer">
               {error && <div className="assistant-error">⚠️ {error}</div>}
               <div className="assistant-input-row">
                 <button
-                  className={`assistant-voice-btn ${recording ? "recording" : ""} ${transcribing ? "transcribing" : ""}`}
+                  className={`assistant-voice-btn ${recording ? "recording" : ""} ${
+                    transcribing ? "transcribing" : ""
+                  }`}
                   onClick={toggleRecording}
                   disabled={loading || transcribing}
                   title={recording ? "Остановить запись" : "Голосовой ввод"}
@@ -327,11 +496,21 @@ export default function AssistantPage() {
                   value={input}
                   onChange={(e) => setInput(e.target.value)}
                   onKeyDown={handleKeyDown}
-                  placeholder={recording ? "🎙️ Говорите..." : transcribing ? "✍️ Распознаю речь..." : "Спросите что угодно... (Enter — отправить)"}
+                  placeholder={
+                    recording
+                      ? "🎙️ Говорите..."
+                      : transcribing
+                      ? "✍️ Распознаю речь..."
+                      : "Спросите что угодно... (Enter — отправить)"
+                  }
                   disabled={loading || recording || transcribing}
                   rows={2}
                 />
-                <button className="assistant-send-btn" onClick={() => sendMessage()} disabled={!input.trim() || loading || recording}>
+                <button
+                  className="assistant-send-btn"
+                  onClick={() => sendMessage()}
+                  disabled={!input.trim() || loading || recording}
+                >
                   {loading ? <span className="send-spinner" /> : "➤"}
                 </button>
               </div>
