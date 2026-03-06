@@ -5,14 +5,17 @@ export default async function handler(req, res) {
   if (!OPENAI_KEY) return res.status(500).json({ error: "No API key" });
 
   try {
-    const { text, voice = "onyx" } = req.body;
+    const { text } = req.body;
     if (!text) return res.status(400).json({ error: "No text" });
 
+    // Убираем markdown и сокращаем для быстрого TTS
     const clean = text
       .replace(/[#*`_]/g, "")
       .replace(/\n{2,}/g, ". ")
       .replace(/<[^>]*>/g, "")
-      .slice(0, 4000);
+      .replace(/\s{2,}/g, " ")
+      .trim()
+      .slice(0, 2000);
 
     const response = await fetch("https://api.openai.com/v1/audio/speech", {
       method: "POST",
@@ -21,10 +24,10 @@ export default async function handler(req, res) {
         Authorization: `Bearer ${OPENAI_KEY}`,
       },
       body: JSON.stringify({
-        model: "tts-1-hd",
-        voice: voice,
+        model: "tts-1",
+        voice: "onyx",
         input: clean,
-        speed: 1.0,
+        speed: 1.15,
       }),
     });
 
