@@ -1473,3 +1473,60 @@ img { max-width: 100%; }
 
 /* Dark: AI float */
 [data-theme="dark"] .ai-fab { box-shadow: 0 6px 24px rgba(0,0,0,0.4) !important; }
+/* ===== GREETING PICKER ===== */
+.greeting-picker-wrapper {
+  position: relative; margin-left: auto; flex-shrink: 0;
+}
+.greeting-picker-btn {
+  display: flex; align-items: center; gap: 6px;
+  padding: 8px 16px; border-radius: var(--radius-md);
+  border: 1px solid var(--dkrs-glass-border);
+  background: rgba(255,255,255,0.7); cursor: pointer;
+  font-size: 14px; font-weight: 500; color: var(--dkrs-text);
+  transition: all 0.2s ease;
+}
+.greeting-picker-btn:hover {
+  border-color: var(--dkrs-primary); background: rgba(0,191,166,0.06);
+}
+.greeting-arrow { font-size: 10px; opacity: 0.5; }
+.greeting-dropdown {
+  position: absolute; top: calc(100% + 8px); right: 0;
+  background: rgba(255,255,255,0.98); border: 1px solid var(--dkrs-glass-border);
+  border-radius: var(--radius-lg); box-shadow: var(--shadow-lg);
+  min-width: 220px; z-index: 100; overflow: hidden;
+  animation: fadeInUp 0.2s ease both;
+}
+.greeting-option {
+  display: flex; flex-direction: column; gap: 2px;
+  width: 100%; padding: 12px 16px; border: none;
+  background: none; cursor: pointer; text-align: left;
+  transition: all 0.15s ease;
+}
+.greeting-option:hover { background: rgba(0,191,166,0.06); }
+.greeting-option.active { background: rgba(0,191,166,0.1); }
+.greeting-option-label { font-size: 14px; font-weight: 600; color: var(--dkrs-text); }
+.greeting-option-desc { font-size: 12px; color: var(--dkrs-text-tertiary); }
+.greeting-option.active .greeting-option-label { color: var(--dkrs-primary); }
+
+/* Dark: Greeting */
+[data-theme="dark"] .greeting-picker-btn {
+  background: rgba(30,41,59,0.8) !important;
+  border-color: rgba(148,163,184,0.15) !important;
+  color: #f1f5f9 !important;
+}
+[data-theme="dark"] .greeting-picker-btn:hover {
+  border-color: var(--dkrs-primary) !important;
+}
+[data-theme="dark"] .greeting-dropdown {
+  background: rgba(15,23,42,0.98) !important;
+  border-color: rgba(148,163,184,0.15) !important;
+}
+[data-theme="dark"] .greeting-option:hover {
+  background: rgba(0,191,166,0.08) !important;
+}
+[data-theme="dark"] .greeting-option.active {
+  background: rgba(0,191,166,0.12) !important;
+}
+[data-theme="dark"] .greeting-option-label { color: #f1f5f9 !important; }
+[data-theme="dark"] .greeting-option-desc { color: #64748b !important; }
+[data-theme="dark"] .greeting-option.active .greeting-option-label { color: #00e5cc !important; }
