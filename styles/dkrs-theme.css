@@ -1232,6 +1232,71 @@ img { max-width: 100%; }
   .prompt-card-label { font-size: 12px; }
 }
 
+/* ===== VOICE & TTS v2 ===== */
+.assistant-voice-btn {
+  width: 48px; height: 48px; border-radius: 50%;
+  border: 2px solid var(--dkrs-glass-border);
+  background: rgba(255,255,255,0.8); font-size: 20px;
+  cursor: pointer; display: grid; place-items: center;
+  flex-shrink: 0; transition: all 0.3s ease; position: relative;
+}
+.assistant-voice-btn:hover:not(:disabled) {
+  border-color: var(--dkrs-primary); background: rgba(0,191,166,0.06);
+  transform: scale(1.05);
+}
+.assistant-voice-btn.recording {
+  border-color: #ef4444 !important; background: rgba(239,68,68,0.1) !important;
+  animation: voicePulse 1.2s ease-in-out infinite;
+}
+.assistant-voice-btn.recording::after {
+  content: ''; position: absolute; inset: -4px;
+  border-radius: 50%; border: 2px solid rgba(239,68,68,0.3);
+  animation: pulseRing 1.5s ease-out infinite;
+}
+.assistant-voice-btn.transcribing {
+  border-color: var(--risk-med-color) !important;
+  background: rgba(245,158,11,0.08) !important;
+}
+.assistant-voice-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+@keyframes voicePulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(239,68,68,0.3); }
+  50% { box-shadow: 0 0 20px 6px rgba(239,68,68,0.15); }
+}
+
+.mini-spin {
+  display: inline-block; width: 18px; height: 18px;
+  border: 2px solid rgba(148,163,184,0.3);
+  border-top-color: var(--dkrs-primary);
+  border-radius: 50%; animation: spinSlow 0.7s linear infinite;
+}
+
+.msg-speak-btn {
+  background: none; border: none; cursor: pointer; font-size: 15px;
+  padding: 3px 8px; border-radius: var(--radius-sm);
+  transition: all 0.2s ease; margin-left: 4px; opacity: 0.4;
+}
+.msg-speak-btn:hover { opacity: 1; transform: scale(1.15); }
+.msg-speak-btn.active { opacity: 1; color: var(--dkrs-primary); }
+.msg-speak-btn:disabled { opacity: 0.3; cursor: wait; }
+.msg-speak-btn .mini-spin { width: 14px; height: 14px; border-width: 2px; }
+
+/* Dark: Voice v2 */
+[data-theme="dark"] .assistant-voice-btn {
+  background: rgba(30,41,59,0.8) !important;
+  border-color: rgba(148,163,184,0.15) !important;
+}
+[data-theme="dark"] .assistant-voice-btn:hover:not(:disabled) {
+  border-color: var(--dkrs-primary) !important;
+  background: rgba(0,191,166,0.1) !important;
+}
+[data-theme="dark"] .assistant-voice-btn.recording {
+  border-color: #ef4444 !important;
+  background: rgba(239,68,68,0.12) !important;
+}
+[data-theme="dark"] .msg-speak-btn { color: #94a3b8; }
+[data-theme="dark"] .msg-speak-btn.active { color: #00e5cc; }
+
 /* ===== DARK THEME — COMPLETE ===== */
 [data-theme="dark"] body {
   background: #0f172a !important;
