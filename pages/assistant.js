@@ -1,15 +1,16 @@
 import React, { useEffect, useRef, useState } from "react";
+import ReactDOM from "react-dom";
 import DkrsAppShell from "../components/DkrsAppShell";
 import AiFloatingButton from "../components/AiFloatingButton";
 
-const GREETINGS = [
+var GREETINGS = [
   { value: "sir", label: "🎩 Сэр", desc: "Обращение: сэр" },
   { value: "mam", label: "👩 Мэм", desc: "Обращение: мэм" },
   { value: "boss", label: "💼 Босс", desc: "Обращение: босс" },
   { value: "neutral", label: "🤝 Нейтрально", desc: "Без обращений" },
 ];
 
-const QUICK_PROMPTS = [
+var QUICK_PROMPTS = [
   { icon: "📊", label: "Общий анализ", prompt: "Дай полный финансовый анализ за текущий период: выручка, расходы, прибыль, маржа по каждому проекту." },
   { icon: "🏆", label: "Лучшие проекты", prompt: "Какие проекты самые прибыльные? Сравни маржу и объёмы." },
   { icon: "⚠️", label: "Проблемные зоны", prompt: "Какие проекты убыточные или с низкой маржой? Что делать?" },
@@ -20,14 +21,14 @@ const QUICK_PROMPTS = [
   { icon: "🎯", label: "Оптимизация", prompt: "Где сократить расходы? Анализ: ЗП, реклама, транспорт, штрафы." },
 ];
 
-const TOOL_ACTIONS = [
+var TOOL_ACTIONS = [
   { icon: "📋", label: "Сводка", action: "summary" },
   { icon: "🔄", label: "Сравнить", action: "compare" },
   { icon: "📊", label: "Прогноз", action: "forecast" },
   { icon: "🧮", label: "Структура", action: "structure" },
 ];
 
-const TOOL_PROMPTS = {
+var TOOL_PROMPTS = {
   summary: "Краткая сводка: показатели, топ проекты, риски, рекомендация.",
   compare: "Сравни все периоды: динамика выручки, расходов, прибыли, маржи.",
   forecast: "Прогноз на следующий месяц с учётом трендов.",
@@ -36,7 +37,7 @@ const TOOL_PROMPTS = {
 
 function formatMessage(text) {
   if (!text) return "";
-  let h = text
+  var h = text
     .replace(/## (.+)/g, '<h3 class="ai-h3">$1</h3>')
     .replace(/### (.+)/g, '<h4 class="ai-h4">$1</h4>')
     .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
@@ -50,32 +51,69 @@ function formatMessage(text) {
   return "<p>" + h + "</p>";
 }
 
+function GreetingDropdown(props) {
+  var greeting = props.greeting;
+  var onSelect = props.onSelect;
+  var onClose = props.onClose;
+  var btnRect = props.btnRect;
+
+  if (!btnRect) return null;
+
+  var style = {
+    position: "fixed",
+    top: btnRect.bottom + 8,
+    right: window.innerWidth - btnRect.right,
+    zIndex: 99999,
+  };
+
+  return ReactDOM.createPortal(
+    React.createElement(React.Fragment, null,
+      React.createElement("div", {
+        style: { position: "fixed", top: 0, left: 0, right: 0, bottom: 0, zIndex: 99998 },
+        onClick: onClose
+      }),
+      React.createElement("div", { className: "greeting-dropdown-portal", style: style },
+        GREETINGS.map(function (g) {
+          return React.createElement("button", {
+            key: g.value,
+            className: "greeting-option" + (greeting === g.value ? " active" : ""),
+            onClick: function () { onSelect(g.value); }
+          },
+            React.createElement("span", { className: "greeting-option-label" }, g.label),
+            React.createElement("span", { className: "greeting-option-desc" }, g.desc)
+          );
+        })
+      )
+    ),
+    document.body
+  );
+}
+
 export default function AssistantPage() {
-  const [mounted, setMounted] = useState(false);
-  const [messages, setMessages] = useState([]);
-  const [input, setInput] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
-  const [month, setMonth] = useState("");
-  const [months, setMonths] = useState([]);
-  const [tokens, setTokens] = useState(0);
-  const [recording, setRecording] = useState(false);
-  const [transcribing, setTranscribing] = useState(false);
-  const [ttsLoading, setTtsLoading] = useState(null);
-  const [playingId, setPlayingId] = useState(null);
-  const [greeting, setGreeting] = useState("sir");
-  const [showGreetingPicker, setShowGreetingPicker] = useState(false);
-  const chatRef = useRef(null);
-  const mediaRecorderRef = useRef(null);
-  const chunksRef = useRef([]);
-  const audioRef = useRef(null);
+  var _s = useState(false), mounted = _s[0], setMounted = _s[1];
+  var _m = useState([]), messages = _m[0], setMessages = _m[1];
+  var _i = useState(""), input = _i[0], setInput = _i[1];
+  var _l = useState(false), loading = _l[0], setLoading = _l[1];
+  var _e = useState(""), error = _e[0], setError = _e[1];
+  var _mo = useState(""), month = _mo[0], setMonth = _mo[1];
+  var _ms = useState([]), months = _ms[0], setMonths = _ms[1];
+  var _t = useState(0), tokens = _t[0], setTokens = _t[1];
+  var _r = useState(false), recording = _r[0], setRecording = _r[1];
+  var _tr = useState(false), transcribing = _tr[0], setTranscribing = _tr[1];
+  var _tl = useState(null), ttsLoading = _tl[0], setTtsLoading = _tl[1];
+  var _pl = useState(null), playingId = _pl[0], setPlayingId = _pl[1];
+  var _g = useState("sir"), greeting = _g[0], setGreeting = _g[1];
+  var _sg = useState(false), showGreetingPicker = _sg[0], setShowGreetingPicker = _sg[1];
+  var _br = useState(null), btnRect = _br[0], setBtnRect = _br[1];
+  var chatRef = useRef(null);
+  var mediaRecorderRef = useRef(null);
+  var chunksRef = useRef([]);
+  var audioRef = useRef(null);
+  var greetingBtnRef = useRef(null);
 
   useEffect(function () {
     setMounted(true);
-    try {
-      var saved = localStorage.getItem("jarvis-greeting");
-      if (saved) setGreeting(saved);
-    } catch (e) {}
+    try { var saved = localStorage.getItem("jarvis-greeting"); if (saved) setGreeting(saved); } catch (e) {}
   }, []);
 
   useEffect(function () {
@@ -83,10 +121,7 @@ export default function AssistantPage() {
       try {
         var r = await fetch("/api/periods-list");
         var d = await r.json();
-        if (d && d.periods && d.periods.length) {
-          setMonths(d.periods);
-          setMonth(d.periods[0]);
-        }
+        if (d && d.periods && d.periods.length) { setMonths(d.periods); setMonth(d.periods[0]); }
       } catch (e) {}
     })();
   }, []);
@@ -95,6 +130,17 @@ export default function AssistantPage() {
     if (chatRef.current) chatRef.current.scrollTop = chatRef.current.scrollHeight;
   }, [messages, loading]);
 
+  function toggleGreetingPicker() {
+    if (showGreetingPicker) {
+      setShowGreetingPicker(false);
+    } else {
+      if (greetingBtnRef.current) {
+        setBtnRect(greetingBtnRef.current.getBoundingClientRect());
+      }
+      setShowGreetingPicker(true);
+    }
+  }
+
   function changeGreeting(val) {
     setGreeting(val);
     try { localStorage.setItem("jarvis-greeting", val); } catch (e) {}
@@ -102,10 +148,7 @@ export default function AssistantPage() {
   }
 
   function stopAudio() {
-    if (audioRef.current) {
-      audioRef.current.pause();
-      audioRef.current = null;
-    }
+    if (audioRef.current) { audioRef.current.pause(); audioRef.current = null; }
     setPlayingId(null);
   }
 
@@ -113,8 +156,7 @@ export default function AssistantPage() {
     setTtsLoading(msgId);
     try {
       var res = await fetch("/api/text-to-speech", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
+        method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ text: text }),
       });
       var data = await res.json();
@@ -122,9 +164,7 @@ export default function AssistantPage() {
         var audio = new Audio(data.audio);
         audio.onended = function () { setPlayingId(null); audioRef.current = null; };
         audio.onerror = function () { setPlayingId(null); audioRef.current = null; };
-        audioRef.current = audio;
-        setPlayingId(msgId);
-        audio.play();
+        audioRef.current = audio; setPlayingId(msgId); audio.play();
       }
     } catch (e) {}
     setTtsLoading(null);
@@ -132,8 +172,7 @@ export default function AssistantPage() {
 
   async function callAssistant(msgs, isVoice) {
     var res = await fetch("/api/assistant", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
+      method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ messages: msgs, month: month, isVoice: isVoice, greeting: greeting }),
     });
     var data = await res.json();
@@ -147,19 +186,12 @@ export default function AssistantPage() {
     stopAudio();
     var userMsg = { role: "user", content: trimmed, ts: Date.now() };
     var next = messages.concat([userMsg]);
-    setMessages(next);
-    setInput("");
-    setError("");
-    setLoading(true);
+    setMessages(next); setInput(""); setError(""); setLoading(true);
     try {
       var data = await callAssistant(next, false);
-      setMessages(function (prev) {
-        return prev.concat([{ role: "assistant", content: data.reply, ts: Date.now(), id: Date.now() }]);
-      });
+      setMessages(function (prev) { return prev.concat([{ role: "assistant", content: data.reply, ts: Date.now(), id: Date.now() }]); });
       if (data.usage && data.usage.total_tokens) setTokens(function (t) { return t + data.usage.total_tokens; });
-    } catch (e) {
-      setError(e.message);
-    }
+    } catch (e) { setError(e.message); }
     setLoading(false);
   }
 
@@ -169,10 +201,7 @@ export default function AssistantPage() {
     stopAudio();
     var userMsg = { role: "user", content: trimmed, ts: Date.now() };
     var next = messages.concat([userMsg]);
-    setMessages(next);
-    setInput("");
-    setError("");
-    setLoading(true);
+    setMessages(next); setInput(""); setError(""); setLoading(true);
     try {
       var data = await callAssistant(next, true);
       var aiMsg = { role: "assistant", content: data.reply, ts: Date.now(), id: Date.now() };
@@ -181,18 +210,11 @@ export default function AssistantPage() {
       setLoading(false);
       await autoSpeak(data.reply, aiMsg.id);
       return;
-    } catch (e) {
-      setError(e.message);
-    }
+    } catch (e) { setError(e.message); }
     setLoading(false);
   }
 
-  function handleKeyDown(e) {
-    if (e.key === "Enter" && !e.shiftKey) {
-      e.preventDefault();
-      sendMessage();
-    }
-  }
+  function handleKeyDown(e) { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendMessage(); } }
 
   async function startRecording() {
     try {
@@ -200,66 +222,44 @@ export default function AssistantPage() {
       var mimeType = MediaRecorder.isTypeSupported("audio/webm") ? "audio/webm" : "audio/mp4";
       var mr = new MediaRecorder(stream, { mimeType: mimeType });
       chunksRef.current = [];
-      mr.ondataavailable = function (e) {
-        if (e.data.size > 0) chunksRef.current.push(e.data);
-      };
+      mr.ondataavailable = function (e) { if (e.data.size > 0) chunksRef.current.push(e.data); };
       mr.onstop = async function () {
         stream.getTracks().forEach(function (t) { t.stop(); });
         await transcribeAudio(new Blob(chunksRef.current, { type: mimeType }));
       };
-      mr.start();
-      mediaRecorderRef.current = mr;
-      setRecording(true);
-    } catch (e) {
-      setError("Микрофон: " + e.message);
-    }
+      mr.start(); mediaRecorderRef.current = mr; setRecording(true);
+    } catch (e) { setError("Микрофон: " + e.message); }
   }
 
   function stopRecording() {
-    if (mediaRecorderRef.current && mediaRecorderRef.current.state === "recording") {
-      mediaRecorderRef.current.stop();
-    }
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state === "recording") mediaRecorderRef.current.stop();
     setRecording(false);
   }
 
-  function toggleRecording() {
-    if (recording) stopRecording();
-    else startRecording();
-  }
+  function toggleRecording() { if (recording) stopRecording(); else startRecording(); }
 
   async function transcribeAudio(blob) {
     setTranscribing(true);
     try {
       var reader = new FileReader();
-      var base64 = await new Promise(function (resolve) {
-        reader.onloadend = function () { resolve(reader.result); };
-        reader.readAsDataURL(blob);
-      });
+      var base64 = await new Promise(function (r) { reader.onloadend = function () { r(reader.result); }; reader.readAsDataURL(blob); });
       var res = await fetch("/api/voice-to-text", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
+        method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ audio: base64 }),
       });
       var data = await res.json();
       if (!res.ok || !data.ok) throw new Error(data.error || "Ошибка распознавания");
-      if (data.text) {
-        setInput("");
-        await sendMessageWithVoice(data.text);
-      }
-    } catch (e) {
-      setError("Распознавание: " + e.message);
-    }
+      if (data.text) { setInput(""); await sendMessageWithVoice(data.text); }
+    } catch (e) { setError("Распознавание: " + e.message); }
     setTranscribing(false);
   }
 
   async function speakMessage(msg) {
     if (playingId === msg.id) { stopAudio(); return; }
-    stopAudio();
-    setTtsLoading(msg.id);
+    stopAudio(); setTtsLoading(msg.id);
     try {
       var res = await fetch("/api/text-to-speech", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
+        method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ text: msg.content }),
       });
       var data = await res.json();
@@ -267,21 +267,12 @@ export default function AssistantPage() {
       var audio = new Audio(data.audio);
       audio.onended = function () { setPlayingId(null); audioRef.current = null; };
       audio.onerror = function () { setPlayingId(null); audioRef.current = null; };
-      audioRef.current = audio;
-      setPlayingId(msg.id);
-      audio.play();
-    } catch (e) {
-      setError("TTS: " + e.message);
-    }
+      audioRef.current = audio; setPlayingId(msg.id); audio.play();
+    } catch (e) { setError("TTS: " + e.message); }
     setTtsLoading(null);
   }
 
-  function clearChat() {
-    setMessages([]);
-    setError("");
-    setTokens(0);
-    stopAudio();
-  }
+  function clearChat() { setMessages([]); setError(""); setTokens(0); stopAudio(); }
 
   var vs = recording ? "recording" : transcribing ? "transcribing" : loading ? "thinking" : playingId ? "speaking" : messages.length ? "ready" : "idle";
   var statusLabels = { idle: "Ожидание", ready: "Готов", recording: "🎙️ Запись...", transcribing: "✍️ Распознаю...", thinking: "🧠 Думает...", speaking: "🔊 Говорит..." };
@@ -303,31 +294,23 @@ export default function AssistantPage() {
             <h2>J.A.R.V.I.S. <span className="jarvis-sub">DKRS Edition</span></h2>
             <p>Голос Onyx • Whisper • Все устройства и браузеры</p>
           </div>
-          <div className="greeting-picker-wrapper">
-            <button className="greeting-picker-btn" onClick={function () { setShowGreetingPicker(!showGreetingPicker); }}>
-              {currentGreeting.label} <span className="greeting-arrow">▾</span>
-            </button>
-            {showGreetingPicker && (
-              <React.Fragment>
-                <div className="greeting-overlay" onClick={function () { setShowGreetingPicker(false); }} />
-                <div className="greeting-dropdown">
-                  {GREETINGS.map(function (g) {
-                    return (
-                      <button
-                        key={g.value}
-                        className={"greeting-option" + (greeting === g.value ? " active" : "")}
-                        onClick={function () { changeGreeting(g.value); }}
-                      >
-                        <span className="greeting-option-label">{g.label}</span>
-                        <span className="greeting-option-desc">{g.desc}</span>
-                      </button>
-                    );
-                  })}
-                </div>
-              </React.Fragment>
-            )}
-          </div>
+          <button
+            ref={greetingBtnRef}
+            className="greeting-picker-btn"
+            onClick={toggleGreetingPicker}
+          >
+            {currentGreeting.label} <span className="greeting-arrow">▾</span>
+          </button>
         </div>
+
+        {showGreetingPicker && (
+          <GreetingDropdown
+            greeting={greeting}
+            onSelect={changeGreeting}
+            onClose={function () { setShowGreetingPicker(false); }}
+            btnRect={btnRect}
+          />
+        )}
 
         <div className="assistant-controls glass-card">
           <div className="assistant-controls-left">
@@ -436,26 +419,19 @@ export default function AssistantPage() {
               <div className="assistant-input-row">
                 <button
                   className={"assistant-voice-btn" + (recording ? " recording" : "") + (transcribing ? " transcribing" : "")}
-                  onClick={toggleRecording}
-                  disabled={loading || transcribing}
+                  onClick={toggleRecording} disabled={loading || transcribing}
                   title={recording ? "Стоп" : "Голос"}
                 >
                   {transcribing ? <span className="mini-spin" /> : recording ? "⏹" : "🎙️"}
                 </button>
                 <textarea
-                  className="assistant-textarea"
-                  value={input}
+                  className="assistant-textarea" value={input}
                   onChange={function (e) { setInput(e.target.value); }}
                   onKeyDown={handleKeyDown}
                   placeholder={recording ? "🎙️ Говорите..." : transcribing ? "✍️ Распознаю..." : "Спросите что угодно... (Enter — отправить)"}
-                  disabled={loading || recording || transcribing}
-                  rows={2}
+                  disabled={loading || recording || transcribing} rows={2}
                 />
-                <button
-                  className="assistant-send-btn"
-                  onClick={function () { sendMessage(); }}
-                  disabled={!input.trim() || loading || recording}
-                >
+                <button className="assistant-send-btn" onClick={function () { sendMessage(); }} disabled={!input.trim() || loading || recording}>
                   {loading ? <span className="send-spinner" /> : "➤"}
                 </button>
               </div>
