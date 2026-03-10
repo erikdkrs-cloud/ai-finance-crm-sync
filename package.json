@@ -14,6 +14,7 @@
     "cookie": "^0.7.2",
     "jose": "^6.0.11",
     "chart.js": "^4.4.7",
-"react-chartjs-2": "^5.2.0"
+    "react-chartjs-2": "^5.2.0",
+    "xlsx": "^0.18.5"
   }
 }
