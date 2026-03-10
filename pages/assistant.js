@@ -45,9 +45,9 @@ function formatMessage(text) {
     .replace(/^\d+\. (.+)/gm, '<li class="ai-li-n">$1</li>')
     .replace(/\n{2,}/g, "</p><p>")
     .replace(/\n/g, "<br/>");
-  h = h.replace(/(<li class="ai-li">.*?<\/li>)+/gs, (m) => `<ul class="ai-ul">${m}</ul>`);
-  h = h.replace(/(<li class="ai-li-n">.*?<\/li>)+/gs, (m) => `<ol class="ai-ol">${m}</ol>`);
-  return `<p>${h}</p>`;
+  h = h.replace(/(<li class="ai-li">.*?<\/li>)+/gs, function (m) { return '<ul class="ai-ul">' + m + "</ul>"; });
+  h = h.replace(/(<li class="ai-li-n">.*?<\/li>)+/gs, function (m) { return '<ol class="ai-ol">' + m + "</ol>"; });
+  return "<p>" + h + "</p>";
 }
 
 export default function AssistantPage() {
@@ -70,259 +70,309 @@ export default function AssistantPage() {
   const chunksRef = useRef([]);
   const audioRef = useRef(null);
 
-  useEffect(() => {
+  useEffect(function () {
     setMounted(true);
-    const saved = localStorage.getItem("jarvis-greeting");
-    if (saved) setGreeting(saved);
+    try {
+      var saved = localStorage.getItem("jarvis-greeting");
+      if (saved) setGreeting(saved);
+    } catch (e) {}
   }, []);
 
-  useEffect(() => {
-    (async () => {
+  useEffect(function () {
+    (async function () {
       try {
-        const r = await fetch("/api/periods-list");
-        const d = await r.json();
-        if (d?.periods?.length) { setMonths(d.periods); setMonth(d.periods[0]); }
-      } catch {}
+        var r = await fetch("/api/periods-list");
+        var d = await r.json();
+        if (d && d.periods && d.periods.length) {
+          setMonths(d.periods);
+          setMonth(d.periods[0]);
+        }
+      } catch (e) {}
     })();
   }, []);
 
-  useEffect(() => {
+  useEffect(function () {
     if (chatRef.current) chatRef.current.scrollTop = chatRef.current.scrollHeight;
   }, [messages, loading]);
 
-  const changeGreeting = (val) => {
+  function changeGreeting(val) {
     setGreeting(val);
-    localStorage.setItem("jarvis-greeting", val);
+    try { localStorage.setItem("jarvis-greeting", val); } catch (e) {}
     setShowGreetingPicker(false);
-  };
+  }
 
-  const stopAudio = () => {
-    if (audioRef.current) { audioRef.current.pause(); audioRef.current = null; }
+  function stopAudio() {
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current = null;
+    }
     setPlayingId(null);
-  };
+  }
 
-  const autoSpeak = async (text, msgId) => {
+  async function autoSpeak(text, msgId) {
     setTtsLoading(msgId);
     try {
-      const res = await fetch("/api/text-to-speech", {
+      var res = await fetch("/api/text-to-speech", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text }),
+        body: JSON.stringify({ text: text }),
       });
-      const data = await res.json();
+      var data = await res.json();
       if (data.ok && data.audio) {
-        const audio = new Audio(data.audio);
-        audio.onended = () => { setPlayingId(null); audioRef.current = null; };
-        audio.onerror = () => { setPlayingId(null); audioRef.current = null; };
+        var audio = new Audio(data.audio);
+        audio.onended = function () { setPlayingId(null); audioRef.current = null; };
+        audio.onerror = function () { setPlayingId(null); audioRef.current = null; };
         audioRef.current = audio;
         setPlayingId(msgId);
         audio.play();
       }
-    } catch {}
+    } catch (e) {}
     setTtsLoading(null);
-  };
+  }
 
-  const callAssistant = async (msgs, isVoice) => {
-    const res = await fetch("/api/assistant", {
+  async function callAssistant(msgs, isVoice) {
+    var res = await fetch("/api/assistant", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ messages: msgs, month, isVoice, greeting }),
+      body: JSON.stringify({ messages: msgs, month: month, isVoice: isVoice, greeting: greeting }),
     });
-    const data = await res.json();
+    var data = await res.json();
     if (!res.ok || !data.ok) throw new Error(data.error || "Ошибка AI");
     return data;
-  };
+  }
 
-  const sendMessage = async (text) => {
-    const trimmed = (text || input).trim();
+  async function sendMessage(text) {
+    var trimmed = (text || input).trim();
     if (!trimmed || loading) return;
     stopAudio();
-    const userMsg = { role: "user", content: trimmed, ts: Date.now() };
-    const next = [...messages, userMsg];
+    var userMsg = { role: "user", content: trimmed, ts: Date.now() };
+    var next = messages.concat([userMsg]);
     setMessages(next);
     setInput("");
     setError("");
     setLoading(true);
     try {
-      const data = await callAssistant(next, false);
-      setMessages((prev) => [...prev, { role: "assistant", content: data.reply, ts: Date.now(), id: Date.now() }]);
-      if (data.usage?.total_tokens) setTokens((t) => t + data.usage.total_tokens);
-    } catch (e) { setError(e.message); }
-    finally { setLoading(false); }
-  };
+      var data = await callAssistant(next, false);
+      setMessages(function (prev) {
+        return prev.concat([{ role: "assistant", content: data.reply, ts: Date.now(), id: Date.now() }]);
+      });
+      if (data.usage && data.usage.total_tokens) setTokens(function (t) { return t + data.usage.total_tokens; });
+    } catch (e) {
+      setError(e.message);
+    }
+    setLoading(false);
+  }
 
-  const sendMessageWithVoice = async (text) => {
-    const trimmed = (text || "").trim();
+  async function sendMessageWithVoice(text) {
+    var trimmed = (text || "").trim();
     if (!trimmed || loading) return;
     stopAudio();
-    const userMsg = { role: "user", content: trimmed, ts: Date.now() };
-    const next = [...messages, userMsg];
+    var userMsg = { role: "user", content: trimmed, ts: Date.now() };
+    var next = messages.concat([userMsg]);
     setMessages(next);
     setInput("");
     setError("");
     setLoading(true);
     try {
-      const data = await callAssistant(next, true);
-      const aiMsg = { role: "assistant", content: data.reply, ts: Date.now(), id: Date.now() };
-      setMessages((prev) => [...prev, aiMsg]);
-      if (data.usage?.total_tokens) setTokens((t) => t + data.usage.total_tokens);
+      var data = await callAssistant(next, true);
+      var aiMsg = { role: "assistant", content: data.reply, ts: Date.now(), id: Date.now() };
+      setMessages(function (prev) { return prev.concat([aiMsg]); });
+      if (data.usage && data.usage.total_tokens) setTokens(function (t) { return t + data.usage.total_tokens; });
       setLoading(false);
       await autoSpeak(data.reply, aiMsg.id);
       return;
-    } catch (e) { setError(e.message); }
+    } catch (e) {
+      setError(e.message);
+    }
     setLoading(false);
-  };
+  }
 
-  const handleKeyDown = (e) => {
-    if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendMessage(); }
-  };
+  function handleKeyDown(e) {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      sendMessage();
+    }
+  }
 
-  const startRecording = async () => {
+  async function startRecording() {
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const mimeType = MediaRecorder.isTypeSupported("audio/webm") ? "audio/webm" : "audio/mp4";
-      const mr = new MediaRecorder(stream, { mimeType });
+      var stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      var mimeType = MediaRecorder.isTypeSupported("audio/webm") ? "audio/webm" : "audio/mp4";
+      var mr = new MediaRecorder(stream, { mimeType: mimeType });
       chunksRef.current = [];
-      mr.ondataavailable = (e) => { if (e.data.size > 0) chunksRef.current.push(e.data); };
-      mr.onstop = async () => {
-        stream.getTracks().forEach((t) => t.stop());
+      mr.ondataavailable = function (e) {
+        if (e.data.size > 0) chunksRef.current.push(e.data);
+      };
+      mr.onstop = async function () {
+        stream.getTracks().forEach(function (t) { t.stop(); });
         await transcribeAudio(new Blob(chunksRef.current, { type: mimeType }));
       };
       mr.start();
       mediaRecorderRef.current = mr;
       setRecording(true);
-    } catch (e) { setError("Микрофон: " + e.message); }
-  };
+    } catch (e) {
+      setError("Микрофон: " + e.message);
+    }
+  }
 
-  const stopRecording = () => {
-    if (mediaRecorderRef.current?.state === "recording") mediaRecorderRef.current.stop();
+  function stopRecording() {
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state === "recording") {
+      mediaRecorderRef.current.stop();
+    }
     setRecording(false);
-  };
+  }
 
-  const toggleRecording = () => { recording ? stopRecording() : startRecording(); };
+  function toggleRecording() {
+    if (recording) stopRecording();
+    else startRecording();
+  }
 
-  const transcribeAudio = async (blob) => {
+  async function transcribeAudio(blob) {
     setTranscribing(true);
     try {
-      const reader = new FileReader();
-      const base64 = await new Promise((r) => { reader.onloadend = () => r(reader.result); reader.readAsDataURL(blob); });
-      const res = await fetch("/api/voice-to-text", {
+      var reader = new FileReader();
+      var base64 = await new Promise(function (resolve) {
+        reader.onloadend = function () { resolve(reader.result); };
+        reader.readAsDataURL(blob);
+      });
+      var res = await fetch("/api/voice-to-text", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ audio: base64 }),
       });
-      const data = await res.json();
+      var data = await res.json();
       if (!res.ok || !data.ok) throw new Error(data.error || "Ошибка распознавания");
-      if (data.text) { setInput(""); await sendMessageWithVoice(data.text); }
-    } catch (e) { setError("Распознавание: " + e.message); }
-    finally { setTranscribing(false); }
-  };
+      if (data.text) {
+        setInput("");
+        await sendMessageWithVoice(data.text);
+      }
+    } catch (e) {
+      setError("Распознавание: " + e.message);
+    }
+    setTranscribing(false);
+  }
 
-  const speakMessage = async (msg) => {
+  async function speakMessage(msg) {
     if (playingId === msg.id) { stopAudio(); return; }
     stopAudio();
     setTtsLoading(msg.id);
     try {
-      const res = await fetch("/api/text-to-speech", {
+      var res = await fetch("/api/text-to-speech", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ text: msg.content }),
       });
-      const data = await res.json();
+      var data = await res.json();
       if (!res.ok || !data.ok) throw new Error(data.error || "Ошибка озвучки");
-      const audio = new Audio(data.audio);
-      audio.onended = () => { setPlayingId(null); audioRef.current = null; };
-      audio.onerror = () => { setPlayingId(null); audioRef.current = null; };
+      var audio = new Audio(data.audio);
+      audio.onended = function () { setPlayingId(null); audioRef.current = null; };
+      audio.onerror = function () { setPlayingId(null); audioRef.current = null; };
       audioRef.current = audio;
       setPlayingId(msg.id);
       audio.play();
-    } catch (e) { setError("TTS: " + e.message); }
-    finally { setTtsLoading(null); }
-  };
+    } catch (e) {
+      setError("TTS: " + e.message);
+    }
+    setTtsLoading(null);
+  }
 
-  const clearChat = () => { setMessages([]); setError(""); setTokens(0); stopAudio(); };
+  function clearChat() {
+    setMessages([]);
+    setError("");
+    setTokens(0);
+    stopAudio();
+  }
 
-  const vs = recording ? "recording" : transcribing ? "transcribing" : loading ? "thinking" : playingId ? "speaking" : messages.length ? "ready" : "idle";
-  const statusLabels = { idle: "Ожидание", ready: "Готов", recording: "🎙️ Запись...", transcribing: "✍️ Распознаю...", thinking: "🧠 Думает...", speaking: "🔊 Говорит..." };
-  const statusClass = { idle: "idle", ready: "listening", recording: "listening", transcribing: "thinking", thinking: "thinking", speaking: "speaking" };
-  const currentGreeting = GREETINGS.find((g) => g.value === greeting) || GREETINGS[0];
+  var vs = recording ? "recording" : transcribing ? "transcribing" : loading ? "thinking" : playingId ? "speaking" : messages.length ? "ready" : "idle";
+  var statusLabels = { idle: "Ожидание", ready: "Готов", recording: "🎙️ Запись...", transcribing: "✍️ Распознаю...", thinking: "🧠 Думает...", speaking: "🔊 Говорит..." };
+  var statusClass = { idle: "idle", ready: "listening", recording: "listening", transcribing: "thinking", thinking: "thinking", speaking: "speaking" };
+  var currentGreeting = GREETINGS.find(function (g) { return g.value === greeting; }) || GREETINGS[0];
+
+  var emptyTitle = "Добрый день. J.A.R.V.I.S. к вашим услугам.";
+  if (greeting === "sir") emptyTitle = "Добрый день, сэр. J.A.R.V.I.S. к вашим услугам.";
+  if (greeting === "mam") emptyTitle = "Добрый день, мэм. J.A.R.V.I.S. к вашим услугам.";
+  if (greeting === "boss") emptyTitle = "Добрый день, босс. J.A.R.V.I.S. к вашим услугам.";
 
   return (
     <DkrsAppShell>
-      <div className={`assistant-page ${mounted ? "mounted" : ""}`}>
-        {/* Hero */}
+      <div className={"assistant-page" + (mounted ? " mounted" : "")}>
+
         <div className="assistant-hero glass-card">
           <div className="assistant-hero-icon jarvis">J</div>
           <div className="assistant-hero-text">
             <h2>J.A.R.V.I.S. <span className="jarvis-sub">DKRS Edition</span></h2>
             <p>Голос Onyx • Whisper • Все устройства и браузеры</p>
           </div>
-          {/* Greeting Picker */}
-         <div className="greeting-picker-wrapper">
-  <button className="greeting-picker-btn" onClick={() => setShowGreetingPicker(!showGreetingPicker)}>
-    {currentGreeting.label} <span className="greeting-arrow">▾</span>
-  </button>
-  {showGreetingPicker && (
-    <>
-      <div className="greeting-overlay" onClick={() => setShowGreetingPicker(false)} />
-      <div className="greeting-dropdown">
-        {GREETINGS.map((g) => (
-          <button
-            key={g.value}
-            className={`greeting-option ${greeting === g.value ? "active" : ""}`}
-            onClick={() => changeGreeting(g.value)}
-          >
-            <span className="greeting-option-label">{g.label}</span>
-            <span className="greeting-option-desc">{g.desc}</span>
-          </button>
-        ))}
-      </div>
-    </>
-  )}
-</div>
+          <div className="greeting-picker-wrapper">
+            <button className="greeting-picker-btn" onClick={function () { setShowGreetingPicker(!showGreetingPicker); }}>
+              {currentGreeting.label} <span className="greeting-arrow">▾</span>
+            </button>
+            {showGreetingPicker && (
+              <React.Fragment>
+                <div className="greeting-overlay" onClick={function () { setShowGreetingPicker(false); }} />
+                <div className="greeting-dropdown">
+                  {GREETINGS.map(function (g) {
+                    return (
+                      <button
+                        key={g.value}
+                        className={"greeting-option" + (greeting === g.value ? " active" : "")}
+                        onClick={function () { changeGreeting(g.value); }}
+                      >
+                        <span className="greeting-option-label">{g.label}</span>
+                        <span className="greeting-option-desc">{g.desc}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </React.Fragment>
+            )}
+          </div>
+        </div>
 
-        {/* Controls */}
         <div className="assistant-controls glass-card">
           <div className="assistant-controls-left">
             <div className="assistant-control-icon">📅</div>
-            <select className="dkrs-select" value={month} onChange={(e) => setMonth(e.target.value)}>
+            <select className="dkrs-select" value={month} onChange={function (e) { setMonth(e.target.value); }}>
               <option value="">Все периоды</option>
-              {months.map((m) => <option key={m} value={m}>{m}</option>)}
+              {months.map(function (m) { return <option key={m} value={m}>{m}</option>; })}
             </select>
             <span className="assistant-control-arrow">→</span>
             <div className="assistant-status-badges">
-              <span className={`assistant-status-badge ${statusClass[vs]}`}>
+              <span className={"assistant-status-badge " + statusClass[vs]}>
                 <span className="dot" />{statusLabels[vs]}
               </span>
               {tokens > 0 && <span className="assistant-status-badge idle">🔢 {tokens.toLocaleString()}</span>}
             </div>
           </div>
           <div className="assistant-controls-right">
-            {TOOL_ACTIONS.map((t) => (
-              <button key={t.action} className="assistant-tool-btn" onClick={() => sendMessage(TOOL_PROMPTS[t.action])} disabled={loading || recording} title={t.label}>
-                <span>{t.icon}</span><span className="tool-btn-label">{t.label}</span>
-              </button>
-            ))}
+            {TOOL_ACTIONS.map(function (t) {
+              return (
+                <button key={t.action} className="assistant-tool-btn" onClick={function () { sendMessage(TOOL_PROMPTS[t.action]); }} disabled={loading || recording} title={t.label}>
+                  <span>{t.icon}</span><span className="tool-btn-label">{t.label}</span>
+                </button>
+              );
+            })}
           </div>
         </div>
 
-        {/* Chat */}
         <div className="assistant-widget glass-card">
           <div className="assistant-widget-header">
             <div>
               <div className="assistant-widget-title">💬 Чат с J.A.R.V.I.S.</div>
-              <div className="assistant-widget-subtitle">{messages.length} сообщений • {month || "все периоды"} • Обращение: {currentGreeting.desc}</div>
+              <div className="assistant-widget-subtitle">{messages.length} сообщений • {month || "все периоды"} • {currentGreeting.desc}</div>
             </div>
             <button className="assistant-clear-btn" onClick={clearChat} disabled={!messages.length && !error}>🗑️ Очистить</button>
           </div>
 
           <div className="assistant-prompts-grid">
-            {QUICK_PROMPTS.map((p, i) => (
-              <button key={i} className="assistant-prompt-card" onClick={() => sendMessage(p.prompt)} disabled={loading || recording}>
-                <span className="prompt-card-icon">{p.icon}</span>
-                <span className="prompt-card-label">{p.label}</span>
-              </button>
-            ))}
+            {QUICK_PROMPTS.map(function (p, i) {
+              return (
+                <button key={i} className="assistant-prompt-card" onClick={function () { sendMessage(p.prompt); }} disabled={loading || recording}>
+                  <span className="prompt-card-icon">{p.icon}</span>
+                  <span className="prompt-card-label">{p.label}</span>
+                </button>
+              );
+            })}
           </div>
 
           <div className="assistant-chat-box">
@@ -330,37 +380,43 @@ export default function AssistantPage() {
               {messages.length === 0 && !loading ? (
                 <div className="assistant-chat-empty">
                   <div className="empty-robot jarvis-logo">J</div>
-                  <div className="empty-title">
-                    {greeting === "sir" && "Добрый день, сэр. J.A.R.V.I.S. к вашим услугам."}
-                    {greeting === "mam" && "Добрый день, мэм. J.A.R.V.I.S. к вашим услугам."}
-                    {greeting === "boss" && "Добрый день, босс. J.A.R.V.I.S. к вашим услугам."}
-                    {greeting === "neutral" && "Добрый день. J.A.R.V.I.S. к вашим услугам."}
-                    {greeting === "name" && "Добрый день. Как к вам обращаться?"}
-                  </div>
+                  <div className="empty-title">{emptyTitle}</div>
                   <div className="empty-desc">Текст → развёрнутый ответ • 🎙️ Голос → быстрый ответ + озвучка</div>
                 </div>
               ) : (
-                messages.map((m, i) => (
-                  <div key={i} className={`assistant-message ${m.role}`}>
-                    <div className="assistant-message-bubble">
-                      <div className="assistant-message-header">
-                        <span className="assistant-message-avatar">{m.role === "user" ? "👤" : <span className="jarvis-mini">J</span>}</span>
-                        <span className="assistant-message-role">{m.role === "user" ? "Вы" : "J.A.R.V.I.S."}</span>
-                        <span className="assistant-message-time">{m.ts ? new Date(m.ts).toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" }) : ""}</span>
-                        {m.role === "assistant" && (
-                          <button className={`msg-speak-btn ${playingId === m.id ? "active" : ""}`} onClick={() => speakMessage(m)} disabled={ttsLoading === m.id}>
-                            {ttsLoading === m.id ? <span className="mini-spin" /> : playingId === m.id ? "⏹️" : "🔊"}
-                          </button>
+                messages.map(function (m, i) {
+                  return (
+                    <div key={i} className={"assistant-message " + m.role}>
+                      <div className="assistant-message-bubble">
+                        <div className="assistant-message-header">
+                          <span className="assistant-message-avatar">
+                            {m.role === "user" ? "👤" : <span className="jarvis-mini">J</span>}
+                          </span>
+                          <span className="assistant-message-role">
+                            {m.role === "user" ? "Вы" : "J.A.R.V.I.S."}
+                          </span>
+                          <span className="assistant-message-time">
+                            {m.ts ? new Date(m.ts).toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" }) : ""}
+                          </span>
+                          {m.role === "assistant" && (
+                            <button
+                              className={"msg-speak-btn" + (playingId === m.id ? " active" : "")}
+                              onClick={function () { speakMessage(m); }}
+                              disabled={ttsLoading === m.id}
+                            >
+                              {ttsLoading === m.id ? <span className="mini-spin" /> : playingId === m.id ? "⏹️" : "🔊"}
+                            </button>
+                          )}
+                        </div>
+                        {m.role === "assistant" ? (
+                          <div className="assistant-message-content" dangerouslySetInnerHTML={{ __html: formatMessage(m.content) }} />
+                        ) : (
+                          <div className="assistant-message-content">{m.content}</div>
                         )}
                       </div>
-                      {m.role === "assistant" ? (
-                        <div className="assistant-message-content" dangerouslySetInnerHTML={{ __html: formatMessage(m.content) }} />
-                      ) : (
-                        <div className="assistant-message-content">{m.content}</div>
-                      )}
                     </div>
-                  </div>
-                ))
+                  );
+                })
               )}
               {loading && (
                 <div className="assistant-message assistant">
@@ -378,20 +434,35 @@ export default function AssistantPage() {
             <div className="assistant-composer">
               {error && <div className="assistant-error">⚠️ {error}</div>}
               <div className="assistant-input-row">
-                <button className={`assistant-voice-btn ${recording ? "recording" : ""} ${transcribing ? "transcribing" : ""}`} onClick={toggleRecording} disabled={loading || transcribing} title={recording ? "Стоп" : "Голос"}>
+                <button
+                  className={"assistant-voice-btn" + (recording ? " recording" : "") + (transcribing ? " transcribing" : "")}
+                  onClick={toggleRecording}
+                  disabled={loading || transcribing}
+                  title={recording ? "Стоп" : "Голос"}
+                >
                   {transcribing ? <span className="mini-spin" /> : recording ? "⏹" : "🎙️"}
                 </button>
-                <textarea className="assistant-textarea" value={input} onChange={(e) => setInput(e.target.value)} onKeyDown={handleKeyDown}
+                <textarea
+                  className="assistant-textarea"
+                  value={input}
+                  onChange={function (e) { setInput(e.target.value); }}
+                  onKeyDown={handleKeyDown}
                   placeholder={recording ? "🎙️ Говорите..." : transcribing ? "✍️ Распознаю..." : "Спросите что угодно... (Enter — отправить)"}
-                  disabled={loading || recording || transcribing} rows={2}
+                  disabled={loading || recording || transcribing}
+                  rows={2}
                 />
-                <button className="assistant-send-btn" onClick={() => sendMessage()} disabled={!input.trim() || loading || recording}>
+                <button
+                  className="assistant-send-btn"
+                  onClick={function () { sendMessage(); }}
+                  disabled={!input.trim() || loading || recording}
+                >
                   {loading ? <span className="send-spinner" /> : "➤"}
                 </button>
               </div>
             </div>
           </div>
         </div>
+
       </div>
       <AiFloatingButton />
     </DkrsAppShell>
