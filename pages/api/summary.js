@@ -1,9 +1,8 @@
 import { neon } from "@neondatabase/serverless";
+import { getUserProjectIds } from "../../lib/getUserProjects";
 
 function num(x) { return Number(x || 0); }
 function round2(x) { return Math.round(num(x) * 100) / 100; }
-
-const sql_conn = neon(process.env.DATABASE_URL);
 
 export default async function handler(req, res) {
   const { month } = req.query;
@@ -13,31 +12,42 @@ export default async function handler(req, res) {
   }
 
   try {
-    const periods = await sql_conn`
-      SELECT id FROM periods WHERE month = ${month} LIMIT 1
-    `;
+    const sql_conn = neon(process.env.DATABASE_URL);
 
+    // Get user's allowed projects
+    const projectIds = await getUserProjectIds(req);
+    if (Array.isArray(projectIds) && projectIds.length === 0) {
+      return res.status(200).json({
+        ok: true, month, projects: [], top_profitable: [], top_unprofitable: [],
+        anomalies: [], totals: { revenue:0, costs:0, profit:0, margin:0 },
+        riskDistribution: { green:0, yellow:0, red:0 }, insights: [],
+      });
+    }
+
+    const periods = await sql_conn`SELECT id FROM periods WHERE month = ${month} LIMIT 1`;
     if (periods.length === 0) {
       return res.status(404).json({ error: "Месяц не найден" });
     }
-
     const periodId = periods[0].id;
 
-    const rows = await sql_conn`
-      SELECT
-        p.name AS project,
-        f.revenue_no_vat,
-        f.salary_workers,
-        f.salary_manager,
-        f.salary_head,
-        f.ads,
-        f.transport,
-        f.penalties,
-        f.tax
-      FROM financial_rows f
-      JOIN projects p ON p.id = f.project_id
-      WHERE f.period_id = ${periodId}
-    `;
+    let rows;
+    if (projectIds === null) {
+      rows = await sql_conn`
+        SELECT p.name AS project, f.revenue_no_vat, f.salary_workers, f.salary_manager,
+          f.salary_head, f.ads, f.transport, f.penalties, f.tax
+        FROM financial_rows f
+        JOIN projects p ON p.id = f.project_id
+        WHERE f.period_id = ${periodId}
+      `;
+    } else {
+      rows = await sql_conn`
+        SELECT p.name AS project, f.revenue_no_vat, f.salary_workers, f.salary_manager,
+          f.salary_head, f.ads, f.transport, f.penalties, f.tax
+        FROM financial_rows f
+        JOIN projects p ON p.id = f.project_id
+        WHERE f.period_id = ${periodId} AND f.project_id = ANY(${projectIds})
+      `;
+    }
 
     const projects = rows.map((r) => {
       const revenue = num(r.revenue_no_vat);
@@ -68,17 +78,9 @@ export default async function handler(req, res) {
       };
     });
 
-    // Топ-3 прибыльных
-    const top_profitable = [...projects]
-      .sort((a, b) => b.profit - a.profit)
-      .slice(0, 3);
+    const top_profitable = [...projects].sort((a, b) => b.profit - a.profit).slice(0, 3);
+    const top_unprofitable = [...projects].sort((a, b) => a.profit - b.profit).slice(0, 3);
 
-    // Топ-3 убыточных (или наименее прибыльных)
-    const top_unprofitable = [...projects]
-      .sort((a, b) => a.profit - b.profit)
-      .slice(0, 3);
-
-    // Аномалии
     const anomalies = projects
       .map((p) => {
         const items = [];
@@ -96,7 +98,6 @@ export default async function handler(req, res) {
         }))
       );
 
-    // Агрегаты для виджетов
     const totals = projects.reduce(
       (acc, p) => {
         acc.revenue += p.revenue;
@@ -115,7 +116,6 @@ export default async function handler(req, res) {
     );
     totals.margin = totals.revenue > 0 ? totals.profit / totals.revenue : 0;
 
-    // Риск-распределение
     const riskDistribution = { green: 0, yellow: 0, red: 0 };
     projects.forEach((p) => {
       if (p.revenue > 0 && p.margin < 0.1) riskDistribution.red++;
@@ -123,7 +123,6 @@ export default async function handler(req, res) {
       else riskDistribution.green++;
     });
 
-    // Инсайты
     const insights = [];
     const bestMargin = [...projects].filter(p => p.revenue > 0).sort((a, b) => b.margin - a.margin)[0];
     if (bestMargin) insights.push({ icon: "🏆", text: `Самая высокая маржа — ${bestMargin.project} (${(bestMargin.margin * 100).toFixed(1)}%)` });
