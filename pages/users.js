@@ -31,6 +31,12 @@ export default function UsersPage() {
   var _editPassword = useState(""), editPassword = _editPassword[0], setEditPassword = _editPassword[1];
   var _editActive = useState(true), editActive = _editActive[0], setEditActive = _editActive[1];
 
+  // Projects assignment
+  var _projectsUser = useState(null), projectsUser = _projectsUser[0], setProjectsUser = _projectsUser[1];
+  var _allProjects = useState([]), allProjects = _allProjects[0], setAllProjects = _allProjects[1];
+  var _assignedIds = useState([]), assignedIds = _assignedIds[0], setAssignedIds = _assignedIds[1];
+  var _projectsLoading = useState(false), projectsLoading = _projectsLoading[0], setProjectsLoading = _projectsLoading[1];
+
   useEffect(function () { setMounted(true); loadUsers(); }, []);
 
   function showMessage(text, type) {
@@ -74,6 +80,7 @@ export default function UsersPage() {
     setEditRole(u.role);
     setEditActive(u.is_active);
     setEditPassword("");
+    setProjectsUser(null);
   }
 
   function cancelEdit() { setEditUser(null); }
@@ -121,6 +128,55 @@ export default function UsersPage() {
     } catch (e) { showMessage("❌ " + e.message, "error"); }
   }
 
+  // === Projects assignment ===
+  async function openProjectsAssign(userId) {
+    if (projectsUser === userId) { setProjectsUser(null); return; }
+    setProjectsUser(userId);
+    setProjectsLoading(true);
+    try {
+      var res = await fetch("/api/user-projects?user_id=" + userId);
+      var json = await res.json();
+      if (json.ok) {
+        setAllProjects(json.all_projects || []);
+        setAssignedIds((json.assigned || []).map(function (p) { return p.id; }));
+      }
+    } catch (e) { showMessage("Ошибка загрузки проектов", "error"); }
+    setProjectsLoading(false);
+  }
+
+  function toggleProject(projectId) {
+    setAssignedIds(function (prev) {
+      var idx = prev.indexOf(projectId);
+      if (idx === -1) return prev.concat([projectId]);
+      var next = prev.slice();
+      next.splice(idx, 1);
+      return next;
+    });
+  }
+
+  function selectAllProjects() {
+    setAssignedIds(allProjects.map(function (p) { return p.id; }));
+  }
+
+  function deselectAllProjects() {
+    setAssignedIds([]);
+  }
+
+  async function saveProjectAssignments(userId) {
+    setSaving(true);
+    try {
+      var res = await fetch("/api/user-projects", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ user_id: userId, project_ids: assignedIds }),
+      });
+      var json = await res.json();
+      if (!json.ok) throw new Error(json.error);
+      showMessage("✅ Проекты назначены! (" + assignedIds.length + " шт.)", "success");
+    } catch (e) { showMessage("❌ " + e.message, "error"); }
+    setSaving(false);
+  }
+
   function getRoleInfo(role) {
     return ROLES.find(function (r) { return r.value === role; }) || ROLES[2];
   }
@@ -138,7 +194,7 @@ export default function UsersPage() {
         <div className="users-header">
           <div>
             <h1 className="users-title">👥 Управление пользователями</h1>
-            <p className="users-subtitle">Создание, редактирование и управление доступом</p>
+            <p className="users-subtitle">Создание, редактирование, назначение проектов</p>
           </div>
           <button className="users-add-btn" onClick={function () { setShowAdd(!showAdd); }}>
             {showAdd ? "✕ Отмена" : "➕ Добавить"}
@@ -147,9 +203,7 @@ export default function UsersPage() {
 
         {/* Message */}
         {msg && (
-          <div className={"users-msg glass-card " + msgType}>
-            {msg}
-          </div>
+          <div className={"users-msg glass-card " + msgType}>{msg}</div>
         )}
 
         {/* Add form */}
@@ -175,11 +229,8 @@ export default function UsersPage() {
                 </div>
                 <div className="auth-field">
                   <label>🎭 Роль</label>
-                  <select value={addRole} onChange={function (e) { setAddRole(e.target.value); }}
-                    className="users-select">
-                    {ROLES.map(function (r) {
-                      return <option key={r.value} value={r.value}>{r.icon} {r.label}</option>;
-                    })}
+                  <select value={addRole} onChange={function (e) { setAddRole(e.target.value); }} className="users-select">
+                    {ROLES.map(function (r) { return <option key={r.value} value={r.value}>{r.icon} {r.label}</option>; })}
                   </select>
                 </div>
               </div>
@@ -202,11 +253,15 @@ export default function UsersPage() {
               </div>
             );
           })}
+          <div className="users-role-item">
+            <span className="users-role-dot" style={{ background: "#00bfa6" }}></span>
+            <span>📁 Admin видит ВСЕ проекты</span>
+          </div>
         </div>
 
         {/* Users list */}
         {loading ? (
-          <div className="dm-loading glass-card"><span className="loader-spinner"></span> Загрузка пользователей...</div>
+          <div className="dm-loading glass-card"><span className="loader-spinner"></span> Загрузка...</div>
         ) : users.length === 0 ? (
           <div className="dm-empty glass-card"><div className="dm-empty-icon">👥</div><p>Пользователей пока нет</p></div>
         ) : (
@@ -215,39 +270,34 @@ export default function UsersPage() {
               var roleInfo = getRoleInfo(u.role);
               var isEditing = editUser === u.id;
               var isCurrentUser = auth.user && auth.user.id === u.id;
+              var showProjects = projectsUser === u.id;
 
               return (
                 <div key={u.id} className={"users-card glass-card" + (!u.is_active ? " inactive" : "") + (isEditing ? " editing" : "")}>
 
                   {isEditing ? (
-                    /* Edit mode */
                     <div className="users-edit-form">
                       <h4>✏️ Редактирование: {u.email}</h4>
                       <div className="users-form-grid">
                         <div className="auth-field">
                           <label>👤 Имя</label>
-                          <input type="text" value={editName}
-                            onChange={function (e) { setEditName(e.target.value); }} />
+                          <input type="text" value={editName} onChange={function (e) { setEditName(e.target.value); }} />
                         </div>
                         <div className="auth-field">
                           <label>🎭 Роль</label>
-                          <select value={editRole} onChange={function (e) { setEditRole(e.target.value); }}
-                            className="users-select">
-                            {ROLES.map(function (r) {
-                              return <option key={r.value} value={r.value}>{r.icon} {r.label}</option>;
-                            })}
+                          <select value={editRole} onChange={function (e) { setEditRole(e.target.value); }} className="users-select">
+                            {ROLES.map(function (r) { return <option key={r.value} value={r.value}>{r.icon} {r.label}</option>; })}
                           </select>
                         </div>
                         <div className="auth-field">
-                          <label>🔒 Новый пароль (необязательно)</label>
+                          <label>🔒 Новый пароль</label>
                           <input type="password" placeholder="Оставьте пустым" value={editPassword}
                             onChange={function (e) { setEditPassword(e.target.value); }} />
                         </div>
                         <div className="auth-field">
                           <label>📊 Статус</label>
                           <select value={editActive ? "true" : "false"}
-                            onChange={function (e) { setEditActive(e.target.value === "true"); }}
-                            className="users-select">
+                            onChange={function (e) { setEditActive(e.target.value === "true"); }} className="users-select">
                             <option value="true">✅ Активен</option>
                             <option value="false">❌ Деактивирован</option>
                           </select>
@@ -261,7 +311,6 @@ export default function UsersPage() {
                       </div>
                     </div>
                   ) : (
-                    /* View mode */
                     <React.Fragment>
                       <div className="users-card-top">
                         <div className="users-card-avatar" style={{ borderColor: roleInfo.color }}>
@@ -286,6 +335,12 @@ export default function UsersPage() {
                       <div className="users-card-bottom">
                         <span className="users-card-date">📅 {fmtDate(u.created_at)}</span>
                         <div className="users-card-actions">
+                          {u.role !== "admin" && (
+                            <button className={"users-action-btn projects" + (showProjects ? " active-btn" : "")}
+                              onClick={function () { openProjectsAssign(u.id); }} title="Назначить проекты">
+                              📁
+                            </button>
+                          )}
                           <button className="users-action-btn edit" onClick={function () { startEdit(u); }} title="Редактировать">
                             ✏️
                           </button>
@@ -301,6 +356,52 @@ export default function UsersPage() {
                           )}
                         </div>
                       </div>
+
+                      {/* Projects assignment panel */}
+                      {showProjects && (
+                        <div className="users-projects-panel" style={{ animation: "fadeInUp 0.3s ease both" }}>
+                          <div className="users-projects-header">
+                            <h4>📁 Назначение проектов для {u.name}</h4>
+                            <div className="users-projects-bulk">
+                              <button onClick={selectAllProjects} className="users-bulk-btn">Выбрать все</button>
+                              <button onClick={deselectAllProjects} className="users-bulk-btn">Снять все</button>
+                            </div>
+                          </div>
+
+                          {projectsLoading ? (
+                            <div style={{ padding: "12px", textAlign: "center", color: "var(--dkrs-text-tertiary)" }}>
+                              Загрузка проектов...
+                            </div>
+                          ) : allProjects.length === 0 ? (
+                            <div style={{ padding: "12px", textAlign: "center", color: "var(--dkrs-text-tertiary)" }}>
+                              Проектов пока нет
+                            </div>
+                          ) : (
+                            <div className="users-projects-grid">
+                              {allProjects.map(function (p) {
+                                var checked = assignedIds.indexOf(p.id) !== -1;
+                                return (
+                                  <label key={p.id} className={"users-project-item" + (checked ? " checked" : "")}>
+                                    <input type="checkbox" checked={checked}
+                                      onChange={function () { toggleProject(p.id); }} />
+                                    <span className="users-project-name">{p.name}</span>
+                                  </label>
+                                );
+                              })}
+                            </div>
+                          )}
+
+                          <div className="users-projects-footer">
+                            <span className="users-projects-count">
+                              Выбрано: {assignedIds.length} из {allProjects.length}
+                            </span>
+                            <button className="auth-btn" onClick={function () { saveProjectAssignments(u.id); }}
+                              disabled={saving} style={{ padding: "8px 20px", fontSize: "13px" }}>
+                              {saving ? "Сохраняем..." : "💾 Сохранить проекты"}
+                            </button>
+                          </div>
+                        </div>
+                      )}
                     </React.Fragment>
                   )}
                 </div>
@@ -328,7 +429,6 @@ export default function UsersPage() {
             <span className="users-stat-label">✅ Активных</span>
           </div>
         </div>
-
       </div>
     </DkrsAppShell>
   );
