@@ -13,6 +13,15 @@ export default async function handler(req, res) {
       return res.status(400).json({ ok: false, error: "Нет данных для импорта" });
     }
 
+    // Ensure columns exist
+    try {
+      await sql`ALTER TABLE project_data ADD COLUMN IF NOT EXISTS expense_salary_workers NUMERIC DEFAULT 0`;
+      await sql`ALTER TABLE project_data ADD COLUMN IF NOT EXISTS expense_salary_management NUMERIC DEFAULT 0`;
+      await sql`ALTER TABLE project_data ADD COLUMN IF NOT EXISTS expense_rent NUMERIC DEFAULT 0`;
+    } catch (e) {
+      // columns might already exist
+    }
+
     var imported = 0;
     var projectsSet = {};
     var periodsSet = {};
@@ -24,7 +33,9 @@ export default async function handler(req, res) {
       var project = String(r.project).trim();
       var month = String(r.month).trim();
       var revenue = parseFloat(r.revenue) || 0;
-      var salary = parseFloat(r.expense_salary) || 0;
+      var salaryWorkers = parseFloat(r.expense_salary_workers) || 0;
+      var salaryMgmt = parseFloat(r.expense_salary_management) || 0;
+      var salary = salaryWorkers + salaryMgmt;
       var ads = parseFloat(r.expense_ads) || 0;
       var transport = parseFloat(r.expense_transport) || 0;
       var other = parseFloat(r.expense_other) || 0;
@@ -58,6 +69,8 @@ export default async function handler(req, res) {
           UPDATE project_data SET
             revenue = ${revenue},
             expense_salary = ${salary},
+            expense_salary_workers = ${salaryWorkers},
+            expense_salary_management = ${salaryMgmt},
             expense_ads = ${ads},
             expense_transport = ${transport},
             expense_other = ${other},
@@ -69,8 +82,17 @@ export default async function handler(req, res) {
         `;
       } else {
         await sql`
-          INSERT INTO project_data (project_id, month, revenue, expense_salary, expense_ads, expense_transport, expense_other, expense_fines, expense_tax, expense_rent)
-          VALUES (${projectId}, ${month}, ${revenue}, ${salary}, ${ads}, ${transport}, ${other}, ${fines}, ${tax}, ${rent})
+          INSERT INTO project_data (
+            project_id, month, revenue, 
+            expense_salary, expense_salary_workers, expense_salary_management,
+            expense_ads, expense_transport, expense_other, 
+            expense_fines, expense_tax, expense_rent
+          ) VALUES (
+            ${projectId}, ${month}, ${revenue},
+            ${salary}, ${salaryWorkers}, ${salaryMgmt},
+            ${ads}, ${transport}, ${other},
+            ${fines}, ${tax}, ${rent}
+          )
         `;
       }
 
@@ -83,7 +105,7 @@ export default async function handler(req, res) {
     try {
       await sql`REFRESH MATERIALIZED VIEW v_financial_calc`;
     } catch (e) {
-      // view might not exist yet, ignore
+      // view might not exist, ignore
     }
 
     return res.status(200).json({
