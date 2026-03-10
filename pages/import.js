@@ -6,7 +6,8 @@ var REQUIRED_COLUMNS = [
   { key: "project", label: "Проект", icon: "🏗️", desc: "Название проекта" },
   { key: "month", label: "Период", icon: "📅", desc: "Формат: 2025-01" },
   { key: "revenue", label: "Выручка", icon: "💰", desc: "Число" },
-  { key: "expense_salary", label: "ЗП", icon: "👤", desc: "Зарплаты" },
+  { key: "expense_salary_workers", label: "ЗП Рабочие", icon: "👷", desc: "Зарплаты рабочих" },
+  { key: "expense_salary_management", label: "ЗП Менеджмент", icon: "👔", desc: "Зарплаты управления" },
   { key: "expense_ads", label: "Реклама", icon: "📢", desc: "Расходы на рекламу" },
   { key: "expense_transport", label: "Транспорт", icon: "🚛", desc: "Логистика" },
   { key: "expense_other", label: "Прочее", icon: "📦", desc: "Другие расходы" },
@@ -97,7 +98,8 @@ export default function ImportPage() {
           if (col.key === "project") return hl.includes("проект") || hl.includes("project") || hl.includes("название");
           if (col.key === "month") return hl.includes("период") || hl.includes("месяц") || hl.includes("month") || hl.includes("дата");
           if (col.key === "revenue") return hl.includes("выручк") || hl.includes("revenue") || hl.includes("доход");
-          if (col.key === "expense_salary") return hl.includes("зп") || hl.includes("зарплат") || hl.includes("salary");
+          if (col.key === "expense_salary_workers") return hl.includes("зп рабоч") || hl.includes("зарплат рабоч") || hl.includes("salary work");
+          if (col.key === "expense_salary_management") return hl.includes("зп менедж") || hl.includes("зп управ") || hl.includes("зарплат менедж") || hl.includes("salary manag");
           if (col.key === "expense_ads") return hl.includes("реклам") || hl.includes("ads") || hl.includes("маркет");
           if (col.key === "expense_transport") return hl.includes("транспорт") || hl.includes("логист") || hl.includes("transport");
           if (col.key === "expense_other") return hl.includes("проч") || hl.includes("other") || hl.includes("друг");
