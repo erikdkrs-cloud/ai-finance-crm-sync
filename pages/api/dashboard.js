@@ -1,4 +1,5 @@
 import { neon } from "@neondatabase/serverless";
+import { getUserProjectIds } from "../../lib/getUserProjects";
 
 function num(x) { return Number(x || 0); }
 function round2(x){ return Math.round(num(x) * 100) / 100; }
@@ -21,7 +22,12 @@ export default async function handler(req, res) {
 
     const sql = neon(process.env.DATABASE_URL);
 
-    // find period
+    // Get user's allowed projects
+    const projectIds = await getUserProjectIds(req);
+    if (Array.isArray(projectIds) && projectIds.length === 0) {
+      return res.status(200).json({ ok: true, month, totals: { revenue:0, costs:0, profit:0, margin:0 }, projects: [] });
+    }
+
     const periodRows = await sql`SELECT id, month FROM periods WHERE month = ${month} LIMIT 1`;
     const period = periodRows?.[0];
     if (!period?.id) {
@@ -29,42 +35,40 @@ export default async function handler(req, res) {
     }
     const period_id = Number(period.id);
 
-    // get rows
-    const rows = await sql`
-      SELECT
-        pr.name AS project,
-        fr.revenue_no_vat,
-        fr.salary_workers,
-        fr.salary_manager,
-        fr.salary_head,
-        fr.ads,
-        fr.transport,
-        fr.penalties,
-        fr.tax
-      FROM financial_rows fr
-      JOIN projects pr ON pr.id = fr.project_id
-      WHERE fr.period_id = ${period_id}
-      ORDER BY pr.name
-    `;
+    let rows;
+    if (projectIds === null) {
+      rows = await sql`
+        SELECT pr.name AS project, fr.revenue_no_vat, fr.salary_workers, fr.salary_manager,
+          fr.salary_head, fr.ads, fr.transport, fr.penalties, fr.tax
+        FROM financial_rows fr
+        JOIN projects pr ON pr.id = fr.project_id
+        WHERE fr.period_id = ${period_id}
+        ORDER BY pr.name
+      `;
+    } else {
+      rows = await sql`
+        SELECT pr.name AS project, fr.revenue_no_vat, fr.salary_workers, fr.salary_manager,
+          fr.salary_head, fr.ads, fr.transport, fr.penalties, fr.tax
+        FROM financial_rows fr
+        JOIN projects pr ON pr.id = fr.project_id
+        WHERE fr.period_id = ${period_id} AND fr.project_id = ANY(${projectIds})
+        ORDER BY pr.name
+      `;
+    }
 
     const projects = rows.map(r => {
       const revenue = num(r.revenue_no_vat);
-
       const salary_workers = num(r.salary_workers);
       const salary_manager = num(r.salary_manager);
       const salary_head = num(r.salary_head);
-
       const ads = num(r.ads);
       const transport = num(r.transport);
       const penalties = num(r.penalties);
       const tax = num(r.tax);
-
       const team_payroll = salary_manager + salary_head;
-
       const costs = salary_workers + team_payroll + ads + transport + penalties + tax;
       const profit = revenue - costs;
       const margin = revenue > 0 ? profit / revenue : 0;
-
       const risk = computeRisk({ revenue, margin, penalties });
 
       return {
@@ -74,14 +78,9 @@ export default async function handler(req, res) {
         profit: round2(profit),
         margin: round4(margin),
         risk,
-
         penalties: round2(penalties),
         ads: round2(ads),
-
-        // было: labor = зарплата рабочих (чтобы не ломать фронт)
         labor: round2(salary_workers),
-
-        // НОВОЕ:
         transport: round2(transport),
         team_payroll: round2(team_payroll),
       };
@@ -104,8 +103,6 @@ export default async function handler(req, res) {
       costs: round2(totalsAgg.costs),
       profit: round2(totalsAgg.profit),
       margin: round4(totalsAgg.revenue > 0 ? totalsAgg.profit / totalsAgg.revenue : 0),
-
-      // доп. поля (не обязательно, но полезно)
       ads: round2(totalsAgg.ads),
       penalties: round2(totalsAgg.penalties),
       labor: round2(totalsAgg.labor),
