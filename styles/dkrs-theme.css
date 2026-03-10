@@ -1397,7 +1397,24 @@ img { max-width: 100%; }
 
 /* Template columns */
 .import-template-section h3 { font-size: 15px; font-weight: 700; margin: 0 0 12px; color: var(--dkrs-text-primary); }
-.template-columns { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 8px; }
+.template-columns { 
+  display: flex; 
+  flex-wrap: wrap; 
+  gap: 10px; 
+}
+.template-col {
+  display: flex; 
+  align-items: center; 
+  gap: 8px;
+  padding: 10px 14px; 
+  border-radius: var(--radius-md);
+  border: 1px solid var(--dkrs-glass-border); 
+  background: rgba(255,255,255,0.5);
+  font-size: 13px; 
+  font-weight: 500;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
 .template-col {
   display: flex; align-items: center; gap: 8px;
   padding: 10px 14px; border-radius: var(--radius-md);
