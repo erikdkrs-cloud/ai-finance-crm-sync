@@ -12,6 +12,9 @@ var PUBLIC_PAGES = ["/login", "/register", "/"];
 export default function AuthProvider({ children }) {
   var _user = useState(null), user = _user[0], setUser = _user[1];
   var _loading = useState(true), loading = _loading[0], setLoading = _loading[1];
+  var _months = useState([]), months = _months[0], setMonths = _months[1];
+  var _selectedMonth = useState(""), selectedMonth = _selectedMonth[0], setSelectedMonth = _selectedMonth[1];
+  var _monthsLoaded = useState(false), monthsLoaded = _monthsLoaded[0], setMonthsLoaded = _monthsLoaded[1];
   var router = useRouter();
 
   useEffect(function () { checkAuth(); }, []);
@@ -24,6 +27,12 @@ export default function AuthProvider({ children }) {
       }
     }
   }, [user, loading, router.pathname]);
+
+  useEffect(function () {
+    if (user && !monthsLoaded) {
+      loadMonths();
+    }
+  }, [user, monthsLoaded]);
 
   async function checkAuth() {
     try {
@@ -40,6 +49,26 @@ export default function AuthProvider({ children }) {
     setLoading(false);
   }
 
+  async function loadMonths() {
+    try {
+      var res = await fetch("/api/months");
+      var json = await res.json();
+      var list = json.months || [];
+      setMonths(list);
+      if (list.length > 0 && !selectedMonth) {
+        setSelectedMonth(list[0]);
+      }
+      setMonthsLoaded(true);
+    } catch (e) {
+      console.error("Failed to load months:", e);
+      setMonthsLoaded(true);
+    }
+  }
+
+  function changeMonth(month) {
+    setSelectedMonth(month);
+  }
+
   async function login(loginOrEmail, password) {
     var res = await fetch("/api/auth/login", {
       method: "POST",
@@ -48,7 +77,9 @@ export default function AuthProvider({ children }) {
     });
     var json = await res.json();
     if (!json.ok) throw new Error(json.error);
-    // Refresh user data
+    setMonthsLoaded(false);
+    setSelectedMonth("");
+    setMonths([]);
     await checkAuth();
     router.push("/dashboard");
     return json;
@@ -62,6 +93,9 @@ export default function AuthProvider({ children }) {
     });
     var json = await res.json();
     if (!json.ok) throw new Error(json.error);
+    setMonthsLoaded(false);
+    setSelectedMonth("");
+    setMonths([]);
     await checkAuth();
     router.push("/dashboard");
     return json;
@@ -70,6 +104,9 @@ export default function AuthProvider({ children }) {
   async function logout() {
     await fetch("/api/auth/logout", { method: "POST" });
     setUser(null);
+    setMonths([]);
+    setSelectedMonth("");
+    setMonthsLoaded(false);
     router.push("/login");
   }
 
@@ -93,6 +130,10 @@ export default function AuthProvider({ children }) {
     logout: logout,
     isAdmin: user && user.role === "admin",
     isManager: user && (user.role === "admin" || user.role === "manager"),
+    months: months,
+    selectedMonth: selectedMonth,
+    setSelectedMonth: changeMonth,
+    monthsLoaded: monthsLoaded,
   };
 
   return (
