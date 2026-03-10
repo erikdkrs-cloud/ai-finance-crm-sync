@@ -1,8 +1,11 @@
-import '../styles/globals.css';
-import '../styles/dkrs-theme.css';
+import "../styles/globals.css";
+import "../styles/dkrs-theme.css";
+import AuthProvider from "../components/AuthProvider";
 
-function MyApp({ Component, pageProps }) {
-  return <Component {...pageProps} />;
+export default function App({ Component, pageProps }) {
+  return (
+    <AuthProvider>
+      <Component {...pageProps} />
+    </AuthProvider>
+  );
 }
-
-export default MyApp;
