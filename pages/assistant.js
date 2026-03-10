@@ -280,20 +280,6 @@ export default function AssistantPage() {
     </>
   )}
 </div>
-                {GREETINGS.map((g) => (
-                  <button
-                    key={g.value}
-                    className={`greeting-option ${greeting === g.value ? "active" : ""}`}
-                    onClick={() => changeGreeting(g.value)}
-                  >
-                    <span className="greeting-option-label">{g.label}</span>
-                    <span className="greeting-option-desc">{g.desc}</span>
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
 
         {/* Controls */}
         <div className="assistant-controls glass-card">
