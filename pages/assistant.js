@@ -258,12 +258,28 @@ export default function AssistantPage() {
             <p>Голос Onyx • Whisper • Все устройства и браузеры</p>
           </div>
           {/* Greeting Picker */}
-          <div className="greeting-picker-wrapper">
-            <button className="greeting-picker-btn" onClick={() => setShowGreetingPicker(!showGreetingPicker)}>
-              {currentGreeting.label} <span className="greeting-arrow">▾</span>
-            </button>
-            {showGreetingPicker && (
-              <div className="greeting-dropdown">
+         <div className="greeting-picker-wrapper">
+  <button className="greeting-picker-btn" onClick={() => setShowGreetingPicker(!showGreetingPicker)}>
+    {currentGreeting.label} <span className="greeting-arrow">▾</span>
+  </button>
+  {showGreetingPicker && (
+    <>
+      <div className="greeting-overlay" onClick={() => setShowGreetingPicker(false)} />
+      <div className="greeting-dropdown">
+        {GREETINGS.map((g) => (
+          <button
+            key={g.value}
+            className={`greeting-option ${greeting === g.value ? "active" : ""}`}
+            onClick={() => changeGreeting(g.value)}
+          >
+            <span className="greeting-option-label">{g.label}</span>
+            <span className="greeting-option-desc">{g.desc}</span>
+          </button>
+        ))}
+      </div>
+    </>
+  )}
+</div>
                 {GREETINGS.map((g) => (
                   <button
                     key={g.value}
