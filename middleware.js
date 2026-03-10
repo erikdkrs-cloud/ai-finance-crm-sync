@@ -4,119 +4,141 @@ import { jwtVerify } from "jose";
 function roleRank(role) {
   if (role === "admin") return 3;
   if (role === "manager") return 2;
-  return 1; // viewer
+  return 1;
 }
 
 async function verify(token) {
-  const secret = process.env.AUTH_SECRET || "";
+  var secret = process.env.AUTH_SECRET || "";
   if (!secret) throw new Error("AUTH_SECRET is not set");
-  const key = new TextEncoder().encode(secret);
-  const { payload } = await jwtVerify(token, key);
-  return payload; // { login, role }
+  var key = new TextEncoder().encode(secret);
+  var result = await jwtVerify(token, key);
+  return result.payload;
 }
 
 function getCookie(req, name) {
-  const cookie = req.headers.get("cookie") || "";
-  const parts = cookie.split(";").map((x) => x.trim());
-  for (const p of parts) {
-    if (p.startsWith(name + "=")) return decodeURIComponent(p.slice(name.length + 1));
+  var cookie = req.headers.get("cookie") || "";
+  var parts = cookie.split(";").map(function (x) { return x.trim(); });
+  for (var i = 0; i < parts.length; i++) {
+    if (parts[i].startsWith(name + "=")) return decodeURIComponent(parts[i].slice(name.length + 1));
   }
   return "";
 }
 
-// Настройка прав на API
 function requiredRoleForApi(pathname) {
-  // READ (viewer)
-  const viewerAllowed = [
-    "/api/months",
-    "/api/dashboard",
-    "/api/reports_list",
-    "/api/report_get",
-    "/api/ping",
-    "/api/auth/debug", // если оставлял debug
+  // Auth endpoints — always open
+  if (pathname.startsWith("/api/auth/")) return null;
+
+  // Viewer level
+  var viewerPaths = [
+    "/api/months", "/api/dashboard", "/api/reports_list",
+    "/api/report_get", "/api/ping", "/api/summary",
+    "/api/analytics", "/api/budget", "/api/data-management",
   ];
-  if (viewerAllowed.some((p) => pathname.startsWith(p))) return "viewer";
+  for (var i = 0; i < viewerPaths.length; i++) {
+    if (pathname.startsWith(viewerPaths[i])) return "viewer";
+  }
 
-  // manager can generate reports
+  // Manager level
   if (pathname.startsWith("/api/report")) return "manager";
+  if (pathname.startsWith("/api/ai")) return "manager";
 
-  // admin only
+  // Admin only
   if (pathname.startsWith("/api/import")) return "admin";
   if (pathname.startsWith("/api/sync")) return "admin";
+  if (pathname.startsWith("/api/users")) return "admin";
 
-  // default: protect everything else as viewer
+  // Default
   if (pathname.startsWith("/api/")) return "viewer";
 
   return null;
 }
 
 export async function middleware(req) {
-  const { pathname, search } = req.nextUrl;
+  var pathname = req.nextUrl.pathname;
+  var search = req.nextUrl.search || "";
 
-  // allow login routes
+  // Public pages
+  if (pathname === "/") return NextResponse.next();
   if (pathname === "/login") return NextResponse.next();
+  if (pathname === "/register") return NextResponse.next();
+
+  // Auth API — always open
   if (pathname.startsWith("/api/auth/")) return NextResponse.next();
 
-  // public home page
-  if (pathname === "/") return NextResponse.next();
-
-  // ✅ Allow Apps Script server-to-server access for import/sync via header token
-  // (без куки, но только если правильный токен)
-  const envToken = process.env.CRM_SYNC_TOKEN || "";
-  const headerToken = req.headers.get("x-crm-sync-token") || "";
-
+  // CRM sync token
+  var envToken = process.env.CRM_SYNC_TOKEN || "";
+  var headerToken = req.headers.get("x-crm-sync-token") || "";
   if (envToken && headerToken && headerToken === envToken) {
     if (pathname.startsWith("/api/import") || pathname.startsWith("/api/sync")) {
       return NextResponse.next();
     }
   }
 
-  // check if this route needs auth
-  const isProtectedPage =
+  // Protected pages
+  var isProtectedPage =
     pathname.startsWith("/dashboard") ||
-    pathname.startsWith("/reports");
+    pathname.startsWith("/reports") ||
+    pathname.startsWith("/summary") ||
+    pathname.startsWith("/assistant") ||
+    pathname.startsWith("/import") ||
+    pathname.startsWith("/data-management") ||
+    pathname.startsWith("/analytics") ||
+    pathname.startsWith("/budget") ||
+    pathname.startsWith("/users");
 
-  const requiredApiRole = requiredRoleForApi(pathname);
-  const needsAuth = isProtectedPage || !!requiredApiRole;
+  var requiredApiRole = requiredRoleForApi(pathname);
+  var needsAuth = isProtectedPage || !!requiredApiRole;
 
   if (!needsAuth) return NextResponse.next();
 
-  // If API request without auth -> return JSON 401 (instead of redirect), to avoid 405 confusion
-  const isApi = pathname.startsWith("/api/");
+  var isApi = pathname.startsWith("/api/");
+  var token = getCookie(req, "ai_finance_session");
 
-  const token = getCookie(req, "ai_finance_session");
   if (!token) {
     if (isApi) return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
-
-    const url = req.nextUrl.clone();
+    var url = req.nextUrl.clone();
     url.pathname = "/login";
-    url.search = `?next=${encodeURIComponent(pathname + (search || ""))}`;
+    url.search = "?next=" + encodeURIComponent(pathname + search);
     return NextResponse.redirect(url);
   }
 
   try {
-    const payload = await verify(token);
-    const role = String(payload?.role || "viewer");
+    var payload = await verify(token);
+    var role = String(payload.role || "viewer");
+
+    // Check page-level role restrictions
+    if (pathname.startsWith("/users") && role !== "admin") {
+      var url403 = req.nextUrl.clone();
+      url403.pathname = "/dashboard";
+      return NextResponse.redirect(url403);
+    }
+
+    if (pathname.startsWith("/import") && role !== "admin") {
+      var urlImport = req.nextUrl.clone();
+      urlImport.pathname = "/dashboard";
+      return NextResponse.redirect(urlImport);
+    }
 
     if (requiredApiRole) {
-      const ok = roleRank(role) >= roleRank(requiredApiRole);
+      var ok = roleRank(role) >= roleRank(requiredApiRole);
       if (!ok) return NextResponse.json({ ok: false, error: "Forbidden" }, { status: 403 });
     }
 
-    const res = NextResponse.next();
-    res.headers.set("x-user-role", role);
-    res.headers.set("x-user-login", String(payload?.login || ""));
-    return res;
-  } catch {
+    var response = NextResponse.next();
+    response.headers.set("x-user-role", role);
+    response.headers.set("x-user-login", String(payload.login || ""));
+    if (payload.userId) response.headers.set("x-user-id", String(payload.userId));
+    if (payload.name) response.headers.set("x-user-name", String(payload.name));
+    return response;
+  } catch (e) {
     if (isApi) return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
-
-    const url = req.nextUrl.clone();
-    url.pathname = "/login";
-    url.search = `?next=${encodeURIComponent(pathname + (search || ""))}`;
-    return NextResponse.redirect(url);
+    var urlLogin = req.nextUrl.clone();
+    urlLogin.pathname = "/login";
+    urlLogin.search = "?next=" + encodeURIComponent(pathname + search);
+    return NextResponse.redirect(urlLogin);
   }
 }
 
-export const config = {
+export var config = {
   matcher: ["/((?!_next/static|_next/image|favicon.ico).*)"],
 };
