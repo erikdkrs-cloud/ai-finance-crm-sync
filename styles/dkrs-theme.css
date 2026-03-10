@@ -1344,24 +1344,6 @@ img { max-width: 100%; }
   box-shadow: 0 0 40px rgba(0,212,255,0.25) !important;
 }
 
-/* ===== FIX: Greeting dropdown overflow ===== */
-.assistant-hero,
-.assistant-hero.glass-card,
-.assistant-controls,
-.assistant-controls.glass-card,
-.assistant-page {
-  overflow: visible !important;
-}
-.glass-card:has(.greeting-picker-wrapper) {
-  overflow: visible !important;
-}
-.greeting-dropdown {
-  position: fixed !important;
-  top: auto !important;
-  right: 40px !important;
-  z-index: 99999 !important;
-}
-
 /* ===== DARK THEME — COMPLETE ===== */
 [data-theme="dark"] body {
   background: #0f172a !important;
