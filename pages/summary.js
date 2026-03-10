@@ -89,3 +89,117 @@ function formatAnomalyValue(item) {
   if (item.reason && item.reason.indexOf("маржинальность") !== -1) return fmtPct(val);
   return fmtMoney(val, 0) + " ₽";
 }
+export default function Summary() {
+  var router = useRouter();
+  var auth = useAuth();
+  var months = auth.months || [];
+  var selectedMonth = auth.selectedMonth || "";
+  var setSelectedMonth = auth.setSelectedMonth;
+
+  var _data = useState(null), data = _data[0], setData = _data[1];
+  var _loading = useState(true), loading = _loading[0], setLoading = _loading[1];
+  var _error = useState(null), error = _error[0], setError = _error[1];
+  var _mounted = useState(false), mounted = _mounted[0], setMounted = _mounted[1];
+
+  useEffect(function () { setMounted(true); }, []);
+
+  useEffect(function () {
+    if (!selectedMonth) { setLoading(false); return; }
+    setLoading(true);
+    fetch("/api/summary?month=" + selectedMonth)
+      .then(function (r) { return r.json(); })
+      .then(function (d) {
+        if (d.ok) { setData(d); setError(null); }
+        else throw new Error(d.error || "Ошибка");
+      })
+      .catch(function (e) { setError(e.message); setData(null); })
+      .finally(function () { setLoading(false); });
+  }, [selectedMonth]);
+
+  var totalProjects = data && data.projects ? data.projects.length : 0;
+  var riskDist = data && data.riskDistribution ? data.riskDistribution : { green: 0, yellow: 0, red: 0 };
+
+  return (
+    <DkrsAppShell>
+      <div className={"summary-page " + (mounted ? "mounted" : "")}>
+        <div className="summary-page-header">
+          <div>
+            <h1 className="summary-title">📋 Сводка и аналитика</h1>
+            <p className="summary-subtitle">Ключевые показатели за период</p>
+          </div>
+          {months.length > 0 && (
+            <div className="dashboard-period-bar" style={{ margin: 0 }}>
+              <span className="dashboard-period-label">📅 Период:</span>
+              <select className="dkrs-select" value={selectedMonth} onChange={function (e) { setSelectedMonth(e.target.value); }}>
+                {months.map(function (m) { return <option key={m} value={m}>{m}</option>; })}
+              </select>
+            </div>
+          )}
+        </div>
+
+        {loading ? (
+          <div className="centered-message"><div className="loader-spinner" /><span>Анализируем данные...</span></div>
+        ) : error ? (
+          <div className="centered-message error">{error}</div>
+        ) : data ? (
+          <React.Fragment>
+            <div className="summary-two-cols">
+              <div className="summary-widget glass-card">
+                <div className="widget-header"><h3>🏆 Топ-3 прибыльных</h3><span className="widget-badge green">Лидеры</span></div>
+                <div className="top-cards-list">
+                  {(data.top_profitable || []).map(function (p, i) { return <TopCard key={p.project} project={p} index={i} variant="profit" />; })}
+                  {(!data.top_profitable || data.top_profitable.length === 0) && <div className="empty-widget">Нет данных</div>}
+                </div>
+              </div>
+              <div className="summary-widget glass-card">
+                <div className="widget-header"><h3>📉 Топ-3 убыточных</h3><span className="widget-badge red">Внимание</span></div>
+                <div className="top-cards-list">
+                  {(data.top_unprofitable || []).map(function (p, i) { return <TopCard key={p.project} project={p} index={i} variant="loss" />; })}
+                  {(!data.top_unprofitable || data.top_unprofitable.length === 0) && <div className="empty-widget">Нет убыточных</div>}
+                </div>
+              </div>
+            </div>
+
+            <div className="summary-two-cols">
+              <div className="summary-widget glass-card">
+                <div className="widget-header"><h3>🎯 Распределение рисков</h3><span className="widget-badge neutral">{totalProjects} проектов</span></div>
+                <div className="risk-rings-row">
+                  <RiskRing count={riskDist.green} total={totalProjects} color="#10b981" label="Низкий" />
+                  <RiskRing count={riskDist.yellow} total={totalProjects} color="#f59e0b" label="Средний" />
+                  <RiskRing count={riskDist.red} total={totalProjects} color="#ef4444" label="Высокий" />
+                </div>
+              </div>
+              <div className="summary-widget glass-card">
+                <div className="widget-header"><h3>📊 Структура расходов</h3><span className="widget-badge neutral">{fmtMoney((data.totals && data.totals.costs) || 0, 0)} ₽</span></div>
+                <ExpenseBar totals={data.totals} />
+              </div>
+            </div>
+
+            <div className="summary-widget glass-card full-width">
+              <div className="widget-header"><h3>⚠️ Аномалии</h3><span className="widget-badge orange">{data.anomalies ? data.anomalies.length : 0} найдено</span></div>
+              <div className="projects-table-wrapper">
+                <table className="dkrs-table">
+                  <thead><tr><th>Проект</th><th>Причина</th><th>Значение</th></tr></thead>
+                  <tbody>
+                    {data.anomalies && data.anomalies.length > 0 ? data.anomalies.map(function (item, i) {
+                      return (
+                        <tr key={i} className="table-row-animated" style={{ animationDelay: i * 50 + "ms" }}>
+                          <td className="project-name">{item.project}</td>
+                          <td><span className="anomaly-chip">{item.reason === "Штрафы" ? "⚖️" : item.reason === "Высокие расходы на рекламу" ? "📢" : "📉"} {item.reason}</span></td>
+                          <td className={item.reason && item.reason.indexOf("маржинальность") !== -1 ? "negative-value" : ""}>{formatAnomalyValue(item)}</td>
+                        </tr>
+                      );
+                    }) : (
+                      <tr><td colSpan="3" className="empty-state"><div className="empty-icon">🎉</div>Аномалий не найдено!</td></tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <div className="summary-two-cols">
+              <div className="summary-widget glass-card">
+                <div className="widget-header"><h3>💡 Быстрые инсайты</h3></div>
+                <div className="insights-list">
+                  {(data.insights || []).map(function (ins, i) {
+                    return <div key={i} className="insight-item" style={{ animationDelay: i * 80 + "ms" }}><span className="insight-icon"
