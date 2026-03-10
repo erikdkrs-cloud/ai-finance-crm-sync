@@ -13,15 +13,6 @@ export default async function handler(req, res) {
       return res.status(400).json({ ok: false, error: "Нет данных для импорта" });
     }
 
-    // Ensure columns exist
-    try {
-      await sql`ALTER TABLE project_data ADD COLUMN IF NOT EXISTS expense_salary_workers NUMERIC DEFAULT 0`;
-      await sql`ALTER TABLE project_data ADD COLUMN IF NOT EXISTS expense_salary_management NUMERIC DEFAULT 0`;
-      await sql`ALTER TABLE project_data ADD COLUMN IF NOT EXISTS expense_rent NUMERIC DEFAULT 0`;
-    } catch (e) {
-      // columns might already exist
-    }
-
     var imported = 0;
     var projectsSet = {};
     var periodsSet = {};
@@ -30,12 +21,11 @@ export default async function handler(req, res) {
       var r = rows[i];
       if (!r.project || !r.month) continue;
 
-      var project = String(r.project).trim();
+      var projectName = String(r.project).trim();
       var month = String(r.month).trim();
       var revenue = parseFloat(r.revenue) || 0;
       var salaryWorkers = parseFloat(r.expense_salary_workers) || 0;
-      var salaryMgmt = parseFloat(r.expense_salary_management) || 0;
-      var salary = salaryWorkers + salaryMgmt;
+      var salaryManager = parseFloat(r.expense_salary_management) || 0;
       var ads = parseFloat(r.expense_ads) || 0;
       var transport = parseFloat(r.expense_transport) || 0;
       var other = parseFloat(r.expense_other) || 0;
@@ -43,69 +33,75 @@ export default async function handler(req, res) {
       var tax = parseFloat(r.expense_tax) || 0;
       var rent = parseFloat(r.expense_rent) || 0;
 
-      // Check if project exists
-      var existing = await sql`
-        SELECT id FROM projects WHERE name = ${project} LIMIT 1
+      // Find or create project
+      var existingProject = await sql`
+        SELECT id FROM projects WHERE name = ${projectName} LIMIT 1
       `;
 
       var projectId;
-      if (existing.length > 0) {
-        projectId = existing[0].id;
+      if (existingProject.length > 0) {
+        projectId = existingProject[0].id;
       } else {
-        var inserted = await sql`
-          INSERT INTO projects (name) VALUES (${project}) RETURNING id
+        var insertedProject = await sql`
+          INSERT INTO projects (name) VALUES (${projectName}) RETURNING id
         `;
-        projectId = inserted[0].id;
+        projectId = insertedProject[0].id;
       }
 
-      // Upsert financial data
-      var existingData = await sql`
-        SELECT id FROM project_data 
-        WHERE project_id = ${projectId} AND month = ${month} LIMIT 1
+      // Find or create period
+      var existingPeriod = await sql`
+        SELECT id FROM periods WHERE month = ${month} LIMIT 1
       `;
 
-      if (existingData.length > 0) {
+      var periodId;
+      if (existingPeriod.length > 0) {
+        periodId = existingPeriod[0].id;
+      } else {
+        var insertedPeriod = await sql`
+          INSERT INTO periods (month) VALUES (${month}) RETURNING id
+        `;
+        periodId = insertedPeriod[0].id;
+      }
+
+      // Check if financial_row already exists
+      var existingRow = await sql`
+        SELECT id FROM financial_rows
+        WHERE project_id = ${projectId} AND period_id = ${periodId}
+        LIMIT 1
+      `;
+
+      if (existingRow.length > 0) {
+        // Update existing
         await sql`
-          UPDATE project_data SET
-            revenue = ${revenue},
-            expense_salary = ${salary},
-            expense_salary_workers = ${salaryWorkers},
-            expense_salary_management = ${salaryMgmt},
-            expense_ads = ${ads},
-            expense_transport = ${transport},
-            expense_other = ${other},
-            expense_fines = ${fines},
-            expense_tax = ${tax},
-            expense_rent = ${rent},
-            updated_at = NOW()
-          WHERE id = ${existingData[0].id}
+          UPDATE financial_rows SET
+            revenue_no_vat = ${revenue},
+            salary_workers = ${salaryWorkers},
+            salary_manager = ${salaryManager},
+            salary_head = 0,
+            ads = ${ads},
+            transport = ${transport},
+            penalties = ${fines},
+            tax = ${tax}
+          WHERE id = ${existingRow[0].id}
         `;
       } else {
+        // Insert new
         await sql`
-          INSERT INTO project_data (
-            project_id, month, revenue, 
-            expense_salary, expense_salary_workers, expense_salary_management,
-            expense_ads, expense_transport, expense_other, 
-            expense_fines, expense_tax, expense_rent
+          INSERT INTO financial_rows (
+            project_id, period_id, revenue_no_vat,
+            salary_workers, salary_manager, salary_head,
+            ads, transport, penalties, tax
           ) VALUES (
-            ${projectId}, ${month}, ${revenue},
-            ${salary}, ${salaryWorkers}, ${salaryMgmt},
-            ${ads}, ${transport}, ${other},
-            ${fines}, ${tax}, ${rent}
+            ${projectId}, ${periodId}, ${revenue},
+            ${salaryWorkers}, ${salaryManager}, 0,
+            ${ads}, ${transport}, ${fines}, ${tax}
           )
         `;
       }
 
-      projectsSet[project] = true;
+      projectsSet[projectName] = true;
       periodsSet[month] = true;
       imported++;
-    }
-
-    // Refresh materialized view
-    try {
-      await sql`REFRESH MATERIALIZED VIEW v_financial_calc`;
-    } catch (e) {
-      // view might not exist, ignore
     }
 
     return res.status(200).json({
@@ -115,6 +111,7 @@ export default async function handler(req, res) {
       periods: Object.keys(periodsSet),
     });
   } catch (e) {
+    console.error("Import error:", e);
     return res.status(500).json({ ok: false, error: e.message });
   }
 }
