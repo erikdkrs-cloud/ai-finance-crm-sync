@@ -51,24 +51,15 @@ function statusLabel(s) {
   return { text: s || "—", color: "#6b7280", bg: "#f3f4f6" };
 }
 
-function extractPhone(text) {
-  if (!text) return null;
-  var cleaned = text.replace(/[^\d+]/g, "");
-  var m = cleaned.match(/[+]?[78]\d{10}/);
-  return m ? m[0] : null;
-}
-
 function parseCandidateInfo(msg) {
   if (!msg) return null;
   var info = {};
-  var fioMatch = msg.match(/ФИО\s*[\n—:]+\s*(.+)/i);
+  var fioMatch = msg.match(/ФИО\s*[\n\u2014:]+\s*(.+)/i);
   if (fioMatch) info.fio = fioMatch[1].trim();
-  var ageMatch = msg.match(/Возраст\s*[\n—:]+\s*(\d+)/i);
+  var ageMatch = msg.match(/Возраст\s*[\n\u2014:]+\s*(\d+)/i);
   if (ageMatch) info.age = ageMatch[1];
-  var citizenMatch = msg.match(/Гражданство\s*[\n—:]+\s*(.+)/i);
+  var citizenMatch = msg.match(/Гражданство\s*[\n\u2014:]+\s*(.+)/i);
   if (citizenMatch) info.citizenship = citizenMatch[1].trim();
-  var phone = extractPhone(msg);
-  if (phone) info.phone = phone;
   if (Object.keys(info).length === 0) return null;
   return info;
 }
@@ -114,22 +105,17 @@ export default function VacanciesPage() {
   }, []);
 
   useEffect(function () { fetchData(); }, [fetchData]);
-
-  useEffect(function () {
-    if (chatEndRef.current) chatEndRef.current.scrollIntoView({ behavior: "smooth" });
-  }, [chatMessages]);
+  useEffect(function () { if (chatEndRef.current) chatEndRef.current.scrollIntoView({ behavior: "smooth" }); }, [chatMessages]);
 
   function doSync() {
     setSyncing(true); setMsg(null);
     fetch("/api/avito/sync?mode=items").then(function (r) { return r.json(); }).then(function (d1) {
       var vc = d1.synced ? d1.synced.vacancies : 0;
       setMsg({ type: "success", text: "⏳ Вакансии: " + vc + ". Загружаю отклики..." });
-      var totalResp = 0;
-      var pageNum = 0;
+      var totalResp = 0; var pageNum = 0;
       function loadChats() {
         fetch("/api/avito/sync?mode=chats&chat_page=" + pageNum).then(function (r) { return r.json(); }).then(function (d) {
-          var batch = d.synced ? d.synced.responses : 0;
-          totalResp += batch;
+          var batch = d.synced ? d.synced.responses : 0; totalResp += batch;
           setMsg({ type: "success", text: "⏳ Загружено " + totalResp + " откликов..." });
           if (batch > 0 && !d.errors) { pageNum++; loadChats(); }
           else { setSyncing(false); setMsg({ type: "success", text: "✅ " + vc + " вакансий, " + totalResp + " откликов" }); fetchData(); }
@@ -141,61 +127,30 @@ export default function VacanciesPage() {
 
   function openChat(response) {
     setSelectedChat(response);
-    setChatMessages([]);
-    setChatPhone(null);
-    setChatLoading(true);
-    setChatText("");
-
-    // Load messages
+    setChatMessages([]); setChatPhone(response.phone || null); setChatLoading(true); setChatText("");
     fetch("/api/avito/chat?chat_id=" + response.avito_chat_id + "&account_id=" + response.account_id)
       .then(function (r) { return r.json(); })
-      .then(function (d) {
-        if (d.ok) setChatMessages(d.messages || []);
-        setChatLoading(false);
-      })
+      .then(function (d) { if (d.ok) setChatMessages(d.messages || []); setChatLoading(false); })
       .catch(function () { setChatLoading(false); });
-
-    // Load phone
-    fetch("/api/avito/phone?chat_id=" + response.avito_chat_id + "&account_id=" + response.account_id)
-      .then(function (r) { return r.json(); })
-      .then(function (d) {
-        if (d.ok && d.phone) setChatPhone(d.phone);
-      })
-      .catch(function () {});
   }
 
   function sendMessage() {
     if (!chatText.trim() || !selectedChat || sending) return;
     setSending(true);
     fetch("/api/avito/chat", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        chat_id: selectedChat.avito_chat_id,
-        account_id: selectedChat.account_id,
-        text: chatText.trim(),
-      }),
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ chat_id: selectedChat.avito_chat_id, account_id: selectedChat.account_id, text: chatText.trim() }),
     }).then(function (r) { return r.json(); }).then(function (d) {
       if (d.ok) {
-        setChatMessages(function (prev) {
-          return prev.concat([{
-            id: Date.now(),
-            direction: "out",
-            content: chatText.trim(),
-            created: Math.floor(Date.now() / 1000),
-          }]);
-        });
+        setChatMessages(function (prev) { return prev.concat([{ id: Date.now(), direction: "out", content: chatText.trim(), created: Math.floor(Date.now() / 1000) }]); });
         setChatText("");
-      } else {
-        alert("Ошибка: " + (d.error || "Не удалось отправить"));
-      }
+      } else { alert("Ошибка: " + (d.error || "Не удалось отправить")); }
       setSending(false);
     }).catch(function () { setSending(false); alert("Ошибка сети"); });
   }
 
   function refreshChat() {
-    if (!selectedChat) return;
-    setChatLoading(true);
+    if (!selectedChat) return; setChatLoading(true);
     fetch("/api/avito/chat?chat_id=" + selectedChat.avito_chat_id + "&account_id=" + selectedChat.account_id)
       .then(function (r) { return r.json(); })
       .then(function (d) { if (d.ok) setChatMessages(d.messages || []); setChatLoading(false); })
@@ -212,7 +167,7 @@ export default function VacanciesPage() {
   }
 
   function deleteAccount(id) {
-    if (!confirm("Удалить аккаунт и все его данные?")) return;
+    if (!confirm("Удалить аккаунт?")) return;
     fetch("/api/avito/accounts?id=" + id, { method: "DELETE" }).then(function () { fetchData(); });
   }
 
@@ -226,13 +181,10 @@ export default function VacanciesPage() {
     if (cityFilter !== "all" && v.city !== cityFilter) return false;
     return true;
   });
-
   filtered.sort(function (a, b) {
     if (sortBy === "responses") return (b.responses_count || 0) - (a.responses_count || 0);
     if (sortBy === "salary") return (b.salary_from || 0) - (a.salary_from || 0);
-    if (sortBy === "title") return (a.title || "").localeCompare(b.title || "");
     if (sortBy === "date") return new Date(b.created_at || 0) - new Date(a.created_at || 0);
-    if (sortBy === "views") return (b.views || 0) - (a.views || 0);
     return 0;
   });
 
@@ -248,7 +200,7 @@ export default function VacanciesPage() {
       return (r.author_name || "").toLowerCase().indexOf(search.toLowerCase()) !== -1 || (r.message || "").toLowerCase().indexOf(search.toLowerCase()) !== -1;
     });
   }
-  return (
+    return (
     <DkrsAppShell>
       <div style={{ maxWidth: 1400, margin: "0 auto" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
@@ -299,14 +251,12 @@ export default function VacanciesPage() {
               ← Назад
             </button>
 
-            {/* Candidate Info Card */}
             <div style={{ background: "#fff", borderRadius: 16, padding: 20, marginBottom: 16, boxShadow: "0 1px 4px rgba(0,0,0,0.06)", border: "1px solid #f0f0f0" }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
                   <div style={{
                     width: 52, height: 52, borderRadius: "50%", background: "linear-gradient(135deg, #6366f1, #8b5cf6)",
-                    display: "flex", alignItems: "center", justifyContent: "center",
-                    fontWeight: 700, color: "#fff", fontSize: 22,
+                    display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700, color: "#fff", fontSize: 22,
                   }}>{(selectedChat.author_name || "?")[0].toUpperCase()}</div>
                   <div>
                     <div style={{ fontWeight: 700, fontSize: 18 }}>{selectedChat.author_name || "Без имени"}</div>
@@ -325,30 +275,23 @@ export default function VacanciesPage() {
                   </div>
                 </div>
                 <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-                  {/* Phone */}
-                  {(chatPhone || (parseCandidateInfo(selectedChat.message) || {}).phone) && (
-                    <a href={"tel:" + (chatPhone || (parseCandidateInfo(selectedChat.message) || {}).phone)}
+                  {(selectedChat.phone || chatPhone) && (
+                    <a href={"tel:" + (selectedChat.phone || chatPhone)}
                       style={{
                         display: "flex", alignItems: "center", gap: 6, padding: "10px 20px",
-                        borderRadius: 12, background: "#22c55e", color: "#fff", textDecoration: "none",
-                        fontWeight: 700, fontSize: 15,
+                        borderRadius: 12, background: "#22c55e", color: "#fff", textDecoration: "none", fontWeight: 700, fontSize: 15,
                       }}>
-                      📞 {chatPhone || (parseCandidateInfo(selectedChat.message) || {}).phone}
+                      📞 {selectedChat.phone || chatPhone}
                     </a>
                   )}
-                  <button onClick={refreshChat} style={{
-                    padding: "10px 16px", borderRadius: 10, border: "1px solid #e5e7eb",
-                    background: "#fff", cursor: "pointer", fontSize: 14
-                  }}>🔄</button>
+                  <button onClick={refreshChat} style={{ padding: "10px 16px", borderRadius: 10, border: "1px solid #e5e7eb", background: "#fff", cursor: "pointer", fontSize: 14 }}>🔄</button>
                 </div>
               </div>
             </div>
 
-            {/* Messages */}
             <div style={{
               background: "#f8fafc", borderRadius: 16, border: "1px solid #e5e7eb",
-              height: 420, overflowY: "auto", padding: 20, marginBottom: 12,
-              display: "flex", flexDirection: "column", gap: 8,
+              height: 420, overflowY: "auto", padding: 20, marginBottom: 12, display: "flex", flexDirection: "column", gap: 8,
             }}>
               {chatLoading ? (
                 <div style={{ textAlign: "center", color: "#888", paddingTop: 60 }}>⏳ Загрузка сообщений...</div>
@@ -357,16 +300,12 @@ export default function VacanciesPage() {
               ) : chatMessages.map(function (m) {
                 var isOut = m.direction === "out";
                 return (
-                  <div key={m.id} style={{
-                    display: "flex", justifyContent: isOut ? "flex-end" : "flex-start",
-                  }}>
+                  <div key={m.id} style={{ display: "flex", justifyContent: isOut ? "flex-end" : "flex-start" }}>
                     <div style={{
                       maxWidth: "70%", padding: "10px 16px", borderRadius: 16,
                       background: isOut ? "linear-gradient(135deg, #6366f1, #8b5cf6)" : "#fff",
-                      color: isOut ? "#fff" : "#111",
-                      boxShadow: "0 1px 3px rgba(0,0,0,0.08)",
-                      borderBottomRightRadius: isOut ? 4 : 16,
-                      borderBottomLeftRadius: isOut ? 16 : 4,
+                      color: isOut ? "#fff" : "#111", boxShadow: "0 1px 3px rgba(0,0,0,0.08)",
+                      borderBottomRightRadius: isOut ? 4 : 16, borderBottomLeftRadius: isOut ? 16 : 4,
                     }}>
                       <div style={{ fontSize: 14, whiteSpace: "pre-line", lineHeight: 1.5 }}>{m.content}</div>
                       <div style={{ fontSize: 11, marginTop: 4, opacity: 0.6, textAlign: "right" }}>{formatDateTime(m.created)}</div>
@@ -377,21 +316,16 @@ export default function VacanciesPage() {
               <div ref={chatEndRef} />
             </div>
 
-            {/* Input */}
             <div style={{ display: "flex", gap: 10 }}>
               <input value={chatText} onChange={function (e) { setChatText(e.target.value); }}
                 onKeyDown={function (e) { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendMessage(); } }}
                 placeholder="Введите сообщение..."
-                style={{
-                  flex: 1, padding: "14px 18px", borderRadius: 14, border: "1px solid #e5e7eb",
-                  fontSize: 15, outline: "none",
-                }} />
+                style={{ flex: 1, padding: "14px 18px", borderRadius: 14, border: "1px solid #e5e7eb", fontSize: 15, outline: "none" }} />
               <button onClick={sendMessage} disabled={sending || !chatText.trim()}
                 style={{
                   padding: "14px 28px", borderRadius: 14, border: "none",
                   background: chatText.trim() ? "linear-gradient(135deg, #6366f1, #8b5cf6)" : "#e5e7eb",
-                  color: chatText.trim() ? "#fff" : "#999",
-                  fontWeight: 700, fontSize: 15, cursor: chatText.trim() ? "pointer" : "default",
+                  color: chatText.trim() ? "#fff" : "#999", fontWeight: 700, fontSize: 15, cursor: chatText.trim() ? "pointer" : "default",
                 }}>
                 {sending ? "⏳" : "➤ Отправить"}
               </button>
@@ -399,7 +333,7 @@ export default function VacanciesPage() {
           </div>
         )}
 
-        {/* ===== VACANCIES TAB ===== */}
+        {/* ===== VACANCIES LIST ===== */}
         {tab === "vacancies" && !selectedVacancy && !selectedChat && (
           <div>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 16, marginBottom: 20 }}>
@@ -418,14 +352,13 @@ export default function VacanciesPage() {
                 );
               })}
             </div>
+
             <div style={{ display: "flex", gap: 12, marginBottom: 16, background: "#fff", padding: "14px 16px", borderRadius: 14, boxShadow: "0 1px 4px rgba(0,0,0,0.06)", flexWrap: "wrap" }}>
               <input placeholder="🔍 Поиск..." value={search} onChange={function (e) { setSearch(e.target.value); setCurrentPage(1); }}
                 style={{ flex: 1, minWidth: 200, padding: "10px 14px", borderRadius: 10, border: "1px solid #e5e7eb", fontSize: 14 }} />
               <select value={statusFilter} onChange={function (e) { setStatusFilter(e.target.value); setCurrentPage(1); }}
                 style={{ padding: "10px 14px", borderRadius: 10, border: "1px solid #e5e7eb", fontSize: 14 }}>
-                <option value="all">Все статусы</option>
-                <option value="active">Активные</option>
-                <option value="old">Завершённые</option>
+                <option value="all">Все статусы</option><option value="active">Активные</option><option value="old">Завершённые</option>
               </select>
               <select value={cityFilter} onChange={function (e) { setCityFilter(e.target.value); setCurrentPage(1); }}
                 style={{ padding: "10px 14px", borderRadius: 10, border: "1px solid #e5e7eb", fontSize: 14 }}>
@@ -434,11 +367,10 @@ export default function VacanciesPage() {
               </select>
               <select value={sortBy} onChange={function (e) { setSortBy(e.target.value); }}
                 style={{ padding: "10px 14px", borderRadius: 10, border: "1px solid #e5e7eb", fontSize: 14 }}>
-                <option value="responses">По откликам</option>
-                <option value="salary">По зарплате</option>
-                <option value="date">По дате</option>
+                <option value="responses">По откликам</option><option value="salary">По зарплате</option><option value="date">По дате</option>
               </select>
             </div>
+
             <div style={{ background: "#fff", borderRadius: 16, overflow: "hidden", boxShadow: "0 1px 4px rgba(0,0,0,0.06)" }}>
               <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14 }}>
                 <thead>
@@ -498,7 +430,7 @@ export default function VacanciesPage() {
           </div>
         )}
 
-        {/* ===== VACANCY DETAIL WITH RESPONSES ===== */}
+        {/* ===== VACANCY DETAIL ===== */}
         {tab === "vacancies" && selectedVacancy && !selectedChat && (
           <div>
             <button onClick={function () { setSelectedVacancy(null); }}
@@ -511,7 +443,7 @@ export default function VacanciesPage() {
                 <span>📍 {selectedVacancy.city || "—"}</span>
                 <span>💰 {selectedVacancy.salary_from ? formatMoney(selectedVacancy.salary_from) : "—"}</span>
                 <span>💬 {vacResponses.length} откликов</span>
-                {selectedVacancy.url && <a href={selectedVacancy.url} target="_blank" rel="noreferrer" style={{ color: "#6366f1", fontWeight: 600 }}>↗ На Авито</a>}
+                {selectedVacancy.url && <a href={selectedVacancy.url} target="_blank" rel="noreferrer" style={{ color: "#6366f1", fontWeight: 600 }}>↗ Авито</a>}
               </div>
             </div>
 
@@ -522,35 +454,32 @@ export default function VacanciesPage() {
               <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                 {vacResponses.map(function (r) {
                   var info = parseCandidateInfo(r.message);
+                  var phone = r.phone || (info && info.phone) || null;
                   return (
                     <div key={r.id} onClick={function () { openChat(r); }}
-                      style={{
-                        background: "#fff", borderRadius: 14, padding: "16px 20px", cursor: "pointer",
-                        boxShadow: "0 1px 4px rgba(0,0,0,0.06)", border: "1px solid #f0f0f0",
-                        transition: "all 0.15s",
-                      }}
+                      style={{ background: "#fff", borderRadius: 14, padding: "16px 20px", cursor: "pointer", boxShadow: "0 1px 4px rgba(0,0,0,0.06)", border: "1px solid #f0f0f0", transition: "all 0.15s" }}
                       onMouseEnter={function (e) { e.currentTarget.style.borderColor = "#6366f1"; e.currentTarget.style.boxShadow = "0 2px 8px rgba(99,102,241,0.15)"; }}
                       onMouseLeave={function (e) { e.currentTarget.style.borderColor = "#f0f0f0"; e.currentTarget.style.boxShadow = "0 1px 4px rgba(0,0,0,0.06)"; }}>
                       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                          <div style={{
-                            width: 44, height: 44, borderRadius: "50%", background: "linear-gradient(135deg, #6366f1, #8b5cf6)",
-                            display: "flex", alignItems: "center", justifyContent: "center",
-                            fontWeight: 700, color: "#fff", fontSize: 18,
-                          }}>{(r.author_name || "?")[0].toUpperCase()}</div>
+                          <div style={{ width: 44, height: 44, borderRadius: "50%", background: "linear-gradient(135deg, #6366f1, #8b5cf6)", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700, color: "#fff", fontSize: 18 }}>{(r.author_name || "?")[0].toUpperCase()}</div>
                           <div>
                             <div style={{ fontWeight: 700, fontSize: 15 }}>{r.author_name || "Без имени"}</div>
-                            {info && (
-                              <div style={{ display: "flex", gap: 8, marginTop: 4, flexWrap: "wrap" }}>
-                                {info.fio && <span style={{ fontSize: 12, color: "#7c3aed" }}>👤 {info.fio}</span>}
-                                {info.age && <span style={{ fontSize: 12, color: "#16a34a" }}>🎂 {info.age}</span>}
-                                {info.phone && <span style={{ fontSize: 12, color: "#059669", fontWeight: 600 }}>📞 {info.phone}</span>}
-                                {info.citizenship && <span style={{ fontSize: 12, color: "#2563eb" }}>🌍 {info.citizenship}</span>}
-                              </div>
-                            )}
+                            <div style={{ display: "flex", gap: 8, marginTop: 4, flexWrap: "wrap" }}>
+                              {info && info.fio && <span style={{ fontSize: 12, color: "#7c3aed" }}>👤 {info.fio}</span>}
+                              {info && info.age && <span style={{ fontSize: 12, color: "#16a34a" }}>🎂 {info.age}</span>}
+                              {info && info.citizenship && <span style={{ fontSize: 12, color: "#2563eb" }}>🌍 {info.citizenship}</span>}
+                              {phone && <span style={{ fontSize: 12, color: "#059669", fontWeight: 700 }}>📞 {phone}</span>}
+                            </div>
                           </div>
                         </div>
                         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                          {phone && (
+                            <a href={"tel:" + phone} onClick={function (e) { e.stopPropagation(); }}
+                              style={{ padding: "6px 14px", borderRadius: 10, background: "#22c55e", color: "#fff", textDecoration: "none", fontWeight: 600, fontSize: 12 }}>
+                              📞 Позвонить
+                            </a>
+                          )}
                           <div style={{ fontSize: 12, color: "#888" }}>{formatDate(r.created_at)}</div>
                           <div style={{ color: "#6366f1", fontWeight: 600, fontSize: 20 }}>→</div>
                         </div>
@@ -582,28 +511,28 @@ export default function VacanciesPage() {
               <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                 {filteredResponses.slice(0, 50).map(function (r) {
                   var info = parseCandidateInfo(r.message);
+                  var phone = r.phone || (info && info.phone) || null;
                   return (
                     <div key={r.id} onClick={function () { openChat(r); }}
-                      style={{
-                        background: "#fff", borderRadius: 14, padding: "16px 20px", cursor: "pointer",
-                        boxShadow: "0 1px 4px rgba(0,0,0,0.06)", border: "1px solid #f0f0f0",
-                      }}
+                      style={{ background: "#fff", borderRadius: 14, padding: "16px 20px", cursor: "pointer", boxShadow: "0 1px 4px rgba(0,0,0,0.06)", border: "1px solid #f0f0f0" }}
                       onMouseEnter={function (e) { e.currentTarget.style.borderColor = "#6366f1"; }}
                       onMouseLeave={function (e) { e.currentTarget.style.borderColor = "#f0f0f0"; }}>
                       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                          <div style={{
-                            width: 42, height: 42, borderRadius: "50%", background: "linear-gradient(135deg, #6366f1, #8b5cf6)",
-                            display: "flex", alignItems: "center", justifyContent: "center",
-                            fontWeight: 700, color: "#fff", fontSize: 17,
-                          }}>{(r.author_name || "?")[0].toUpperCase()}</div>
+                          <div style={{ width: 42, height: 42, borderRadius: "50%", background: "linear-gradient(135deg, #6366f1, #8b5cf6)", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700, color: "#fff", fontSize: 17 }}>{(r.author_name || "?")[0].toUpperCase()}</div>
                           <div>
                             <div style={{ fontWeight: 600, fontSize: 15 }}>{r.author_name || "Без имени"}</div>
                             {r.vacancy_title && <div style={{ fontSize: 12, color: "#888" }}>📋 {r.vacancy_title}</div>}
-                            {info && info.phone && <div style={{ fontSize: 13, color: "#059669", fontWeight: 600 }}>📞 {info.phone}</div>}
+                            {phone && <div style={{ fontSize: 13, color: "#059669", fontWeight: 700 }}>📞 {phone}</div>}
                           </div>
                         </div>
                         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                          {phone && (
+                            <a href={"tel:" + phone} onClick={function (e) { e.stopPropagation(); }}
+                              style={{ padding: "6px 14px", borderRadius: 10, background: "#22c55e", color: "#fff", textDecoration: "none", fontWeight: 600, fontSize: 12 }}>
+                              📞
+                            </a>
+                          )}
                           <div style={{ fontSize: 12, color: "#888" }}>{formatDate(r.created_at)}</div>
                           <div style={{ color: "#6366f1", fontSize: 18 }}>💬</div>
                         </div>
@@ -663,7 +592,6 @@ export default function VacanciesPage() {
             </div>
           </div>
         )}
-
       </div>
     </DkrsAppShell>
   );
