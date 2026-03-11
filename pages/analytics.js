@@ -2,6 +2,16 @@ import React, { useState, useEffect, useRef } from "react";
 import DkrsAppShell from "../components/DkrsAppShell";
 import AiFloatingButton from "../components/AiFloatingButton";
 
+var ALL_EXPENSE_COLS = [
+  { key: "salary_workers", label: "ЗП Раб.", icon: "👷", color: "#6366f1" },
+  { key: "salary_manager", label: "ЗП Мен.", icon: "👔", color: "#8b5cf6" },
+  { key: "salary_head", label: "ЗП Руков.", icon: "🧑‍💼", color: "#a78bfa" },
+  { key: "ads", label: "Реклама", icon: "📢", color: "#f97316" },
+  { key: "transport", label: "Транспорт", icon: "🚛", color: "#0ea5e9" },
+  { key: "penalties", label: "Штрафы", icon: "⚠️", color: "#ef4444" },
+  { key: "tax", label: "Налоги", icon: "🏛️", color: "#64748b" },
+];
+
 export default function AnalyticsPage() {
   var _m = useState(false), mounted = _m[0], setMounted = _m[1];
   var _projects = useState([]), projects = _projects[0], setProjects = _projects[1];
@@ -62,6 +72,23 @@ export default function AnalyticsPage() {
     setLoading(false);
   }
 
+  // Determine which expense columns have non-zero values across all months
+  function getActiveExpenseCols() {
+    if (!data || !data.monthly) return [];
+    return ALL_EXPENSE_COLS.filter(function (col) {
+      return data.monthly.some(function (row) { return Number(row[col.key] || 0) > 0; });
+    });
+  }
+
+  function getActivePieItems() {
+    if (!data || !data.totals) return [];
+    return ALL_EXPENSE_COLS.filter(function (col) {
+      return Number(data.totals[col.key] || 0) > 0;
+    }).map(function (col) {
+      return { label: col.label, value: Number(data.totals[col.key] || 0), color: col.color };
+    });
+  }
+
   async function drawLine() {
     if (!lineRef.current || !data || !data.monthly) return;
     try {
@@ -91,21 +118,21 @@ export default function AnalyticsPage() {
     try {
       var Chart = (await import("chart.js/auto")).default;
       if (pieInst.current) pieInst.current.destroy();
-      var t = data.totals;
-      var items = [
-        { label: "ЗП Рабочие", value: t.salary_workers || 0, color: "#6366f1" },
-        { label: "ЗП Менеджмент", value: t.salary_manager || 0, color: "#8b5cf6" },
-        { label: "ЗП Руковод.", value: t.salary_head || 0, color: "#a78bfa" },
-        { label: "Реклама", value: t.ads || 0, color: "#f97316" },
-        { label: "Транспорт", value: t.transport || 0, color: "#0ea5e9" },
-        { label: "Штрафы", value: t.penalties || 0, color: "#ef4444" },
-        { label: "Налоги", value: t.tax || 0, color: "#64748b" },
-      ].filter(function (i) { return i.value > 0; });
+      var items = getActivePieItems();
       if (items.length === 0) return;
       pieInst.current = new Chart(pieRef.current, {
         type: "doughnut",
-        data: { labels: items.map(function (i) { return i.label; }), datasets: [{ data: items.map(function (i) { return i.value; }), backgroundColor: items.map(function (i) { return i.color; }), borderWidth: 2, borderColor: "#fff" }] },
-        options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: "right", labels: { usePointStyle: true, padding: 12, font: { size: 12 } } }, tooltip: { callbacks: { label: function (c) { var tot = c.dataset.data.reduce(function (a, b) { return a + b; }, 0); return c.label + ": " + Number(c.raw).toLocaleString("ru-RU") + " ₽ (" + (tot > 0 ? ((c.raw / tot) * 100).toFixed(1) : 0) + "%)"; } } } } },
+        data: {
+          labels: items.map(function (i) { return i.label; }),
+          datasets: [{ data: items.map(function (i) { return i.value; }), backgroundColor: items.map(function (i) { return i.color; }), borderWidth: 2, borderColor: "#fff" }],
+        },
+        options: {
+          responsive: true, maintainAspectRatio: false,
+          plugins: {
+            legend: { position: "right", labels: { usePointStyle: true, padding: 12, font: { size: 12 } } },
+            tooltip: { callbacks: { label: function (c) { var tot = c.dataset.data.reduce(function (a, b) { return a + b; }, 0); return c.label + ": " + Number(c.raw).toLocaleString("ru-RU") + " ₽ (" + (tot > 0 ? ((c.raw / tot) * 100).toFixed(1) : 0) + "%)"; } } },
+          },
+        },
       });
     } catch (e) { console.error(e); }
   }
@@ -125,6 +152,8 @@ export default function AnalyticsPage() {
   if (data && data.totals) { var m = data.totals.margin; if (m < 0.1) risk = "red"; else if (m < 0.2) risk = "yellow"; }
   var riskLabels = { green: "Низкий", yellow: "Средний", red: "Высокий" };
   var riskIcons = { green: "🟢", yellow: "🟡", red: "🔴" };
+
+  var activeCols = data ? getActiveExpenseCols() : [];
 
   return (
     <DkrsAppShell>
@@ -189,9 +218,13 @@ export default function AnalyticsPage() {
                 <table className="dm-table">
                   <thead>
                     <tr>
-                      <th>📅 Месяц</th><th>💰 Выручка</th><th>👷 ЗП Раб.</th><th>👔 ЗП Мен.</th>
-                      <th>📢 Реклама</th><th>🚛 Транспорт</th><th>⚠️ Штрафы</th><th>🏛️ Налоги</th>
-                      <th>📊 Прибыль</th><th>📈 Маржа</th>
+                      <th>📅 Месяц</th>
+                      <th>💰 Выручка</th>
+                      {activeCols.map(function (col) {
+                        return <th key={col.key}>{col.icon} {col.label}</th>;
+                      })}
+                      <th>📊 Прибыль</th>
+                      <th>📈 Маржа</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -200,12 +233,9 @@ export default function AnalyticsPage() {
                         <tr key={row.month}>
                           <td className="dm-cell-month">{row.month}</td>
                           <td>{fmtNum(row.revenue)}</td>
-                          <td>{fmtNum(row.salary_workers)}</td>
-                          <td>{fmtNum(row.salary_manager)}</td>
-                          <td>{fmtNum(row.ads)}</td>
-                          <td>{fmtNum(row.transport)}</td>
-                          <td>{fmtNum(row.penalties)}</td>
-                          <td>{fmtNum(row.tax)}</td>
+                          {activeCols.map(function (col) {
+                            return <td key={col.key}>{fmtNum(row[col.key])}</td>;
+                          })}
                           <td><span className={"dm-cell-profit" + (row.profit >= 0 ? " positive" : " negative")}>{fmtNum(row.profit)}</span></td>
                           <td>{fmtPct(row.margin)}</td>
                         </tr>
