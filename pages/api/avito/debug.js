@@ -4,16 +4,11 @@ export default async function handler(req, res) {
   try {
     var sql = neon(process.env.DATABASE_URL);
     var accounts = await sql`SELECT * FROM avito_accounts LIMIT 1`;
-
-    if (!accounts || !accounts[0]) {
-      return res.json({ ok: false, error: "No accounts" });
-    }
+    if (!accounts || !accounts[0]) return res.json({ error: "No accounts" });
 
     var account = accounts[0];
     var AVITO = "https://api.avito.ru";
-    var userId = 376665673;
 
-    // Get token with scopes
     var tokenRes = await fetch(AVITO + "/token", {
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
@@ -24,60 +19,54 @@ export default async function handler(req, res) {
     var tokenData = await tokenRes.json();
     var token = tokenData.access_token;
     var headers = { "Authorization": "Bearer " + token };
+    var userId = account.user_id || 376665673;
 
+    // Test chats with different params
     var results = {};
-
-    // Try ALL possible item endpoints
-    var endpoints = [
-      "/core/v1/accounts/" + userId + "/items",
-      "/core/v1/accounts/" + userId + "/items/",
-      "/core/v1/items",
-      "/core/v1/items/",
-      "/items/v1/accounts/" + userId + "/items",
-      "/autoload/v2/accounts/" + userId + "/items",
-      "/core/v1/accounts/" + userId + "/items?status=active",
-      "/job/v1/accounts/" + userId + "/vacancies",
-      "/job/v2/accounts/" + userId + "/vacancies",
-      "/core/v1/accounts/" + userId + "/items?category_id=110",
-      "/messenger/v1/accounts/" + userId + "/chats",
-      "/messenger/v2/accounts/" + userId + "/chats",
-      "/messenger/v3/accounts/" + userId + "/chats",
-      "/core/v1/accounts/" + userId + "/stats/items",
+    var chatEndpoints = [
+      "/messenger/v2/accounts/" + userId + "/chats?limit=5",
+      "/messenger/v2/accounts/" + userId + "/chats?limit=5&chat_type=u2i",
+      "/messenger/v2/accounts/" + userId + "/chats?limit=5&item_types=job",
+      "/messenger/v1/accounts/" + userId + "/chats?limit=5",
     ];
 
-    for (var i = 0; i < endpoints.length; i++) {
+    for (var i = 0; i < chatEndpoints.length; i++) {
       try {
-        var r = await fetch(AVITO + endpoints[i], { headers: headers });
-        var text = await r.text();
-        var data;
-        try { data = JSON.parse(text); } catch (e) { data = text; }
-        // Truncate large responses
+        var r = await fetch(AVITO + chatEndpoints[i], { headers: headers });
+        var data = await r.json();
         var summary = { status: r.status };
         if (r.status === 200) {
-          if (data.resources) summary.resources_count = data.resources.length;
-          if (data.chats) summary.chats_count = data.chats.length;
-          if (data.items) summary.items_count = data.items.length;
-          if (data.vacancies) summary.vacancies_count = data.vacancies.length;
-          summary.keys = Object.keys(data);
-          // Show first item if exists
-          if (data.resources && data.resources[0]) summary.first_item = data.resources[0];
-          if (data.chats && data.chats[0]) summary.first_chat_keys = Object.keys(data.chats[0]);
-          if (data.items && data.items[0]) summary.first_item = data.items[0];
-          if (data.vacancies && data.vacancies[0]) summary.first_vacancy = data.vacancies[0];
+          summary.chats_count = (data.chats || []).length;
+          summary.meta = data.meta || null;
+          if (data.chats && data.chats[0]) {
+            var chat = data.chats[0];
+            summary.first_chat = {
+              id: chat.id,
+              created: chat.created,
+              context: chat.context,
+              users: chat.users,
+              last_message_text: chat.last_message ? (chat.last_message.text || chat.last_message.content) : null,
+            };
+          }
         } else {
-          summary.body = typeof data === "string" ? data.slice(0, 200) : data;
+          summary.error = data;
         }
-        results[endpoints[i]] = summary;
+        results[chatEndpoints[i]] = summary;
       } catch (e) {
-        results[endpoints[i]] = { error: e.message };
+        results[chatEndpoints[i]] = { error: e.message };
       }
     }
 
+    // Check how many vacancies have category "Вакансии"
+    var vacancyItems = await sql`SELECT COUNT(*) as cnt FROM avito_vacancies WHERE category = 'Вакансии'`;
+    var allItems = await sql`SELECT DISTINCT category FROM avito_vacancies`;
+
     return res.json({
       ok: true,
-      token_scope: tokenData.scope || tokenData.scopes || "not_in_response",
-      token_type: tokenData.token_type,
-      results: results,
+      userId: userId,
+      chat_results: results,
+      db_vacancy_count: vacancyItems[0].cnt,
+      db_categories: allItems.map(function(r) { return r.category; }),
     });
   } catch (e) {
     return res.status(500).json({ ok: false, error: String(e) });
