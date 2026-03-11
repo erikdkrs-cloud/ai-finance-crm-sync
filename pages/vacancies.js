@@ -81,17 +81,28 @@ export default function VacanciesPage() {
 
   useEffect(function () { fetchData(); }, [fetchData]);
 
-  function doSync() {
+    function doSync() {
     setSyncing(true); setMsg(null);
-    fetch("/api/avito/sync").then(function (r) { return r.json(); }).then(function (data) {
-      setSyncing(false);
-      if (data.ok) {
-        setMsg({ type: "success", text: "✅ Синхронизировано: " + data.synced.vacancies + " вакансий, " + data.synced.responses + " откликов" });
+    // First sync items, then chats
+    fetch("/api/avito/sync?mode=items").then(function (r) { return r.json(); }).then(function (data1) {
+      var itemsCount = data1.synced ? data1.synced.vacancies : 0;
+      setMsg({ type: "success", text: "⏳ Вакансии загружены (" + itemsCount + "), загружаю отклики..." });
+      // Now sync chats
+      return fetch("/api/avito/sync?mode=chats").then(function (r) { return r.json(); }).then(function (data2) {
+        setSyncing(false);
+        var respCount = data2.synced ? data2.synced.responses : 0;
+        var allErrors = [].concat(data1.errors || [], data2.errors || []);
+        setMsg({
+          type: "success",
+          text: "✅ Синхронизировано: " + itemsCount + " вакансий, " + respCount + " откликов" +
+            (allErrors.length > 0 ? " (⚠️ " + allErrors.length + " предупреждений)" : ""),
+        });
         fetchData();
-      } else {
-        setMsg({ type: "error", text: "❌ " + (data.error || "Ошибка") });
-      }
-    }).catch(function () { setSyncing(false); setMsg({ type: "error", text: "❌ Ошибка сети" }); });
+      });
+    }).catch(function (e) {
+      setSyncing(false);
+      setMsg({ type: "error", text: "❌ Ошибка: " + e.message });
+    });
   }
 
   function addAccount(e) {
