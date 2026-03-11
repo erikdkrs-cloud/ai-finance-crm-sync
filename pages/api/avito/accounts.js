@@ -5,10 +5,10 @@ export default async function handler(req, res) {
 
   if (req.method === "GET") {
     var rows = await sql`
-      SELECT id, name, user_id, token_expires_at, created_at
+      SELECT id, name, client_id, user_id, token_expires_at, created_at
       FROM avito_accounts ORDER BY name
     `;
-    return res.json({ ok: true, accounts: rows });
+    return res.json({ ok: true, data: rows });
   }
 
   if (req.method === "POST") {
