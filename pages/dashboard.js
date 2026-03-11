@@ -15,7 +15,7 @@ var DashboardCharts = dynamic(
 var ALL_EXPENSE_ITEMS = [
   { key: "salary_workers", label: "ЗП Рабочие", icon: "👷" },
   { key: "salary_manager", label: "ЗП Менеджмент", icon: "👔" },
-  { key: "salary_head", label: "ЗП Руковод.", icon: "🧑‍💼" },
+  { key: "salary_head", label: "Прочее", icon: "📦" },
   { key: "ads", label: "Реклама", icon: "📢" },
   { key: "transport", label: "Транспорт", icon: "🚛" },
   { key: "penalties", label: "Штрафы", icon: "⚠️" },
