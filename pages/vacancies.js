@@ -81,8 +81,43 @@ export default function VacanciesPage() {
 
   useEffect(function () { fetchData(); }, [fetchData]);
 
-      function doSync() {
+        function doSync() {
     setSyncing(true); setMsg(null);
+
+    fetch("/api/avito/sync?mode=items").then(function(r) { return r.json(); }).then(function(d1) {
+      var vc = d1.synced ? d1.synced.vacancies : 0;
+      setMsg({ type: "success", text: "⏳ Вакансии: " + vc + ". Загружаю отклики..." });
+
+      var totalResp = 0;
+      var pageNum = 0;
+
+      function loadChats() {
+        fetch("/api/avito/sync?mode=chats&chat_page=" + pageNum).then(function(r) { return r.json(); }).then(function(d) {
+          var batch = d.synced ? d.synced.responses : 0;
+          totalResp += batch;
+          setMsg({ type: "success", text: "⏳ Загружено " + totalResp + " откликов..." });
+
+          if (batch > 0 && !d.errors) {
+            pageNum++;
+            loadChats();
+          } else {
+            setSyncing(false);
+            setMsg({ type: "success", text: "✅ " + vc + " вакансий, " + totalResp + " откликов" });
+            fetchData();
+          }
+        }).catch(function() {
+          setSyncing(false);
+          setMsg({ type: "success", text: "✅ " + vc + " вакансий, " + totalResp + " откликов" });
+          fetchData();
+        });
+      }
+
+      loadChats();
+    }).catch(function(e) {
+      setSyncing(false);
+      setMsg({ type: "error", text: "❌ " + e.message });
+    });
+  }
     
     fetch("/api/avito/sync?mode=items").then(function(r) { return r.json(); }).then(function(d1) {
       var vc = d1.synced ? d1.synced.vacancies : 0;
