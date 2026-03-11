@@ -2,7 +2,6 @@ import { neon } from "@neondatabase/serverless";
 
 var sql = neon(process.env.DATABASE_URL);
 
-// Расстояние Левенштейна для fuzzy matching
 function levenshtein(a, b) {
   var la = a.length, lb = b.length;
   var d = [];
@@ -36,22 +35,19 @@ export default async function handler(req, res) {
 
   var body = req.body || {};
   var rows = body.rows;
-  var renames = body.renames || {}; // { "Опечатка": "Правильное название" }
+  var renames = body.renames || {};
 
   if (!Array.isArray(rows)) return res.status(400).json({ ok: false, error: "rows must be an array" });
   if (rows.length === 0) return res.status(200).json({ ok: true, imported: 0 });
 
   try {
-    // Get existing projects
     var existingProjects = await sql`SELECT id, name FROM projects ORDER BY name`;
     var existingNames = existingProjects.map(function (p) { return p.name; });
 
-    // Check mode — if no renames provided and there are similar names, return warnings
+    // Step 1: Always show review unless confirmed
     if (!body.confirmed) {
-      var warnings = [];
       var fileProjects = [];
 
-      // Collect unique project names from file
       for (var i = 0; i < rows.length; i++) {
         var pName = String(rows[i].project || "").trim();
         if (pName && fileProjects.indexOf(pName) === -1) {
@@ -59,7 +55,8 @@ export default async function handler(req, res) {
         }
       }
 
-      // Check each file project against existing
+      var projectReview = [];
+
       for (var i = 0; i < fileProjects.length; i++) {
         var fp = fileProjects[i];
         var exactMatch = false;
@@ -71,44 +68,39 @@ export default async function handler(req, res) {
           }
         }
 
-        if (!exactMatch) {
-          // New project — check for similar names
-          var similar = [];
-          for (var j = 0; j < existingNames.length; j++) {
-            var sim = similarity(fp, existingNames[j]);
-            if (sim >= 0.6 && sim < 1) {
-              similar.push({ name: existingNames[j], similarity: Math.round(sim * 100) });
-            }
-          }
-
-          if (similar.length > 0) {
-            similar.sort(function (a, b) { return b.similarity - a.similarity; });
-            warnings.push({
-              fileProject: fp,
-              similar: similar.slice(0, 3),
-            });
+        // Find similar projects for all (exact or not)
+        var similar = [];
+        for (var j = 0; j < existingNames.length; j++) {
+          if (existingNames[j] === fp) continue;
+          var sim = similarity(fp, existingNames[j]);
+          if (sim >= 0.4) {
+            similar.push({ name: existingNames[j], similarity: Math.round(sim * 100) });
           }
         }
-      }
+        similar.sort(function (a, b) { return b.similarity - a.similarity; });
 
-      if (warnings.length > 0) {
-        return res.status(200).json({
-          ok: true,
-          needsReview: true,
-          warnings: warnings,
-          existingProjects: existingNames,
+        projectReview.push({
+          fileProject: fp,
+          exactMatch: exactMatch,
+          similar: similar.slice(0, 5),
         });
       }
+
+      return res.status(200).json({
+        ok: true,
+        needsReview: true,
+        projectReview: projectReview,
+        existingProjects: existingNames,
+      });
     }
 
-    // Apply renames
+    // Step 2: Confirmed — apply renames and import
     var processedRows = rows.map(function (r) {
       var proj = String(r.project || "").trim();
       if (renames[proj]) proj = renames[proj];
       return Object.assign({}, r, { project: proj });
     });
 
-    // Import
     var imported = 0;
     var projectSet = {};
     var periodSet = {};
