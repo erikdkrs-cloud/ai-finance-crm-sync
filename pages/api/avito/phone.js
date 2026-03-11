@@ -1,6 +1,13 @@
 import { neon } from "@neondatabase/serverless";
 var avito = require("../../../lib/avito");
 
+function findPhone(text) {
+  if (!text) return null;
+  var cleaned = text.replace(/[^\d+]/g, "");
+  var m = cleaned.match(/(?:\+7|8)\d{10}/);
+  return m ? m[0] : null;
+}
+
 export default async function handler(req, res) {
   var sql = neon(process.env.DATABASE_URL);
   var chatId = req.query.chat_id;
@@ -19,30 +26,9 @@ export default async function handler(req, res) {
   var userId = await avito.getUserId(sql, account);
 
   try {
-    // Get chat info to find the other user
-    var chatData = await avito.avitoFetch(
-      sql, account,
-      "/messenger/v2/accounts/" + userId + "/chats/" + chatId
-    );
-
-    var otherUserId = null;
-    if (chatData.users) {
-      for (var i = 0; i < chatData.users.length; i++) {
-        if (String(chatData.users[i].id) !== String(userId)) {
-          otherUserId = chatData.users[i].id;
-          break;
-        }
-      }
-    }
-
-    if (!otherUserId) {
-      return res.json({ ok: true, phone: null, note: "No other user found" });
-    }
-
-    // Try to get phone from chat context (some API versions)
     var phone = null;
 
-    // Method 1: Check if phone is in the messages
+    // Search phone in chat messages
     try {
       var msgs = await avito.avitoFetch(
         sql, account,
@@ -52,34 +38,14 @@ export default async function handler(req, res) {
         for (var j = 0; j < msgs.messages.length; j++) {
           var m = msgs.messages[j];
           if (m.content && m.content.text) {
-            var phoneMatch = m.content.text.match(/(?:\+7|8)[\s\-]?$?\d{3}$?[\s\-]?\d{3}[\s\-]?\d{2}[\s\-]?\d{2}/);
-            if (phoneMatch) {
-              phone = phoneMatch[0];
-              break;
-            }
+            var found = findPhone(m.content.text);
+            if (found) { phone = found; break; }
           }
         }
       }
     } catch (e) { /* ignore */ }
 
-    // Method 2: Try getting phone via item context
-    if (!phone && chatData.context && chatData.context.value && chatData.context.value.id) {
-      try {
-        var itemId = chatData.context.value.id;
-        var phoneData = await avito.avitoFetch(
-          sql, account,
-          "/core/v1/accounts/" + userId + "/items/" + itemId + "/phone"
-        );
-        if (phoneData.phone) phone = phoneData.phone;
-      } catch (e) { /* This endpoint may not exist for all cases */ }
-    }
-
-    return res.json({
-      ok: true,
-      phone: phone,
-      other_user_id: otherUserId,
-      chat_users: chatData.users || [],
-    });
+    return res.json({ ok: true, phone: phone });
   } catch (e) {
     return res.status(500).json({ ok: false, error: e.message });
   }
