@@ -1,6 +1,13 @@
 import { neon } from "@neondatabase/serverless";
 var avito = require("../../../lib/avito");
 
+function findPhone(text) {
+  if (!text) return null;
+  var cleaned = text.replace(/[^\d+]/g, "");
+  var m = cleaned.match(/[+]?[78]\d{10}/);
+  return m ? m[0] : null;
+}
+
 export default async function handler(req, res) {
   try {
     var sql = neon(process.env.DATABASE_URL);
@@ -68,19 +75,12 @@ export default async function handler(req, res) {
         // ===== CHATS (batched) =====
         if (mode === "all" || mode === "chats") {
           try {
-            var chatUrl = "/messenger/v2/accounts/" + userId + "/chats?limit=100";
-
-            // Use offset for pagination across requests
             var savedOffset = null;
             if (chatPage > 0) {
               var offRow = await sql`SELECT value FROM app_settings WHERE key = ${'chat_offset_' + account.id} LIMIT 1`;
               if (offRow && offRow[0]) savedOffset = offRow[0].value;
             }
-            if (savedOffset) {
-              chatUrl += "&offset=" + encodeURIComponent(savedOffset);
-            }
 
-            // Fetch max 5 pages per request (500 chats) to stay under timeout
             var fetched = 0;
             var lastId = savedOffset;
             var keepGoing = true;
@@ -113,27 +113,75 @@ export default async function handler(req, res) {
 
                 // Get candidate (not owner)
                 var authorName = "";
+                var candidateUserId = null;
                 if (chat.users) {
                   for (var u = 0; u < chat.users.length; u++) {
                     if (String(chat.users[u].id) !== String(userId)) {
                       authorName = chat.users[u].name || "";
+                      candidateUserId = chat.users[u].id;
                       break;
                     }
                   }
                 }
 
-                // Message text
-                var msg = "";
-                if (chat.last_message) {
-                  msg = chat.last_message.text || "";
-                  if (!msg && chat.last_message.content) {
-                    msg = typeof chat.last_message.content === "string"
+                // Get FIRST message from candidate (contains phone/resume)
+                var fullMessage = "";
+                var candidatePhone = null;
+                try {
+                  var msgsData = await avito.avitoFetch(
+                    sql, account,
+                    "/messenger/v1/accounts/" + userId + "/chats/" + chatId + "/messages/?limit=20"
+                  );
+                  var msgs = msgsData.messages || [];
+                  // Sort oldest first
+                  msgs.sort(function (a, b) { return a.created - b.created; });
+
+                  // Find first message from candidate
+                  for (var mi = 0; mi < msgs.length; mi++) {
+                    var m = msgs[mi];
+                    var mText = m.content ? (m.content.text || "") : "";
+                    if (!mText) continue;
+
+                    // First message from candidate (not owner)
+                    if (String(m.author_id) !== String(userId)) {
+                      if (!fullMessage) fullMessage = mText;
+                      // Search phone in ALL candidate messages
+                      var ph = findPhone(mText);
+                      if (ph && !candidatePhone) candidatePhone = ph;
+                    }
+                  }
+
+                  // Also check all messages for phone if not found yet
+                  if (!candidatePhone) {
+                    for (var mi2 = 0; mi2 < msgs.length; mi2++) {
+                      var mText2 = msgs[mi2].content ? (msgs[mi2].content.text || "") : "";
+                      var ph2 = findPhone(mText2);
+                      if (ph2) { candidatePhone = ph2; break; }
+                    }
+                  }
+                } catch (msgErr) {
+                  // Fallback to last_message
+                  if (chat.last_message) {
+                    fullMessage = chat.last_message.text || "";
+                    if (!fullMessage && chat.last_message.content) {
+                      fullMessage = typeof chat.last_message.content === "string"
+                        ? chat.last_message.content
+                        : (chat.last_message.content.text || "");
+                    }
+                  }
+                }
+
+                // If no fullMessage, fallback to last_message
+                if (!fullMessage && chat.last_message) {
+                  fullMessage = chat.last_message.text || "";
+                  if (!fullMessage && chat.last_message.content) {
+                    fullMessage = typeof chat.last_message.content === "string"
                       ? chat.last_message.content
                       : (chat.last_message.content.text || "");
                   }
                 }
 
-                // Context info for raw_data
+                // Context info
                 var vacTitle = "";
                 var locTitle = "";
                 var priceStr = "";
@@ -143,17 +191,17 @@ export default async function handler(req, res) {
                   if (chat.context.value.location) locTitle = chat.context.value.location.title || "";
                 }
 
-                var created = chat.created
-                  ? new Date(chat.created * 1000).toISOString()
-                  : null;
+                var created = chat.created ? new Date(chat.created * 1000).toISOString() : null;
 
                 await sql`
-                  INSERT INTO avito_responses (vacancy_id, account_id, avito_chat_id, author_name, message, created_at, raw_data)
-                  VALUES (${vacDbId}, ${account.id}, ${chatId}, ${authorName}, ${msg}, ${created},
-                    ${JSON.stringify({ vacancy_title: vacTitle, vacancy_avito_id: chatItemId, location: locTitle, price_string: priceStr })}
+                  INSERT INTO avito_responses (vacancy_id, account_id, avito_chat_id, author_name, message, phone, created_at, raw_data)
+                  VALUES (${vacDbId}, ${account.id}, ${chatId}, ${authorName}, ${fullMessage}, ${candidatePhone}, ${created},
+                    ${JSON.stringify({ vacancy_title: vacTitle, vacancy_avito_id: chatItemId, location: locTitle, price_string: priceStr, candidate_user_id: candidateUserId })}
                   )
                   ON CONFLICT (avito_chat_id) DO UPDATE SET
-                    author_name=EXCLUDED.author_name, message=EXCLUDED.message,
+                    author_name=EXCLUDED.author_name,
+                    message=EXCLUDED.message,
+                    phone=COALESCE(EXCLUDED.phone, avito_responses.phone),
                     vacancy_id=COALESCE(EXCLUDED.vacancy_id, avito_responses.vacancy_id),
                     raw_data=EXCLUDED.raw_data
                 `;
@@ -161,13 +209,9 @@ export default async function handler(req, res) {
               }
 
               lastId = chats[chats.length - 1].id;
-
-              if (!chatsData.meta || !chatsData.meta.has_more) {
-                keepGoing = false;
-              }
+              if (!chatsData.meta || !chatsData.meta.has_more) { keepGoing = false; }
             }
 
-            // Save offset for next batch
             hasMoreChats = keepGoing;
             if (lastId) {
               await sql`
@@ -176,7 +220,6 @@ export default async function handler(req, res) {
               `;
             }
 
-            // Update response counts
             await sql`
               UPDATE avito_vacancies v SET responses_count = (
                 SELECT COUNT(*) FROM avito_responses r WHERE r.vacancy_id = v.id
