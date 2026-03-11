@@ -32,7 +32,7 @@ export default function ImportPage() {
   var _result = useState(null), result = _result[0], setResult = _result[1];
   var _error = useState(""), error = _error[0], setError = _error[1];
   var _dragOver = useState(false), dragOver = _dragOver[0], setDragOver = _dragOver[1];
-  var _warnings = useState(null), warnings = _warnings[0], setWarnings = _warnings[1];
+  var _review = useState(null), review = _review[0], setReview = _review[1];
   var _renames = useState({}), renames = _renames[0], setRenames = _renames[1];
   var _existingProjects = useState([]), existingProjects = _existingProjects[0], setExistingProjects = _existingProjects[1];
   var fileInputRef = useRef(null);
@@ -41,23 +41,11 @@ export default function ImportPage() {
 
   function handleDragOver(e) { e.preventDefault(); setDragOver(true); }
   function handleDragLeave(e) { e.preventDefault(); setDragOver(false); }
-
-  function handleDrop(e) {
-    e.preventDefault();
-    setDragOver(false);
-    var f = e.dataTransfer.files[0];
-    if (f) processFile(f);
-  }
-
-  function handleFileSelect(e) {
-    var f = e.target.files[0];
-    if (f) processFile(f);
-  }
+  function handleDrop(e) { e.preventDefault(); setDragOver(false); var f = e.dataTransfer.files[0]; if (f) processFile(f); }
+  function handleFileSelect(e) { var f = e.target.files[0]; if (f) processFile(f); }
 
   async function processFile(f) {
-    setError("");
-    setFile(f);
-    setLoading(true);
+    setError(""); setFile(f); setLoading(true);
     try {
       var ext = f.name.split(".").pop().toLowerCase();
       if (["xlsx", "xls", "csv"].indexOf(ext) === -1) throw new Error("Поддерживаются только .xlsx, .xls, .csv файлы");
@@ -74,7 +62,6 @@ export default function ImportPage() {
       var workbook = XLSX.read(new Uint8Array(arrayBuffer), { type: "array" });
       var sheet = workbook.Sheets[workbook.SheetNames[0]];
       var jsonData = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: "" });
-
       if (jsonData.length < 2) throw new Error("Файл пустой или содержит только заголовки");
 
       var fileHeaders = jsonData[0].map(function (h) { return String(h).trim(); });
@@ -82,9 +69,7 @@ export default function ImportPage() {
         return row.some(function (cell) { return cell !== "" && cell !== null && cell !== undefined; });
       });
 
-      setHeaders(fileHeaders);
-      setRows(fileRows);
-      setRawData(jsonData);
+      setHeaders(fileHeaders); setRows(fileRows); setRawData(jsonData);
 
       var autoMapping = {};
       REQUIRED_COLUMNS.concat(OPTIONAL_COLUMNS).forEach(function (col) {
@@ -120,9 +105,7 @@ export default function ImportPage() {
   }
 
   function canImport() {
-    return REQUIRED_COLUMNS.every(function (col) {
-      return mapping[col.key] !== undefined && mapping[col.key] !== "";
-    });
+    return REQUIRED_COLUMNS.every(function (col) { return mapping[col.key] !== undefined && mapping[col.key] !== ""; });
   }
 
   function getMappedPreview() {
@@ -138,25 +121,19 @@ export default function ImportPage() {
       var obj = {};
       Object.keys(mapping).forEach(function (key) {
         var val = row[mapping[key]];
-        if (key === "project" || key === "month") {
-          obj[key] = String(val || "").trim();
-        } else {
-          obj[key] = parseFloat(String(val).replace(/[^\d.-]/g, "")) || 0;
-        }
+        if (key === "project" || key === "month") { obj[key] = String(val || "").trim(); }
+        else { obj[key] = parseFloat(String(val).replace(/[^\d.-]/g, "")) || 0; }
       });
       return obj;
     }).filter(function (r) { return r.project && r.month && r.revenue > 0; });
   }
 
-  async function checkAndImport() {
-    setImporting(true);
-    setError("");
-    setWarnings(null);
+  async function checkProjects() {
+    setImporting(true); setError(""); setReview(null);
     try {
       var validRows = buildImportRows();
       if (validRows.length === 0) throw new Error("Нет валидных строк для импорта");
 
-      // First pass — check for similar project names
       var checkRes = await fetch("/api/import-data", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -165,43 +142,21 @@ export default function ImportPage() {
       var checkData = await checkRes.json();
 
       if (checkData.ok && checkData.needsReview) {
-        // Found similar names — show review step
-        setWarnings(checkData.warnings);
+        setReview(checkData.projectReview);
         setExistingProjects(checkData.existingProjects || []);
-        // Pre-fill renames with best match
-        var autoRenames = {};
-        checkData.warnings.forEach(function (w) {
-          if (w.similar.length > 0 && w.similar[0].similarity >= 80) {
-            autoRenames[w.fileProject] = w.similar[0].name;
-          }
-        });
-        setRenames(autoRenames);
-        setStep(3.5); // Review step
-        setImporting(false);
-        return;
+        setRenames({});
+        setStep(3.5);
+      } else if (!checkData.ok) {
+        throw new Error(checkData.error || "Ошибка");
       }
-
-      if (!checkData.ok) throw new Error(checkData.error || "Ошибка импорта");
-
-      // No warnings — imported directly
-      setResult({
-        total: validRows.length,
-        imported: checkData.imported || validRows.length,
-        skipped: rows.length - validRows.length,
-        projects: checkData.projects || [],
-        periods: checkData.periods || [],
-      });
-      setStep(4);
     } catch (e) { setError(e.message); }
     setImporting(false);
   }
 
   async function confirmImport() {
-    setImporting(true);
-    setError("");
+    setImporting(true); setError("");
     try {
       var validRows = buildImportRows();
-
       var importRes = await fetch("/api/import-data", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -225,11 +180,8 @@ export default function ImportPage() {
   function updateRename(fileProject, value) {
     setRenames(function (prev) {
       var next = Object.assign({}, prev);
-      if (value === "__new__" || value === "") {
-        delete next[fileProject];
-      } else {
-        next[fileProject] = value;
-      }
+      if (value === "__new__" || value === "") { delete next[fileProject]; }
+      else { next[fileProject] = value; }
       return next;
     });
   }
@@ -237,7 +189,7 @@ export default function ImportPage() {
   function resetAll() {
     setStep(1); setFile(null); setRawData(null); setHeaders([]);
     setRows([]); setMapping({}); setResult(null); setError("");
-    setWarnings(null); setRenames({}); setExistingProjects([]);
+    setReview(null); setRenames({}); setExistingProjects([]);
   }
 
   return (
@@ -250,13 +202,8 @@ export default function ImportPage() {
             <p className="import-subtitle">Загрузите Excel или CSV файл с финансовыми данными</p>
           </div>
           <div className="import-steps">
-            {[
-              { n: 1, label: "Загрузка" },
-              { n: 2, label: "Маппинг" },
-              { n: 3, label: "Проверка" },
-              { n: 4, label: "Готово" },
-            ].map(function (s, i) {
-              var active = step >= s.n || (s.n === 3 && step === 3.5);
+            {[{ n: 1, label: "Загрузка" }, { n: 2, label: "Маппинг" }, { n: 3, label: "Проверка" }, { n: 4, label: "Готово" }].map(function (s, i) {
+              var active = step >= s.n || (s.n === 3 && step >= 3);
               var done = step > s.n || (s.n === 3 && step > 3.5);
               return (
                 <React.Fragment key={s.n}>
@@ -271,80 +218,41 @@ export default function ImportPage() {
           </div>
         </div>
 
-        {/* STEP 1: Upload */}
+        {/* STEP 1 */}
         {step === 1 && (
           <div className="import-card glass-card">
-            <div
-              className={"import-dropzone" + (dragOver ? " drag-over" : "")}
-              onDragOver={handleDragOver}
-              onDragLeave={handleDragLeave}
-              onDrop={handleDrop}
-              onClick={function () { fileInputRef.current.click(); }}
-            >
+            <div className={"import-dropzone" + (dragOver ? " drag-over" : "")} onDragOver={handleDragOver} onDragLeave={handleDragLeave} onDrop={handleDrop} onClick={function () { fileInputRef.current.click(); }}>
               <input ref={fileInputRef} type="file" accept=".xlsx,.xls,.csv" onChange={handleFileSelect} style={{ display: "none" }} />
-              {loading ? (
-                <div className="dropzone-loading"><span className="loader-spinner" /><span>Обрабатываем файл...</span></div>
-              ) : (
-                <React.Fragment>
-                  <div className="dropzone-icon">📄</div>
-                  <div className="dropzone-title">Перетащите файл сюда</div>
-                  <div className="dropzone-desc">или нажмите для выбора • .xlsx, .xls, .csv • до 10 МБ</div>
-                </React.Fragment>
+              {loading ? (<div className="dropzone-loading"><span className="loader-spinner" /><span>Обрабатываем файл...</span></div>) : (
+                <React.Fragment><div className="dropzone-icon">📄</div><div className="dropzone-title">Перетащите файл сюда</div><div className="dropzone-desc">или нажмите для выбора • .xlsx, .xls, .csv • до 10 МБ</div></React.Fragment>
               )}
             </div>
             {error && <div className="import-error">⚠️ {error}</div>}
             <div className="import-template-section">
               <h3>📋 Ожидаемые колонки</h3>
               <div className="template-columns">
-                {REQUIRED_COLUMNS.map(function (col) {
-                  return (<div key={col.key} className="template-col required"><span className="template-col-icon">{col.icon}</span><span className="template-col-name">{col.label}</span><span className="template-col-badge">обязательно</span></div>);
-                })}
-                {OPTIONAL_COLUMNS.map(function (col) {
-                  return (<div key={col.key} className="template-col optional"><span className="template-col-icon">{col.icon}</span><span className="template-col-name">{col.label}</span><span className="template-col-badge optional">опционально</span></div>);
-                })}
+                {REQUIRED_COLUMNS.map(function (col) { return (<div key={col.key} className="template-col required"><span className="template-col-icon">{col.icon}</span><span className="template-col-name">{col.label}</span><span className="template-col-badge">обязательно</span></div>); })}
+                {OPTIONAL_COLUMNS.map(function (col) { return (<div key={col.key} className="template-col optional"><span className="template-col-icon">{col.icon}</span><span className="template-col-name">{col.label}</span><span className="template-col-badge optional">опционально</span></div>); })}
               </div>
             </div>
           </div>
         )}
 
-        {/* STEP 2: Mapping */}
+        {/* STEP 2 */}
         {step === 2 && (
           <div className="import-card glass-card">
-            <div className="import-card-header">
-              <div>
-                <h2>🔗 Маппинг колонок</h2>
-                <p className="import-card-desc">Файл: <strong>{file.name}</strong> • {rows.length} строк • {headers.length} колонок</p>
-              </div>
-            </div>
+            <div className="import-card-header"><div><h2>🔗 Маппинг колонок</h2><p className="import-card-desc">Файл: <strong>{file.name}</strong> • {rows.length} строк • {headers.length} колонок</p></div></div>
             <div className="mapping-grid">
               <div className="mapping-section">
                 <h3 className="mapping-section-title">Обязательные поля</h3>
                 {REQUIRED_COLUMNS.map(function (col) {
-                  return (
-                    <div key={col.key} className={"mapping-row" + (mapping[col.key] !== undefined ? " mapped" : " unmapped")}>
-                      <div className="mapping-left"><span className="mapping-icon">{col.icon}</span><div><div className="mapping-label">{col.label}</div><div className="mapping-desc">{col.desc}</div></div></div>
-                      <div className="mapping-arrow">{mapping[col.key] !== undefined ? "✅" : "→"}</div>
-                      <select className="mapping-select" value={mapping[col.key] !== undefined ? mapping[col.key] : ""} onChange={function (e) { updateMapping(col.key, e.target.value); }}>
-                        <option value="">— Выберите колонку —</option>
-                        {headers.map(function (h, i) { return <option key={i} value={i}>{h}</option>; })}
-                      </select>
-                    </div>
-                  );
+                  return (<div key={col.key} className={"mapping-row" + (mapping[col.key] !== undefined ? " mapped" : " unmapped")}><div className="mapping-left"><span className="mapping-icon">{col.icon}</span><div><div className="mapping-label">{col.label}</div><div className="mapping-desc">{col.desc}</div></div></div><div className="mapping-arrow">{mapping[col.key] !== undefined ? "✅" : "→"}</div><select className="mapping-select" value={mapping[col.key] !== undefined ? mapping[col.key] : ""} onChange={function (e) { updateMapping(col.key, e.target.value); }}><option value="">— Выберите колонку —</option>{headers.map(function (h, i) { return <option key={i} value={i}>{h}</option>; })}</select></div>);
                 })}
               </div>
               <div className="mapping-section">
                 <h3 className="mapping-section-title">Дополнительные поля</h3>
                 {OPTIONAL_COLUMNS.map(function (col) {
-                  return (
-                    <div key={col.key} className={"mapping-row" + (mapping[col.key] !== undefined ? " mapped" : "")}>
-                      <div className="mapping-left"><span className="mapping-icon">{col.icon}</span><div className="mapping-label">{col.label}</div></div>
-                      <div className="mapping-arrow">{mapping[col.key] !== undefined ? "✅" : "→"}</div>
-                      <select className="mapping-select" value={mapping[col.key] !== undefined ? mapping[col.key] : ""} onChange={function (e) { updateMapping(col.key, e.target.value); }}>
-                        <option value="">— Пропустить —</option>
-                        {headers.map(function (h, i) { return <option key={i} value={i}>{h}</option>; })}
-                      </select>
-                    </div>
-                  );
+                  return (<div key={col.key} className={"mapping-row" + (mapping[col.key] !== undefined ? " mapped" : "")}><div className="mapping-left"><span className="mapping-icon">{col.icon}</span><div className="mapping-label">{col.label}</div></div><div className="mapping-arrow">{mapping[col.key] !== undefined ? "✅" : "→"}</div><select className="mapping-select" value={mapping[col.key] !== undefined ? mapping[col.key] : ""} onChange={function (e) { updateMapping(col.key, e.target.value); }}><option value="">— Пропустить —</option>{headers.map(function (h, i) { return <option key={i} value={i}>{h}</option>; })}</select></div>);
                 })}
               </div>
             </div>
@@ -355,121 +263,132 @@ export default function ImportPage() {
           </div>
         )}
 
-        {/* STEP 3: Preview */}
+        {/* STEP 3 */}
         {step === 3 && (
           <div className="import-card glass-card">
-            <div className="import-card-header">
-              <div><h2>👁️ Предпросмотр импорта</h2><p className="import-card-desc">Проверьте данные перед импортом • Первые 5 строк</p></div>
-            </div>
+            <div className="import-card-header"><div><h2>👁️ Предпросмотр</h2><p className="import-card-desc">Первые 5 строк</p></div></div>
             <div className="preview-table-wrapper">
               <table className="preview-table">
-                <thead>
-                  <tr>
-                    {REQUIRED_COLUMNS.concat(OPTIONAL_COLUMNS).filter(function (col) { return mapping[col.key] !== undefined; }).map(function (col) {
-                      return <th key={col.key}>{col.icon} {col.label}</th>;
-                    })}
-                  </tr>
-                </thead>
-                <tbody>
-                  {getMappedPreview().map(function (row, i) {
-                    return (<tr key={i}>{REQUIRED_COLUMNS.concat(OPTIONAL_COLUMNS).filter(function (col) { return mapping[col.key] !== undefined; }).map(function (col) { return <td key={col.key}>{row[col.key]}</td>; })}</tr>);
-                  })}
-                </tbody>
+                <thead><tr>{REQUIRED_COLUMNS.concat(OPTIONAL_COLUMNS).filter(function (col) { return mapping[col.key] !== undefined; }).map(function (col) { return <th key={col.key}>{col.icon} {col.label}</th>; })}</tr></thead>
+                <tbody>{getMappedPreview().map(function (row, i) { return (<tr key={i}>{REQUIRED_COLUMNS.concat(OPTIONAL_COLUMNS).filter(function (col) { return mapping[col.key] !== undefined; }).map(function (col) { return <td key={col.key}>{row[col.key]}</td>; })}</tr>); })}</tbody>
               </table>
             </div>
             <div className="preview-stats">
-              <div className="preview-stat"><span className="preview-stat-icon">📊</span><span className="preview-stat-label">Всего строк</span><span className="preview-stat-value">{rows.length}</span></div>
-              <div className="preview-stat"><span className="preview-stat-icon">✅</span><span className="preview-stat-label">Маппинг полей</span><span className="preview-stat-value">{Object.keys(mapping).length}</span></div>
-              <div className="preview-stat"><span className="preview-stat-icon">📅</span><span className="preview-stat-label">Файл</span><span className="preview-stat-value">{file.name}</span></div>
+              <div className="preview-stat"><span className="preview-stat-icon">📊</span><span className="preview-stat-label">Строк</span><span className="preview-stat-value">{rows.length}</span></div>
+              <div className="preview-stat"><span className="preview-stat-icon">✅</span><span className="preview-stat-label">Полей</span><span className="preview-stat-value">{Object.keys(mapping).length}</span></div>
             </div>
             {error && <div className="import-error">⚠️ {error}</div>}
             <div className="import-actions">
               <button className="import-btn secondary" onClick={function () { setStep(2); }}>← Маппинг</button>
-              <button className="import-btn primary" onClick={checkAndImport} disabled={importing}>
-                {importing ? <span><span className="loader-spinner small" /> Проверяем...</span> : "🚀 Импортировать " + rows.length + " строк"}
+              <button className="import-btn primary" onClick={checkProjects} disabled={importing}>
+                {importing ? <span><span className="loader-spinner small" /> Проверяем проекты...</span> : "🔍 Проверить и импортировать"}
               </button>
             </div>
           </div>
         )}
 
-        {/* STEP 3.5: Review similar project names */}
-        {step === 3.5 && warnings && (
+        {/* STEP 3.5: Review ALL projects */}
+        {step === 3.5 && review && (
           <div className="import-card glass-card">
             <div className="import-card-header">
               <div>
-                <h2>⚠️ Найдены похожие проекты</h2>
-                <p className="import-card-desc">В файле найдены названия проектов, похожие на уже существующие. Возможно, это опечатки.</p>
+                <h2>🔍 Проверка проектов</h2>
+                <p className="import-card-desc">Проверьте названия проектов из файла. Если видите опечатку — привяжите к существующему проекту.</p>
               </div>
             </div>
 
-            <div style={{ display: "flex", flexDirection: "column", gap: 16, marginTop: 16 }}>
-              {warnings.map(function (w) {
+            <div style={{ display: "flex", flexDirection: "column", gap: 12, marginTop: 16 }}>
+              {review.map(function (item) {
+                var isExact = item.exactMatch;
+                var isRenamed = renames[item.fileProject] !== undefined;
+                var hasSimilar = item.similar && item.similar.length > 0;
+
                 return (
-                  <div key={w.fileProject} style={{ background: "rgba(249,115,22,0.05)", border: "1px solid rgba(249,115,22,0.2)", borderRadius: 12, padding: 20 }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
-                      <span style={{ fontSize: 20 }}>🔍</span>
-                      <div>
-                        <div style={{ fontWeight: 700, fontSize: 15 }}>В файле: «{w.fileProject}»</div>
-                        <div style={{ fontSize: 12, color: "#94a3b8" }}>Новый проект — не найден в базе</div>
+                  <div key={item.fileProject} style={{
+                    border: "1px solid " + (isExact ? "rgba(16,185,129,0.3)" : isRenamed ? "rgba(0,191,166,0.3)" : "rgba(249,115,22,0.3)"),
+                    background: isExact ? "rgba(16,185,129,0.03)" : isRenamed ? "rgba(0,191,166,0.03)" : "rgba(249,115,22,0.03)",
+                    borderRadius: 12, padding: 16,
+                  }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: isExact && !hasSimilar ? 0 : 10 }}>
+                      <span style={{ fontSize: 18 }}>{isExact ? "✅" : isRenamed ? "🔄" : "⚠️"}</span>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ fontWeight: 700, fontSize: 14 }}>«{item.fileProject}»</div>
+                        <div style={{ fontSize: 12, color: "#94a3b8" }}>
+                          {isExact ? "Найден в базе — совпадение 100%"
+                            : isRenamed ? "Будет привязан к → «" + renames[item.fileProject] + "»"
+                            : "Новый проект — не найден в базе"}
+                        </div>
                       </div>
+                      {isExact && <span style={{ fontSize: 11, background: "rgba(16,185,129,0.1)", color: "#10b981", padding: "4px 10px", borderRadius: 6, fontWeight: 600 }}>100% совпадение</span>}
                     </div>
 
-                    <div style={{ fontSize: 13, color: "#64748b", marginBottom: 8 }}>Похожие существующие проекты:</div>
+                    {!isExact && (
+                      <div>
+                        {hasSimilar && (
+                          <div style={{ marginBottom: 8 }}>
+                            <div style={{ fontSize: 12, color: "#64748b", marginBottom: 6 }}>Похожие проекты в базе:</div>
+                            <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                              {item.similar.map(function (s) {
+                                var sel = renames[item.fileProject] === s.name;
+                                return (
+                                  <button key={s.name} onClick={function () { updateRename(item.fileProject, sel ? "__new__" : s.name); }}
+                                    style={{
+                                      display: "flex", justifyContent: "space-between", alignItems: "center",
+                                      padding: "8px 12px", borderRadius: 8, cursor: "pointer", transition: "all 0.2s",
+                                      border: sel ? "2px solid #00bfa6" : "1px solid rgba(0,0,0,0.08)",
+                                      background: sel ? "rgba(0,191,166,0.08)" : "#fff",
+                                      fontWeight: sel ? 600 : 400, fontSize: 13,
+                                    }}>
+                                    <span>{sel ? "✅ " : ""}{s.name}</span>
+                                    <span style={{
+                                      fontSize: 11, padding: "2px 8px", borderRadius: 4, fontWeight: 600,
+                                      background: s.similarity >= 80 ? "rgba(239,68,68,0.1)" : s.similarity >= 60 ? "rgba(249,115,22,0.1)" : "rgba(0,0,0,0.04)",
+                                      color: s.similarity >= 80 ? "#ef4444" : s.similarity >= 60 ? "#f97316" : "#94a3b8",
+                                    }}>
+                                      {s.similarity}%
+                                    </span>
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        )}
 
-                    <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 12 }}>
-                      {w.similar.map(function (s) {
-                        var isSelected = renames[w.fileProject] === s.name;
-                        return (
-                          <button
-                            key={s.name}
-                            onClick={function () { updateRename(w.fileProject, isSelected ? "__new__" : s.name); }}
-                            style={{
-                              display: "flex", justifyContent: "space-between", alignItems: "center",
-                              padding: "10px 14px", borderRadius: 8, cursor: "pointer", transition: "all 0.2s",
-                              border: isSelected ? "2px solid #00bfa6" : "1px solid rgba(0,0,0,0.1)",
-                              background: isSelected ? "rgba(0,191,166,0.08)" : "#fff",
-                              fontWeight: isSelected ? 600 : 400, fontSize: 14,
-                            }}
-                          >
-                            <span>{isSelected ? "✅ " : ""}{s.name}</span>
-                            <span style={{ fontSize: 11, color: "#94a3b8", background: "rgba(0,0,0,0.04)", padding: "2px 8px", borderRadius: 4 }}>
-                              совпадение {s.similarity}%
-                            </span>
-                          </button>
-                        );
-                      })}
-                    </div>
-
-                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                      <button
-                        onClick={function () { updateRename(w.fileProject, "__new__"); }}
-                        style={{
-                          padding: "8px 16px", borderRadius: 8, cursor: "pointer", fontSize: 13, fontWeight: 600,
-                          border: !renames[w.fileProject] ? "2px solid #6366f1" : "1px solid rgba(0,0,0,0.1)",
-                          background: !renames[w.fileProject] ? "rgba(99,102,241,0.08)" : "#f8fafc",
-                          color: !renames[w.fileProject] ? "#6366f1" : "#64748b",
-                        }}
-                      >
-                        ➕ Создать новый проект «{w.fileProject}»
-                      </button>
-                    </div>
+                        <button onClick={function () { updateRename(item.fileProject, "__new__"); }}
+                          style={{
+                            padding: "6px 14px", borderRadius: 8, cursor: "pointer", fontSize: 12, fontWeight: 600,
+                            border: !isRenamed ? "2px solid #6366f1" : "1px solid rgba(0,0,0,0.08)",
+                            background: !isRenamed ? "rgba(99,102,241,0.08)" : "#f8fafc",
+                            color: !isRenamed ? "#6366f1" : "#94a3b8",
+                          }}>
+                          ➕ Создать как новый проект
+                        </button>
+                      </div>
+                    )}
                   </div>
                 );
               })}
             </div>
 
+            {/* Summary */}
+            <div style={{ marginTop: 20, padding: 14, background: "rgba(0,0,0,0.02)", borderRadius: 10, fontSize: 13, display: "flex", gap: 20, flexWrap: "wrap" }}>
+              <span>✅ Совпадений: <strong>{review.filter(function (r) { return r.exactMatch; }).length}</strong></span>
+              <span>🔄 Переименований: <strong>{Object.keys(renames).length}</strong></span>
+              <span>➕ Новых: <strong>{review.filter(function (r) { return !r.exactMatch && !renames[r.fileProject]; }).length}</strong></span>
+            </div>
+
             {error && <div className="import-error" style={{ marginTop: 16 }}>⚠️ {error}</div>}
 
-            <div className="import-actions" style={{ marginTop: 24 }}>
-              <button className="import-btn secondary" onClick={function () { setStep(3); setWarnings(null); }}>← Назад</button>
+            <div className="import-actions" style={{ marginTop: 20 }}>
+              <button className="import-btn secondary" onClick={function () { setStep(3); setReview(null); }}>← Назад</button>
               <button className="import-btn primary" onClick={confirmImport} disabled={importing}>
-                {importing ? <span><span className="loader-spinner small" /> Импортируем...</span> : "✅ Подтвердить и импортировать"}
+                {importing ? <span><span className="loader-spinner small" /> Импортируем...</span> : "✅ Подтвердить импорт"}
               </button>
             </div>
           </div>
         )}
 
-        {/* STEP 4: Success */}
+        {/* STEP 4 */}
         {step === 4 && result && (
           <div className="import-card glass-card">
             <div className="import-success">
@@ -479,12 +398,12 @@ export default function ImportPage() {
               <div className="success-stats">
                 <div className="success-stat"><span className="success-stat-num">{result.imported}</span><span className="success-stat-label">Импортировано</span></div>
                 <div className="success-stat"><span className="success-stat-num">{result.skipped}</span><span className="success-stat-label">Пропущено</span></div>
-                {result.projects && result.projects.length > 0 && <div className="success-stat"><span className="success-stat-num">{result.projects.length}</span><span className="success-stat-label">Проектов</span></div>}
-                {result.periods && result.periods.length > 0 && <div className="success-stat"><span className="success-stat-num">{result.periods.length}</span><span className="success-stat-label">Периодов</span></div>}
+                {result.projects && <div className="success-stat"><span className="success-stat-num">{result.projects.length}</span><span className="success-stat-label">Проектов</span></div>}
+                {result.periods && <div className="success-stat"><span className="success-stat-num">{result.periods.length}</span><span className="success-stat-label">Периодов</span></div>}
               </div>
               {Object.keys(renames).length > 0 && (
-                <div style={{ marginTop: 16, padding: 16, background: "rgba(0,191,166,0.05)", borderRadius: 12, fontSize: 13 }}>
-                  <strong>🔄 Переименования:</strong>
+                <div style={{ marginTop: 16, padding: 14, background: "rgba(0,191,166,0.05)", borderRadius: 12, fontSize: 13 }}>
+                  <strong>🔄 Переименования при импорте:</strong>
                   {Object.keys(renames).map(function (k) { return <div key={k} style={{ marginTop: 4 }}>«{k}» → «{renames[k]}»</div>; })}
                 </div>
               )}
