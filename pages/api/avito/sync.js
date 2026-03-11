@@ -26,14 +26,19 @@ export default async function handler(req, res) {
       try {
         var userId = await avito.getUserId(sql, account);
 
-        // Fetch vacancies (items)
+        // ===== FETCH VACANCIES =====
         var page = 1;
         var hasMore = true;
         while (hasMore) {
-          var data = await avito.avitoFetch(sql, account,
-            "/core/v1/accounts/" + userId + "/items?per_page=50&page=" + page +
-            "&category=110&status=active,removed,blocked,old"
-          );
+          var data;
+          try {
+            data = await avito.avitoFetch(sql, account,
+              "/core/v1/accounts/" + userId + "/items?per_page=50&page=" + page
+            );
+          } catch (fetchErr) {
+            console.error("Items fetch error page " + page + ":", fetchErr.message);
+            break;
+          }
 
           var items = data.resources || [];
           if (items.length === 0) { hasMore = false; break; }
@@ -41,18 +46,52 @@ export default async function handler(req, res) {
           for (var j = 0; j < items.length; j++) {
             var item = items[j];
             var avitoId = Number(item.id);
+            var itemTitle = item.title || "";
+            var itemUrl = item.url || ("https://www.avito.ru/" + avitoId);
+            var itemStatus = item.status || "unknown";
+            var itemCategory = "";
+            if (item.category) {
+              itemCategory = item.category.name || item.category.id || "";
+            }
+            var itemCity = "";
+            if (item.address) {
+              itemCity = typeof item.address === "string" ? item.address : (item.address.city || item.address.location || "");
+            }
+
+            var salaryFrom = null;
+            var salaryTo = null;
+            if (item.salary) {
+              salaryFrom = item.salary.from || item.salary.min || null;
+              salaryTo = item.salary.to || item.salary.max || null;
+            }
+            if (item.params) {
+              item.params.forEach(function (p) {
+                if (p.id === "salary" || p.id === "compensation") {
+                  if (p.value && typeof p.value === "object") {
+                    salaryFrom = salaryFrom || p.value.from || p.value.min || null;
+                    salaryTo = salaryTo || p.value.to || p.value.max || null;
+                  }
+                }
+              });
+            }
+
+            var createdAt = item.created || item.time || null;
+            if (createdAt && typeof createdAt === "number") {
+              createdAt = new Date(createdAt * 1000).toISOString();
+            }
 
             await sql`
               INSERT INTO avito_vacancies (account_id, avito_id, title, url, status, category, city, salary_from, salary_to, created_at, updated_at, raw_data)
               VALUES (
-                ${account.id}, ${avitoId}, ${item.title || ""}, ${item.url || ""},
-                ${item.status || ""}, ${item.category && item.category.name || ""},
-                ${item.address || ""}, ${item.salary_from || null}, ${item.salary_to || null},
-                ${item.created || null}, ${new Date().toISOString()}, ${JSON.stringify(item)}
+                ${account.id}, ${avitoId}, ${itemTitle}, ${itemUrl},
+                ${itemStatus}, ${itemCategory}, ${itemCity},
+                ${salaryFrom}, ${salaryTo},
+                ${createdAt}, ${new Date().toISOString()}, ${JSON.stringify(item)}
               )
               ON CONFLICT (avito_id) DO UPDATE SET
                 title = EXCLUDED.title, url = EXCLUDED.url, status = EXCLUDED.status,
-                city = EXCLUDED.city, salary_from = EXCLUDED.salary_from, salary_to = EXCLUDED.salary_to,
+                category = EXCLUDED.category, city = EXCLUDED.city,
+                salary_from = EXCLUDED.salary_from, salary_to = EXCLUDED.salary_to,
                 updated_at = EXCLUDED.updated_at, raw_data = EXCLUDED.raw_data
             `;
             totalVacancies++;
@@ -62,36 +101,47 @@ export default async function handler(req, res) {
           if (items.length < 50) hasMore = false;
         }
 
-        // Fetch stats for vacancies
+        // ===== FETCH STATS =====
         var vacancies = await sql`
           SELECT id, avito_id FROM avito_vacancies WHERE account_id = ${account.id}
         `;
 
-        // Get stats in batch (up to 200)
         if (vacancies.length > 0) {
-          var ids = vacancies.map(function (v) { return v.avito_id; });
+          var ids = vacancies.map(function (v) { return Number(v.avito_id); });
           var batchSize = 200;
+
           for (var b = 0; b < ids.length; b += batchSize) {
             var batch = ids.slice(b, b + batchSize);
             try {
+              var today = new Date().toISOString().slice(0, 10);
+              var yearAgo = new Date(Date.now() - 365 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+
               var statsData = await avito.avitoFetch(sql, account,
-                "/core/v1/accounts/" + userId + "/items/stats/",
+                "/core/v1/accounts/" + userId + "/stats/items",
                 {
                   method: "POST",
-                  body: JSON.stringify({ itemIds: batch, dateFrom: "2024-01-01", dateTo: new Date().toISOString().slice(0, 10), fields: ["views", "contacts"] }),
+                  body: JSON.stringify({
+                    dateFrom: yearAgo,
+                    dateTo: today,
+                    itemIds: batch,
+                    fields: ["uniqViews", "uniqContacts", "uniqFavorites"]
+                  }),
                 }
               );
 
-              if (statsData && statsData.result && statsData.result.items) {
-                for (var s = 0; s < statsData.result.items.length; s++) {
-                  var stat = statsData.result.items[s];
-                  var totalViews = 0;
-                  if (stat.stats) {
-                    stat.stats.forEach(function (d) { totalViews += Number(d.views || d.uniqViews || 0); });
-                  }
+              var statsItems = statsData.result && statsData.result.items || statsData.items || [];
+              for (var s = 0; s < statsItems.length; s++) {
+                var stat = statsItems[s];
+                var statItemId = stat.itemId || stat.item_id;
+                var totalViews = 0;
+                var statDays = stat.stats || stat.days || [];
+                statDays.forEach(function (d) {
+                  totalViews += Number(d.uniqViews || d.views || 0);
+                });
+                if (statItemId) {
                   await sql`
                     UPDATE avito_vacancies SET views = ${totalViews}
-                    WHERE avito_id = ${stat.itemId} AND account_id = ${account.id}
+                    WHERE avito_id = ${statItemId} AND account_id = ${account.id}
                   `;
                 }
               }
@@ -101,21 +151,27 @@ export default async function handler(req, res) {
           }
         }
 
-        // Fetch responses (chats)
+        // ===== FETCH CHATS (RESPONSES) =====
         try {
           var chatsData = await avito.avitoFetch(sql, account,
-            "/messenger/v2/accounts/" + userId + "/chats?item_types=job&limit=100"
+            "/messenger/v2/accounts/" + userId + "/chats?chat_type=u2i&limit=100"
           );
 
           var chats = chatsData.chats || [];
           for (var c = 0; c < chats.length; c++) {
             var chat = chats[c];
-            var chatItemId = chat.context && chat.context.value && chat.context.value.id;
-            if (!chatItemId) continue;
 
-            var vacRow = await sql`
-              SELECT id FROM avito_vacancies WHERE avito_id = ${chatItemId} AND account_id = ${account.id} LIMIT 1
-            `;
+            var chatItemId = null;
+            if (chat.context && chat.context.value) {
+              chatItemId = chat.context.value.id || chat.context.value.item_id;
+            }
+
+            var vacRow = null;
+            if (chatItemId) {
+              vacRow = await sql`
+                SELECT id FROM avito_vacancies WHERE avito_id = ${chatItemId} AND account_id = ${account.id} LIMIT 1
+              `;
+            }
             var vacancyDbId = vacRow && vacRow[0] ? vacRow[0].id : null;
 
             var authorName = "";
@@ -124,13 +180,30 @@ export default async function handler(req, res) {
               if (other) authorName = other.name || "";
             }
 
-            var lastMsg = chat.last_message ? (chat.last_message.text || chat.last_message.content && chat.last_message.content.text || "") : "";
-            var chatCreated = chat.created ? new Date(chat.created * 1000).toISOString() : null;
+            var lastMsg = "";
+            if (chat.last_message) {
+              lastMsg = chat.last_message.text || "";
+              if (!lastMsg && chat.last_message.content) {
+                lastMsg = chat.last_message.content.text || "";
+              }
+            }
+
+            var chatCreated = null;
+            if (chat.created) {
+              chatCreated = typeof chat.created === "number"
+                ? new Date(chat.created * 1000).toISOString()
+                : chat.created;
+            }
+
+            var chatId = String(chat.id);
 
             await sql`
               INSERT INTO avito_responses (vacancy_id, account_id, avito_chat_id, author_name, message, created_at, raw_data)
-              VALUES (${vacancyDbId}, ${account.id}, ${chat.id}, ${authorName}, ${lastMsg}, ${chatCreated}, ${JSON.stringify(chat)})
-              ON CONFLICT DO NOTHING
+              VALUES (${vacancyDbId}, ${account.id}, ${chatId}, ${authorName}, ${lastMsg}, ${chatCreated}, ${JSON.stringify(chat)})
+              ON CONFLICT (avito_chat_id) DO UPDATE SET
+                author_name = EXCLUDED.author_name,
+                message = EXCLUDED.message,
+                raw_data = EXCLUDED.raw_data
             `;
             totalResponses++;
           }
