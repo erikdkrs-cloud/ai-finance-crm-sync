@@ -81,27 +81,48 @@ export default function VacanciesPage() {
 
   useEffect(function () { fetchData(); }, [fetchData]);
 
-    function doSync() {
+      function doSync() {
     setSyncing(true); setMsg(null);
-    // First sync items, then chats
-    fetch("/api/avito/sync?mode=items").then(function (r) { return r.json(); }).then(function (data1) {
-      var itemsCount = data1.synced ? data1.synced.vacancies : 0;
-      setMsg({ type: "success", text: "⏳ Вакансии загружены (" + itemsCount + "), загружаю отклики..." });
-      // Now sync chats
-      return fetch("/api/avito/sync?mode=chats").then(function (r) { return r.json(); }).then(function (data2) {
-        setSyncing(false);
-        var respCount = data2.synced ? data2.synced.responses : 0;
-        var allErrors = [].concat(data1.errors || [], data2.errors || []);
-        setMsg({
-          type: "success",
-          text: "✅ Синхронизировано: " + itemsCount + " вакансий, " + respCount + " откликов" +
-            (allErrors.length > 0 ? " (⚠️ " + allErrors.length + " предупреждений)" : ""),
-        });
-        fetchData();
+    
+    fetch("/api/avito/sync?mode=items").then(function(r) { return r.json(); }).then(function(d1) {
+      var vc = d1.synced ? d1.synced.vacancies : 0;
+      setMsg({ type: "success", text: "⏳ Вакансии: " + vc + ". Загружаю отклики..." });
+      
+      // Reset chat offset
+      fetch("/api/avito/sync?mode=chats&chat_page=0").then(function(r) { return r.json(); }).then(function(d2) {
+        var rc = d2.synced ? d2.synced.responses : 0;
+        
+        function loadMore(page, total) {
+          if (!d2.hasMoreChats && page > 0) {
+            setSyncing(false);
+            setMsg({ type: "success", text: "✅ " + vc + " вакансий, " + total + " откликов" });
+            fetchData();
+            return;
+          }
+          if (page > 0) {
+            setMsg({ type: "success", text: "⏳ Загружено " + total + " откликов, продолжаю..." });
+          }
+          fetch("/api/avito/sync?mode=chats&chat_page=" + page).then(function(r) { return r.json(); }).then(function(d) {
+            var newTotal = total + (d.synced ? d.synced.responses : 0);
+            if (d.hasMoreChats) {
+              loadMore(page + 1, newTotal);
+            } else {
+              setSyncing(false);
+              setMsg({ type: "success", text: "✅ " + vc + " вакансий, " + newTotal + " откликов" });
+              fetchData();
+            }
+          }).catch(function() {
+            setSyncing(false);
+            setMsg({ type: "success", text: "✅ " + vc + " вакансий, " + total + " откликов (частично)" });
+            fetchData();
+          });
+        }
+        
+        loadMore(1, rc);
       });
-    }).catch(function (e) {
+    }).catch(function(e) {
       setSyncing(false);
-      setMsg({ type: "error", text: "❌ Ошибка: " + e.message });
+      setMsg({ type: "error", text: "❌ " + e.message });
     });
   }
 
