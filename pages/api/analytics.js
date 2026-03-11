@@ -9,14 +9,12 @@ export default async function handler(req, res) {
   var action = req.query.action || "projects";
 
   try {
-    // Get user's allowed projects
     var projectIds = await getUserProjectIds(req);
     if (Array.isArray(projectIds) && projectIds.length === 0) {
       if (action === "projects") return res.status(200).json({ ok: true, projects: [] });
       if (action === "detail") return res.status(200).json({ ok: true, monthly: [], totals: null });
     }
 
-    // List projects
     if (action === "projects") {
       var projects;
       if (projectIds === null) {
@@ -40,16 +38,25 @@ export default async function handler(req, res) {
       return res.status(200).json({ ok: true, projects: projects });
     }
 
-    // Project detail
     if (action === "detail") {
       var projectName = req.query.project;
       if (!projectName) return res.status(400).json({ ok: false, error: "project required" });
 
-      // Check user has access to this project
       if (projectIds !== null) {
         var projectCheck = await sql`SELECT id FROM projects WHERE name = ${projectName} LIMIT 1`;
-        if (projectCheck.length === 0 || projectIds.indexOf(projectCheck[0].id) === -1) {
-          return res.status(403).json({ ok: false, error: "Нет доступа к этому проекту" });
+        if (projectCheck.length === 0) {
+          return res.status(200).json({ ok: true, monthly: [], totals: null });
+        }
+        var checkId = Number(projectCheck[0].id);
+        var hasAccess = false;
+        for (var k = 0; k < projectIds.length; k++) {
+          if (Number(projectIds[k]) === checkId) {
+            hasAccess = true;
+            break;
+          }
+        }
+        if (!hasAccess) {
+          return res.status(200).json({ ok: true, monthly: [], totals: null });
         }
       }
 
@@ -70,47 +77,38 @@ export default async function handler(req, res) {
 
       var monthly = rows.map(function (r) {
         var revenue = num(r.revenue_no_vat);
-        var salary_workers = num(r.salary_workers);
-        var salary_manager = num(r.salary_manager);
-        var salary_head = num(r.salary_head);
+        var sw = num(r.salary_workers);
+        var sm = num(r.salary_manager);
+        var sh = num(r.salary_head);
         var ads = num(r.ads);
         var transport = num(r.transport);
         var penalties = num(r.penalties);
         var tax = num(r.tax);
-        var costs = salary_workers + salary_manager + salary_head + ads + transport + penalties + tax;
+        var costs = sw + sm + sh + ads + transport + penalties + tax;
         var profit = revenue - costs;
         var margin = revenue > 0 ? profit / revenue : 0;
-
         return {
-          month: r.month,
-          revenue: revenue,
-          salary_workers: salary_workers,
-          salary_manager: salary_manager,
-          salary_head: salary_head,
-          ads: ads,
-          transport: transport,
-          penalties: penalties,
-          tax: tax,
-          costs: costs,
-          profit: profit,
-          margin: margin,
+          month: r.month, revenue: revenue,
+          salary_workers: sw, salary_manager: sm, salary_head: sh,
+          ads: ads, transport: transport, penalties: penalties, tax: tax,
+          costs: costs, profit: profit, margin: margin,
         };
       });
 
-      var totals = monthly.reduce(function (acc, r) {
-        acc.revenue += r.revenue;
-        acc.costs += r.costs;
-        acc.profit += r.profit;
-        acc.salary_workers += r.salary_workers;
-        acc.salary_manager += r.salary_manager;
-        acc.salary_head += r.salary_head;
-        acc.ads += r.ads;
-        acc.transport += r.transport;
-        acc.penalties += r.penalties;
-        acc.tax += r.tax;
-        return acc;
-      }, { revenue: 0, costs: 0, profit: 0, salary_workers: 0, salary_manager: 0, salary_head: 0, ads: 0, transport: 0, penalties: 0, tax: 0 });
-
+      var totals = { revenue: 0, costs: 0, profit: 0, salary_workers: 0, salary_manager: 0, salary_head: 0, ads: 0, transport: 0, penalties: 0, tax: 0 };
+      for (var i = 0; i < monthly.length; i++) {
+        var r = monthly[i];
+        totals.revenue += r.revenue;
+        totals.costs += r.costs;
+        totals.profit += r.profit;
+        totals.salary_workers += r.salary_workers;
+        totals.salary_manager += r.salary_manager;
+        totals.salary_head += r.salary_head;
+        totals.ads += r.ads;
+        totals.transport += r.transport;
+        totals.penalties += r.penalties;
+        totals.tax += r.tax;
+      }
       totals.margin = totals.revenue > 0 ? totals.profit / totals.revenue : 0;
       totals.months = monthly.length;
 
