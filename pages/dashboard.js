@@ -46,6 +46,8 @@ export default function DashboardPage() {
   var months = auth.months || [];
   var selectedMonth = auth.selectedMonth || "";
   var setSelectedMonth = auth.setSelectedMonth;
+  var user = auth.user;
+  var canEdit = user && (user.role === "admin" || user.role === "manager");
 
   var _mounted = useState(false), mounted = _mounted[0], setMounted = _mounted[1];
   var _loading = useState(true), loading = _loading[0], setLoading = _loading[1];
@@ -57,32 +59,90 @@ export default function DashboardPage() {
   var _sortField = useState("profit"), sortField = _sortField[0], setSortField = _sortField[1];
   var _sortDir = useState("desc"), sortDir = _sortDir[0], setSortDir = _sortDir[1];
   var _expandedProject = useState(null), expandedProject = _expandedProject[0], setExpandedProject = _expandedProject[1];
+  var _editingProject = useState(null), editingProject = _editingProject[0], setEditingProject = _editingProject[1];
+  var _editValues = useState({}), editValues = _editValues[0], setEditValues = _editValues[1];
+  var _saving = useState(false), saving = _saving[0], setSaving = _saving[1];
+  var _saveMsg = useState(""), saveMsg = _saveMsg[0], setSaveMsg = _saveMsg[1];
 
   var debouncedSearch = useDebounce(search, 200);
 
   useEffect(function () { setMounted(true); }, []);
 
-  useEffect(function () {
+  var loadData = useCallback(function () {
     if (!selectedMonth) { setLoading(false); return; }
-    var alive = true;
     setLoading(true);
     setErr("");
     fetch("/api/dashboard?month=" + encodeURIComponent(selectedMonth))
       .then(function (r) { return r.json(); })
       .then(function (d) {
-        if (!alive) return;
         if (!d.ok) throw new Error(d.error || "Error");
         setTotals(d.totals || null);
         setProjects(d.projects || []);
       })
-      .catch(function (e) { if (alive) setErr(e.message || "Ошибка"); })
-      .finally(function () { if (alive) setLoading(false); });
-    return function () { alive = false; };
+      .catch(function (e) { setErr(e.message || "Ошибка"); })
+      .finally(function () { setLoading(false); });
   }, [selectedMonth]);
+
+  useEffect(function () { loadData(); }, [loadData]);
 
   var toggleExpand = useCallback(function (name) {
     setExpandedProject(function (prev) { return prev === name ? null : name; });
+    setEditingProject(null);
+    setSaveMsg("");
   }, []);
+
+  function startEdit(p) {
+    setEditingProject(p.project);
+    setEditValues({
+      revenue: p.revenue,
+      salary_workers: p.salary_workers,
+      salary_manager: p.salary_manager,
+      salary_head: p.salary_head,
+      ads: p.ads,
+      transport: p.transport,
+      penalties: p.penalties,
+      tax: p.tax,
+    });
+    setSaveMsg("");
+  }
+
+  function cancelEdit() {
+    setEditingProject(null);
+    setEditValues({});
+    setSaveMsg("");
+  }
+
+  function updateEditValue(key, val) {
+    setEditValues(function (prev) {
+      var next = Object.assign({}, prev);
+      next[key] = val;
+      return next;
+    });
+  }
+
+  async function saveEdit(projectName) {
+    setSaving(true);
+    setSaveMsg("");
+    try {
+      var payload = Object.assign({}, editValues, {
+        project: projectName,
+        month: selectedMonth,
+      });
+      var res = await fetch("/api/update-row", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      var data = await res.json();
+      if (!data.ok) throw new Error(data.error || "Ошибка сохранения");
+      setSaveMsg("✅ Сохранено!");
+      setEditingProject(null);
+      loadData();
+    } catch (e) {
+      setSaveMsg("❌ " + e.message);
+    }
+    setSaving(false);
+  }
 
   var filtered = useMemo(function () {
     var list = projects.slice();
@@ -112,7 +172,6 @@ export default function DashboardPage() {
     return { revenue: Number(totals.revenue || 0), profit: Number(totals.profit || 0), margin: Number(totals.margin || 0), count: projects.length };
   }, [totals, projects]);
 
-  // Determine which expense columns have non-zero values across all projects
   var activeExpenseItems = useMemo(function () {
     return ALL_EXPENSE_ITEMS.filter(function (item) {
       return projects.some(function (p) { return Number(p[item.key] || 0) > 0; });
@@ -134,9 +193,13 @@ export default function DashboardPage() {
     return activeExpenseItems.map(function (item) {
       var v = Number(p[item.key] || 0);
       var pct = costs > 0 ? ((v / costs) * 100).toFixed(1) : "0.0";
-      return { label: item.label, icon: item.icon, numValue: v, pct: pct };
+      return { key: item.key, label: item.label, icon: item.icon, numValue: v, pct: pct };
     }).filter(function (d) { return d.numValue > 0; });
   }
+
+  var allEditableFields = [{ key: "revenue", label: "💰 Выручка" }].concat(
+    ALL_EXPENSE_ITEMS.map(function (item) { return { key: item.key, label: item.icon + " " + item.label }; })
+  );
 
   return (
     <DkrsAppShell>
@@ -179,7 +242,7 @@ export default function DashboardPage() {
           <div className="dashboard-table-header">
             <div>
               <h2 className="dashboard-table-title">Проекты</h2>
-              <p className="dashboard-table-subtitle">Нажмите на строку для детального анализа</p>
+              <p className="dashboard-table-subtitle">Нажмите на строку для детального анализа{canEdit ? " • ✏️ для редактирования" : ""}</p>
             </div>
             <div className="dashboard-table-totals-pills">
               <span className="totals-pill teal">● Выручка: {fmtMoney(totalsSafe.revenue)} ₽</span>
@@ -219,6 +282,8 @@ export default function DashboardPage() {
             </select>
           </div>
 
+          {saveMsg && <div style={{ padding: "8px 16px", fontSize: 13, fontWeight: 600, color: saveMsg.startsWith("✅") ? "#10b981" : "#ef4444" }}>{saveMsg}</div>}
+
           <div className="dashboard-table-wrapper">
             <table className="dashboard-table">
               <thead>
@@ -229,17 +294,19 @@ export default function DashboardPage() {
                   <th onClick={function () { handleSort("profit"); }} className="sortable num">ПРИБЫЛЬ{sortIcon("profit")}</th>
                   <th onClick={function () { handleSort("margin"); }} className="sortable num">МАРЖА{sortIcon("margin")}</th>
                   <th>РИСК</th>
+                  {canEdit && <th style={{ width: 40 }}></th>}
                 </tr>
               </thead>
               <tbody>
                 {loading ? (
-                  <tr><td colSpan={6} className="table-loading"><div className="loader-spinner" /> Загрузка...</td></tr>
+                  <tr><td colSpan={canEdit ? 7 : 6} className="table-loading"><div className="loader-spinner" /> Загрузка...</td></tr>
                 ) : filtered.length === 0 ? (
-                  <tr><td colSpan={6} className="table-empty">Нет проектов</td></tr>
+                  <tr><td colSpan={canEdit ? 7 : 6} className="table-empty">Нет проектов</td></tr>
                 ) : filtered.map(function (p, i) {
                   var name = p.project || "—";
                   var risk = riskLevel(p.margin);
                   var isExpanded = expandedProject === name;
+                  var isEditing = editingProject === name;
                   var details = buildDetails(p);
                   return (
                     <React.Fragment key={i}>
@@ -255,34 +322,105 @@ export default function DashboardPage() {
                         <td className="num">{fmtMoney(p.profit, 0)} ₽</td>
                         <td className="num">{fmtPct(p.margin)}</td>
                         <td><RiskBadge riskLevel={risk} /></td>
+                        {canEdit && (
+                          <td>
+                            <button
+                              className="edit-row-btn"
+                              title="Редактировать"
+                              onClick={function (e) {
+                                e.stopPropagation();
+                                if (!isExpanded) setExpandedProject(name);
+                                if (isEditing) cancelEdit(); else startEdit(p);
+                              }}
+                              style={{
+                                background: isEditing ? "rgba(239,68,68,0.1)" : "rgba(99,102,241,0.1)",
+                                color: isEditing ? "#ef4444" : "#6366f1",
+                                border: "none", borderRadius: 8, width: 32, height: 32,
+                                cursor: "pointer", fontSize: 14, display: "flex",
+                                alignItems: "center", justifyContent: "center", transition: "all 0.2s",
+                              }}>
+                              {isEditing ? "✕" : "✏️"}
+                            </button>
+                          </td>
+                        )}
                       </tr>
                       {isExpanded && (
-                        <tr className="detail-row"><td colSpan={6}>
+                        <tr className="detail-row"><td colSpan={canEdit ? 7 : 6}>
                           <div className="detail-content">
-                            <div className="detail-grid">
-                              {details.length === 0 ? (
-                                <div style={{ padding: 16, color: "#94a3b8", fontSize: 13 }}>Нет расходов по этому проекту</div>
-                              ) : details.map(function (d, j) {
-                                return (
-                                  <div key={j} className="detail-item" style={{ animationDelay: j * 50 + "ms" }}>
-                                    <span className="detail-item-icon">{d.icon}</span>
-                                    <div className="detail-item-body">
-                                      <span className="detail-item-label">{d.label}</span>
-                                      <div className="detail-item-bar-track"><div className="detail-item-bar-fill" style={{ width: Math.min(100, Number(d.pct)) + "%" }} /></div>
-                                    </div>
-                                    <div className="detail-item-right">
-                                      <span className="detail-item-value">{fmtMoney(d.numValue, 0)} ₽</span>
-                                      <span className="detail-item-pct">{d.pct}%</span>
-                                    </div>
-                                  </div>
-                                );
-                              })}
-                            </div>
-                            <div className="detail-summary">
-                              <div className="detail-summary-item"><span>Итого расходы</span><strong>{fmtMoney(p.costs, 0)} ₽</strong></div>
-                              <div className="detail-summary-item"><span>Прибыль</span><strong style={{ color: Number(p.profit) >= 0 ? "var(--risk-low-color)" : "var(--risk-high-color)" }}>{fmtMoney(p.profit, 0)} ₽</strong></div>
-                              <div className="detail-summary-item"><span>Маржа</span><strong>{fmtPct(p.margin)}</strong></div>
-                            </div>
+                            {isEditing ? (
+                              <div style={{ padding: "8px 0" }}>
+                                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))", gap: 12 }}>
+                                  {allEditableFields.map(function (field) {
+                                    return (
+                                      <div key={field.key} style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                                        <label style={{ fontSize: 12, fontWeight: 600, color: "#64748b" }}>{field.label}</label>
+                                        <input
+                                          type="number"
+                                          step="0.01"
+                                          value={editValues[field.key] !== undefined ? editValues[field.key] : ""}
+                                          onChange={function (e) { updateEditValue(field.key, e.target.value); }}
+                                          style={{
+                                            padding: "8px 12px", borderRadius: 8, fontSize: 14, fontWeight: 600,
+                                            border: "2px solid rgba(99,102,241,0.2)", outline: "none",
+                                            background: "rgba(99,102,241,0.03)", transition: "border 0.2s",
+                                          }}
+                                          onFocus={function (e) { e.target.style.borderColor = "#6366f1"; }}
+                                          onBlur={function (e) { e.target.style.borderColor = "rgba(99,102,241,0.2)"; }}
+                                        />
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                                <div style={{ display: "flex", gap: 10, marginTop: 16, alignItems: "center" }}>
+                                  <button
+                                    onClick={function () { saveEdit(name); }}
+                                    disabled={saving}
+                                    style={{
+                                      padding: "10px 24px", borderRadius: 10, border: "none", cursor: "pointer",
+                                      background: "linear-gradient(135deg, #00bfa6, #00e5cc)", color: "#fff",
+                                      fontWeight: 700, fontSize: 14, transition: "all 0.2s",
+                                      opacity: saving ? 0.6 : 1,
+                                    }}>
+                                    {saving ? "⏳ Сохраняем..." : "💾 Сохранить"}
+                                  </button>
+                                  <button
+                                    onClick={cancelEdit}
+                                    style={{
+                                      padding: "10px 24px", borderRadius: 10, border: "1px solid rgba(0,0,0,0.1)",
+                                      cursor: "pointer", background: "#f8fafc", fontWeight: 600, fontSize: 14,
+                                    }}>
+                                    Отмена
+                                  </button>
+                                </div>
+                              </div>
+                            ) : (
+                              <React.Fragment>
+                                <div className="detail-grid">
+                                  {details.length === 0 ? (
+                                    <div style={{ padding: 16, color: "#94a3b8", fontSize: 13 }}>Нет расходов по этому проекту</div>
+                                  ) : details.map(function (d, j) {
+                                    return (
+                                      <div key={j} className="detail-item" style={{ animationDelay: j * 50 + "ms" }}>
+                                        <span className="detail-item-icon">{d.icon}</span>
+                                        <div className="detail-item-body">
+                                          <span className="detail-item-label">{d.label}</span>
+                                          <div className="detail-item-bar-track"><div className="detail-item-bar-fill" style={{ width: Math.min(100, Number(d.pct)) + "%" }} /></div>
+                                        </div>
+                                        <div className="detail-item-right">
+                                          <span className="detail-item-value">{fmtMoney(d.numValue, 0)} ₽</span>
+                                          <span className="detail-item-pct">{d.pct}%</span>
+                                        </div>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                                <div className="detail-summary">
+                                  <div className="detail-summary-item"><span>Итого расходы</span><strong>{fmtMoney(p.costs, 0)} ₽</strong></div>
+                                  <div className="detail-summary-item"><span>Прибыль</span><strong style={{ color: Number(p.profit) >= 0 ? "var(--risk-low-color)" : "var(--risk-high-color)" }}>{fmtMoney(p.profit, 0)} ₽</strong></div>
+                                  <div className="detail-summary-item"><span>Маржа</span><strong>{fmtPct(p.margin)}</strong></div>
+                                </div>
+                              </React.Fragment>
+                            )}
                           </div>
                         </td></tr>
                       )}
