@@ -5,7 +5,7 @@ import AiFloatingButton from "../components/AiFloatingButton";
 var ALL_EXPENSE_COLS = [
   { key: "salary_workers", label: "ЗП Раб.", icon: "👷", color: "#6366f1" },
   { key: "salary_manager", label: "ЗП Мен.", icon: "👔", color: "#8b5cf6" },
-  { key: "salary_head", label: "ЗП Руков.", icon: "🧑‍💼", color: "#a78bfa" },
+  { key: "salary_head", label: "Прочее", icon: "📦", color: "#a78bfa" },
   { key: "ads", label: "Реклама", icon: "📢", color: "#f97316" },
   { key: "transport", label: "Транспорт", icon: "🚛", color: "#0ea5e9" },
   { key: "penalties", label: "Штрафы", icon: "⚠️", color: "#ef4444" },
