@@ -39,6 +39,7 @@ function requiredRoleForApi(pathname) {
   if (pathname.startsWith("/api/report")) return "manager";
   if (pathname.startsWith("/api/ai")) return "manager";
   if (pathname.startsWith("/api/import")) return "manager";
+  if (pathname.startsWith("/api/update-row")) return "manager";
 
   if (pathname.startsWith("/api/sync")) return "admin";
   if (pathname.startsWith("/api/users")) return "admin";
