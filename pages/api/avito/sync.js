@@ -26,14 +26,14 @@ export default async function handler(req, res) {
       try {
         var userId = await avito.getUserId(sql, account);
 
-        // ===== FETCH VACANCIES =====
+        // ===== FETCH ITEMS via /core/v1/items =====
         var page = 1;
         var hasMore = true;
         while (hasMore) {
           var data;
           try {
             data = await avito.avitoFetch(sql, account,
-              "/core/v1/accounts/" + userId + "/items?per_page=50&page=" + page
+              "/core/v1/items?per_page=50&page=" + page
             );
           } catch (fetchErr) {
             console.error("Items fetch error page " + page + ":", fetchErr.message);
@@ -49,19 +49,29 @@ export default async function handler(req, res) {
             var itemTitle = item.title || "";
             var itemUrl = item.url || ("https://www.avito.ru/" + avitoId);
             var itemStatus = item.status || "unknown";
+
             var itemCategory = "";
             if (item.category) {
-              itemCategory = item.category.name || item.category.id || "";
-            }
-            var itemCity = "";
-            if (item.address) {
-              itemCity = typeof item.address === "string" ? item.address : (item.address.city || item.address.location || "");
+              itemCategory = item.category.name || String(item.category.id || "");
             }
 
+            var itemCity = "";
+            if (item.address) {
+              if (typeof item.address === "string") {
+                itemCity = item.address;
+              } else {
+                itemCity = item.address.city || item.address.location || item.address.title || "";
+              }
+            }
+
+            // Salary from price or params
             var salaryFrom = null;
             var salaryTo = null;
+            if (item.price) {
+              salaryFrom = Number(item.price) || null;
+            }
             if (item.salary) {
-              salaryFrom = item.salary.from || item.salary.min || null;
+              salaryFrom = item.salary.from || item.salary.min || salaryFrom;
               salaryTo = item.salary.to || item.salary.max || null;
             }
             if (item.params) {
@@ -99,6 +109,9 @@ export default async function handler(req, res) {
 
           page++;
           if (items.length < 50) hasMore = false;
+
+          // Safety limit
+          if (page > 100) break;
         }
 
         // ===== FETCH STATS =====
@@ -108,107 +121,113 @@ export default async function handler(req, res) {
 
         if (vacancies.length > 0) {
           var ids = vacancies.map(function (v) { return Number(v.avito_id); });
-          var batchSize = 200;
 
-          for (var b = 0; b < ids.length; b += batchSize) {
-            var batch = ids.slice(b, b + batchSize);
+          // Try getting stats for each item individually
+          for (var si = 0; si < ids.length; si++) {
             try {
-              var today = new Date().toISOString().slice(0, 10);
-              var yearAgo = new Date(Date.now() - 365 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
-
-              var statsData = await avito.avitoFetch(sql, account,
-                "/core/v1/accounts/" + userId + "/stats/items",
-                {
-                  method: "POST",
-                  body: JSON.stringify({
-                    dateFrom: yearAgo,
-                    dateTo: today,
-                    itemIds: batch,
-                    fields: ["uniqViews", "uniqContacts", "uniqFavorites"]
-                  }),
-                }
+              var statData = await avito.avitoFetch(sql, account,
+                "/core/v1/items/" + ids[si] + "/stats"
               );
-
-              var statsItems = statsData.result && statsData.result.items || statsData.items || [];
-              for (var s = 0; s < statsItems.length; s++) {
-                var stat = statsItems[s];
-                var statItemId = stat.itemId || stat.item_id;
-                var totalViews = 0;
-                var statDays = stat.stats || stat.days || [];
-                statDays.forEach(function (d) {
+              var totalViews = 0;
+              if (statData && statData.stats) {
+                statData.stats.forEach(function (d) {
                   totalViews += Number(d.uniqViews || d.views || 0);
                 });
-                if (statItemId) {
-                  await sql`
-                    UPDATE avito_vacancies SET views = ${totalViews}
-                    WHERE avito_id = ${statItemId} AND account_id = ${account.id}
-                  `;
-                }
               }
-            } catch (statsErr) {
-              console.error("Stats error:", statsErr.message);
+              if (totalViews > 0) {
+                await sql`
+                  UPDATE avito_vacancies SET views = ${totalViews}
+                  WHERE avito_id = ${ids[si]} AND account_id = ${account.id}
+                `;
+              }
+            } catch (statErr) {
+              // Stats endpoint may not exist — skip silently
             }
+
+            // Don't hammer API — only check first 20
+            if (si >= 20) break;
           }
         }
 
         // ===== FETCH CHATS (RESPONSES) =====
         try {
-          var chatsData = await avito.avitoFetch(sql, account,
-            "/messenger/v2/accounts/" + userId + "/chats?chat_type=u2i&limit=100"
-          );
+          var chatPage = 0;
+          var hasMoreChats = true;
+          var processedChats = 0;
 
-          var chats = chatsData.chats || [];
-          for (var c = 0; c < chats.length; c++) {
-            var chat = chats[c];
-
-            var chatItemId = null;
-            if (chat.context && chat.context.value) {
-              chatItemId = chat.context.value.id || chat.context.value.item_id;
+          while (hasMoreChats) {
+            var chatUrl = "/messenger/v2/accounts/" + userId + "/chats?limit=100";
+            if (chatPage > 0) {
+              chatUrl += "&offset=" + (chatPage * 100);
             }
 
-            var vacRow = null;
-            if (chatItemId) {
-              vacRow = await sql`
-                SELECT id FROM avito_vacancies WHERE avito_id = ${chatItemId} AND account_id = ${account.id} LIMIT 1
-              `;
-            }
-            var vacancyDbId = vacRow && vacRow[0] ? vacRow[0].id : null;
+            var chatsData = await avito.avitoFetch(sql, account, chatUrl);
+            var chats = chatsData.chats || [];
 
-            var authorName = "";
-            if (chat.users) {
-              var other = chat.users.find(function (u) { return String(u.id) !== String(userId); });
-              if (other) authorName = other.name || "";
-            }
+            if (chats.length === 0) { hasMoreChats = false; break; }
 
-            var lastMsg = "";
-            if (chat.last_message) {
-              lastMsg = chat.last_message.text || "";
-              if (!lastMsg && chat.last_message.content) {
-                lastMsg = chat.last_message.content.text || "";
+            for (var c = 0; c < chats.length; c++) {
+              var chat = chats[c];
+
+              // Find linked item
+              var chatItemId = null;
+              if (chat.context && chat.context.value) {
+                chatItemId = chat.context.value.id || chat.context.value.item_id;
               }
+
+              var vacRow = null;
+              if (chatItemId) {
+                vacRow = await sql`
+                  SELECT id FROM avito_vacancies WHERE avito_id = ${chatItemId} AND account_id = ${account.id} LIMIT 1
+                `;
+              }
+              var vacancyDbId = vacRow && vacRow[0] ? vacRow[0].id : null;
+
+              // Get author name
+              var authorName = "";
+              if (chat.users) {
+                var other = chat.users.find(function (u) { return String(u.id) !== String(userId); });
+                if (other) authorName = other.name || "";
+              }
+
+              // Get last message
+              var lastMsg = "";
+              if (chat.last_message) {
+                lastMsg = chat.last_message.text || "";
+                if (!lastMsg && chat.last_message.content) {
+                  lastMsg = chat.last_message.content.text || "";
+                }
+              }
+
+              // Parse created date
+              var chatCreated = null;
+              if (chat.created) {
+                chatCreated = typeof chat.created === "number"
+                  ? new Date(chat.created * 1000).toISOString()
+                  : chat.created;
+              }
+
+              var chatId = String(chat.id);
+
+              await sql`
+                INSERT INTO avito_responses (vacancy_id, account_id, avito_chat_id, author_name, message, created_at, raw_data)
+                VALUES (${vacancyDbId}, ${account.id}, ${chatId}, ${authorName}, ${lastMsg}, ${chatCreated}, ${JSON.stringify(chat)})
+                ON CONFLICT (avito_chat_id) DO UPDATE SET
+                  author_name = EXCLUDED.author_name,
+                  message = EXCLUDED.message,
+                  raw_data = EXCLUDED.raw_data
+              `;
+              processedChats++;
             }
 
-            var chatCreated = null;
-            if (chat.created) {
-              chatCreated = typeof chat.created === "number"
-                ? new Date(chat.created * 1000).toISOString()
-                : chat.created;
-            }
-
-            var chatId = String(chat.id);
-
-            await sql`
-              INSERT INTO avito_responses (vacancy_id, account_id, avito_chat_id, author_name, message, created_at, raw_data)
-              VALUES (${vacancyDbId}, ${account.id}, ${chatId}, ${authorName}, ${lastMsg}, ${chatCreated}, ${JSON.stringify(chat)})
-              ON CONFLICT (avito_chat_id) DO UPDATE SET
-                author_name = EXCLUDED.author_name,
-                message = EXCLUDED.message,
-                raw_data = EXCLUDED.raw_data
-            `;
-            totalResponses++;
+            chatPage++;
+            if (chats.length < 100) hasMoreChats = false;
+            if (chatPage > 20) break; // Safety limit
           }
 
-          // Update response counts
+          totalResponses = processedChats;
+
+          // Update response counts on vacancies
           await sql`
             UPDATE avito_vacancies v SET responses_count = (
               SELECT COUNT(*) FROM avito_responses r WHERE r.vacancy_id = v.id
@@ -216,6 +235,7 @@ export default async function handler(req, res) {
           `;
         } catch (chatErr) {
           console.error("Chat error:", chatErr.message);
+          errors.push({ account: account.name, warning: "Chats: " + chatErr.message });
         }
 
       } catch (accErr) {
