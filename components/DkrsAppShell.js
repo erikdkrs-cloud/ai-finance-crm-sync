@@ -47,7 +47,7 @@ var DkrsAppShell = function (props) {
     { href: "/assistant", icon: <AssistantIcon />, label: "AI помощник", minRole: "viewer" },
     { href: "/reports", icon: <ReportsIcon />, label: "Отчёты", minRole: "viewer" },
     { href: "/analytics", icon: <AnalyticsIcon />, label: "Аналитика", minRole: "viewer" },
-    { href: "/import", icon: <ImportIcon />, label: "Импорт", minRole: "admin" },
+    { href: "/import", icon: <ImportIcon />, label: "Импорт", minRole: "manager" },
     { href: "/data-management", icon: <DataIcon />, label: "Данные", minRole: "admin" },
     { href: "/users", icon: <UsersIcon />, label: "Пользователи", minRole: "admin" },
   ];
