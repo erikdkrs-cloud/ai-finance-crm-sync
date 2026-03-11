@@ -53,7 +53,8 @@ function statusLabel(s) {
 
 function extractPhone(text) {
   if (!text) return null;
-  var m = text.match(/(?:\+7|8)[\s\-]?$?\d{3}$?[\s\-]?\d{3}[\s\-]?\d{2}[\s\-]?\d{2}/);
+  var cleaned = text.replace(/[^\d+]/g, "");
+  var m = cleaned.match(/[+]?[78]\d{10}/);
   return m ? m[0] : null;
 }
 
