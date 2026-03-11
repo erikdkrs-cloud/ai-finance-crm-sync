@@ -25,29 +25,25 @@ function getCookie(req, name) {
 }
 
 function requiredRoleForApi(pathname) {
-  // Auth endpoints — always open
   if (pathname.startsWith("/api/auth/")) return null;
 
-  // Viewer level
   var viewerPaths = [
     "/api/months", "/api/dashboard", "/api/reports_list",
     "/api/report_get", "/api/ping", "/api/summary",
-    "/api/analytics", "/api/budget", "/api/data-management",
+    "/api/analytics", "/api/budget",
   ];
   for (var i = 0; i < viewerPaths.length; i++) {
     if (pathname.startsWith(viewerPaths[i])) return "viewer";
   }
 
-  // Manager level
   if (pathname.startsWith("/api/report")) return "manager";
   if (pathname.startsWith("/api/ai")) return "manager";
+  if (pathname.startsWith("/api/import")) return "manager";
 
-  // Admin only
-  if (pathname.startsWith("/api/import")) return "admin";
   if (pathname.startsWith("/api/sync")) return "admin";
   if (pathname.startsWith("/api/users")) return "admin";
+  if (pathname.startsWith("/api/data-management")) return "admin";
 
-  // Default
   if (pathname.startsWith("/api/")) return "viewer";
 
   return null;
@@ -57,15 +53,12 @@ export async function middleware(req) {
   var pathname = req.nextUrl.pathname;
   var search = req.nextUrl.search || "";
 
-  // Public pages
   if (pathname === "/") return NextResponse.next();
   if (pathname === "/login") return NextResponse.next();
   if (pathname === "/register") return NextResponse.next();
 
-  // Auth API — always open
   if (pathname.startsWith("/api/auth/")) return NextResponse.next();
 
-  // CRM sync token
   var envToken = process.env.CRM_SYNC_TOKEN || "";
   var headerToken = req.headers.get("x-crm-sync-token") || "";
   if (envToken && headerToken && headerToken === envToken) {
@@ -74,7 +67,6 @@ export async function middleware(req) {
     }
   }
 
-  // Protected pages
   var isProtectedPage =
     pathname.startsWith("/dashboard") ||
     pathname.startsWith("/reports") ||
@@ -106,14 +98,19 @@ export async function middleware(req) {
     var payload = await verify(token);
     var role = String(payload.role || "viewer");
 
-    // Check page-level role restrictions
     if (pathname.startsWith("/users") && role !== "admin") {
       var url403 = req.nextUrl.clone();
       url403.pathname = "/dashboard";
       return NextResponse.redirect(url403);
     }
 
-    if (pathname.startsWith("/import") && role !== "admin") {
+    if (pathname.startsWith("/data-management") && role !== "admin") {
+      var urlDm = req.nextUrl.clone();
+      urlDm.pathname = "/dashboard";
+      return NextResponse.redirect(urlDm);
+    }
+
+    if (pathname.startsWith("/import") && roleRank(role) < roleRank("manager")) {
       var urlImport = req.nextUrl.clone();
       urlImport.pathname = "/dashboard";
       return NextResponse.redirect(urlImport);
