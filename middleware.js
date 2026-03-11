@@ -40,6 +40,7 @@ function requiredRoleForApi(pathname) {
   if (pathname.startsWith("/api/ai")) return "manager";
   if (pathname.startsWith("/api/import")) return "manager";
   if (pathname.startsWith("/api/update-row")) return "manager";
+  if (pathname.startsWith("/api/avito")) return "manager";
 
   if (pathname.startsWith("/api/sync")) return "admin";
   if (pathname.startsWith("/api/users")) return "admin";
@@ -77,7 +78,8 @@ export async function middleware(req) {
     pathname.startsWith("/data-management") ||
     pathname.startsWith("/analytics") ||
     pathname.startsWith("/budget") ||
-    pathname.startsWith("/users");
+    pathname.startsWith("/users") ||
+pathname.startsWith("/vacancies");
 
   var requiredApiRole = requiredRoleForApi(pathname);
   var needsAuth = isProtectedPage || !!requiredApiRole;
