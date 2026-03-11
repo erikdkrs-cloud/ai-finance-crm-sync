@@ -1,171 +1,110 @@
 import { neon } from "@neondatabase/serverless";
+import { verifySessionToken, getCookie } from "../../lib/auth";
 
 var sql = neon(process.env.DATABASE_URL);
 
+async function getUser(req) {
+  try {
+    var token = getCookie(req, "ai_finance_session");
+    if (!token) return null;
+    return await verifySessionToken(token);
+  } catch (e) { return null; }
+}
+
 export default async function handler(req, res) {
-
-  // GET — список записей с фильтрами
-  if (req.method === "GET") {
-    try {
-      var month = req.query.month || "";
-      var project = req.query.project || "";
-
-      // Get all periods and projects for filters
-      var allPeriods = await sql`SELECT DISTINCT month FROM periods ORDER BY month DESC`;
-      var allProjects = await sql`SELECT DISTINCT name FROM projects ORDER BY name`;
-
-      var query;
-      if (month && project) {
-        query = await sql`
-          SELECT f.id, p.name AS project_name, per.month,
-            f.revenue_no_vat, f.salary_workers, f.salary_manager, f.salary_head,
-            f.ads, f.transport, f.penalties, f.tax
-          FROM financial_rows f
-          JOIN projects p ON p.id = f.project_id
-          JOIN periods per ON per.id = f.period_id
-          WHERE per.month = ${month} AND p.name = ${project}
-          ORDER BY per.month DESC, p.name
-        `;
-      } else if (month) {
-        query = await sql`
-          SELECT f.id, p.name AS project_name, per.month,
-            f.revenue_no_vat, f.salary_workers, f.salary_manager, f.salary_head,
-            f.ads, f.transport, f.penalties, f.tax
-          FROM financial_rows f
-          JOIN projects p ON p.id = f.project_id
-          JOIN periods per ON per.id = f.period_id
-          WHERE per.month = ${month}
-          ORDER BY per.month DESC, p.name
-        `;
-      } else if (project) {
-        query = await sql`
-          SELECT f.id, p.name AS project_name, per.month,
-            f.revenue_no_vat, f.salary_workers, f.salary_manager, f.salary_head,
-            f.ads, f.transport, f.penalties, f.tax
-          FROM financial_rows f
-          JOIN projects p ON p.id = f.project_id
-          JOIN periods per ON per.id = f.period_id
-          WHERE p.name = ${project}
-          ORDER BY per.month DESC, p.name
-        `;
-      } else {
-        query = await sql`
-          SELECT f.id, p.name AS project_name, per.month,
-            f.revenue_no_vat, f.salary_workers, f.salary_manager, f.salary_head,
-            f.ads, f.transport, f.penalties, f.tax
-          FROM financial_rows f
-          JOIN projects p ON p.id = f.project_id
-          JOIN periods per ON per.id = f.period_id
-          ORDER BY per.month DESC, p.name
-          LIMIT 200
-        `;
-      }
-
-      return res.status(200).json({
-        ok: true,
-        rows: query,
-        periods: allPeriods.map(function (r) { return r.month; }),
-        projects: allProjects.map(function (r) { return r.name; }),
-      });
-    } catch (e) {
-      return res.status(500).json({ ok: false, error: e.message });
-    }
+  var user = await getUser(req);
+  if (!user || user.role !== "admin") {
+    return res.status(403).json({ ok: false, error: "Admin only" });
   }
 
-  // PUT — обновить запись
-  if (req.method === "PUT") {
-    try {
-      var id = req.body.id;
-      var v = req.body.values;
-      if (!id || !v) return res.status(400).json({ ok: false, error: "id и values обязательны" });
+  var action = req.query.action || req.body?.action || "";
 
-      await sql`
-        UPDATE financial_rows SET
-          revenue_no_vat = ${parseFloat(v.revenue_no_vat) || 0},
-          salary_workers = ${parseFloat(v.salary_workers) || 0},
-          salary_manager = ${parseFloat(v.salary_manager) || 0},
-          salary_head = ${parseFloat(v.salary_head) || 0},
-          ads = ${parseFloat(v.ads) || 0},
-          transport = ${parseFloat(v.transport) || 0},
-          penalties = ${parseFloat(v.penalties) || 0},
-          tax = ${parseFloat(v.tax) || 0}
-        WHERE id = ${id}
-      `;
-
-      return res.status(200).json({ ok: true });
-    } catch (e) {
-      return res.status(500).json({ ok: false, error: e.message });
-    }
+  // GET: list projects with row counts
+  if (req.method === "GET" && action === "projects") {
+    var projects = await sql`
+      SELECT p.id, p.name,
+        COUNT(f.id) as row_count,
+        COALESCE(SUM(f.revenue_no_vat), 0) as total_revenue
+      FROM projects p
+      LEFT JOIN financial_rows f ON f.project_id = p.id
+      GROUP BY p.id, p.name
+      ORDER BY p.name
+    `;
+    return res.json({ ok: true, projects: projects });
   }
 
-  // POST — добавить новую запись
-  if (req.method === "POST") {
-    try {
-      var r = req.body;
-      if (!r.project || !r.month) return res.status(400).json({ ok: false, error: "project и month обязательны" });
-
-      var projectName = String(r.project).trim();
-      var month = String(r.month).trim();
-
-      // Find or create project
-      var existingProject = await sql`SELECT id FROM projects WHERE name = ${projectName} LIMIT 1`;
-      var projectId;
-      if (existingProject.length > 0) {
-        projectId = existingProject[0].id;
-      } else {
-        var ins = await sql`INSERT INTO projects (name) VALUES (${projectName}) RETURNING id`;
-        projectId = ins[0].id;
-      }
-
-      // Find or create period
-      var existingPeriod = await sql`SELECT id FROM periods WHERE month = ${month} LIMIT 1`;
-      var periodId;
-      if (existingPeriod.length > 0) {
-        periodId = existingPeriod[0].id;
-      } else {
-        var insP = await sql`INSERT INTO periods (month) VALUES (${month}) RETURNING id`;
-        periodId = insP[0].id;
-      }
-
-      // Check duplicate
-      var dup = await sql`
-        SELECT id FROM financial_rows WHERE project_id = ${projectId} AND period_id = ${periodId} LIMIT 1
-      `;
-      if (dup.length > 0) {
-        return res.status(400).json({ ok: false, error: "Запись для этого проекта и периода уже существует. Используйте редактирование." });
-      }
-
-      await sql`
-        INSERT INTO financial_rows (
-          project_id, period_id, revenue_no_vat,
-          salary_workers, salary_manager, salary_head,
-          ads, transport, penalties, tax
-        ) VALUES (
-          ${projectId}, ${periodId}, ${parseFloat(r.revenue_no_vat) || 0},
-          ${parseFloat(r.salary_workers) || 0}, ${parseFloat(r.salary_manager) || 0}, ${parseFloat(r.salary_head) || 0},
-          ${parseFloat(r.ads) || 0}, ${parseFloat(r.transport) || 0}, ${parseFloat(r.penalties) || 0}, ${parseFloat(r.tax) || 0}
-        )
-      `;
-
-      return res.status(200).json({ ok: true });
-    } catch (e) {
-      return res.status(500).json({ ok: false, error: e.message });
-    }
+  // GET: list periods with row counts
+  if (req.method === "GET" && action === "periods") {
+    var periods = await sql`
+      SELECT per.id, per.month,
+        COUNT(f.id) as row_count,
+        COALESCE(SUM(f.revenue_no_vat), 0) as total_revenue,
+        COUNT(DISTINCT f.project_id) as project_count
+      FROM periods per
+      LEFT JOIN financial_rows f ON f.period_id = per.id
+      GROUP BY per.id, per.month
+      ORDER BY per.month DESC
+    `;
+    return res.json({ ok: true, periods: periods });
   }
 
-  // DELETE — удалить запись
-  if (req.method === "DELETE") {
-    try {
-      var id = req.body.id;
-      if (!id) return res.status(400).json({ ok: false, error: "id обязателен" });
+  // POST: delete project
+  if (req.method === "POST" && action === "delete-project") {
+    var projectId = Number(req.body.project_id);
+    if (!projectId) return res.status(400).json({ ok: false, error: "project_id required" });
 
-      await sql`DELETE FROM financial_rows WHERE id = ${id}`;
+    await sql`DELETE FROM financial_rows WHERE project_id = ${projectId}`;
+    await sql`DELETE FROM user_projects WHERE project_id = ${projectId}`;
+    await sql`DELETE FROM projects WHERE id = ${projectId}`;
 
-      return res.status(200).json({ ok: true });
-    } catch (e) {
-      return res.status(500).json({ ok: false, error: e.message });
-    }
+    return res.json({ ok: true, deleted: "project", id: projectId });
   }
 
-  return res.status(405).json({ ok: false, error: "Method not allowed" });
+  // POST: delete period
+  if (req.method === "POST" && action === "delete-period") {
+    var periodId = Number(req.body.period_id);
+    if (!periodId) return res.status(400).json({ ok: false, error: "period_id required" });
+
+    await sql`DELETE FROM financial_rows WHERE period_id = ${periodId}`;
+    await sql`DELETE FROM periods WHERE id = ${periodId}`;
+
+    return res.json({ ok: true, deleted: "period", id: periodId });
+  }
+
+  // POST: cleanup empty projects (no financial rows)
+  if (req.method === "POST" && action === "cleanup-projects") {
+    var empty = await sql`
+      SELECT p.id, p.name FROM projects p
+      LEFT JOIN financial_rows f ON f.project_id = p.id
+      GROUP BY p.id, p.name
+      HAVING COUNT(f.id) = 0
+    `;
+
+    var ids = empty.map(function (r) { return r.id; });
+    if (ids.length > 0) {
+      await sql`DELETE FROM user_projects WHERE project_id = ANY(${ids})`;
+      await sql`DELETE FROM projects WHERE id = ANY(${ids})`;
+    }
+
+    return res.json({ ok: true, deleted_count: ids.length, deleted_names: empty.map(function (r) { return r.name; }) });
+  }
+
+  // POST: cleanup empty periods
+  if (req.method === "POST" && action === "cleanup-periods") {
+    var emptyPeriods = await sql`
+      SELECT per.id, per.month FROM periods per
+      LEFT JOIN financial_rows f ON f.period_id = per.id
+      GROUP BY per.id, per.month
+      HAVING COUNT(f.id) = 0
+    `;
+
+    var pIds = emptyPeriods.map(function (r) { return r.id; });
+    if (pIds.length > 0) {
+      await sql`DELETE FROM periods WHERE id = ANY(${pIds})`;
+    }
+
+    return res.json({ ok: true, deleted_count: pIds.length, deleted_months: emptyPeriods.map(function (r) { return r.month; }) });
+  }
+
+  return res.status(400).json({ ok: false, error: "Unknown action" });
 }
