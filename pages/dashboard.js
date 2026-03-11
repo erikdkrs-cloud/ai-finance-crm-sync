@@ -12,6 +12,16 @@ var DashboardCharts = dynamic(
   { ssr: false, loading: function () { return <div className="charts-loading"><div className="loader-spinner" /><span>Загрузка графиков...</span></div>; } }
 );
 
+var ALL_EXPENSE_ITEMS = [
+  { key: "salary_workers", label: "ЗП Рабочие", icon: "👷" },
+  { key: "salary_manager", label: "ЗП Менеджмент", icon: "👔" },
+  { key: "salary_head", label: "ЗП Руковод.", icon: "🧑‍💼" },
+  { key: "ads", label: "Реклама", icon: "📢" },
+  { key: "transport", label: "Транспорт", icon: "🚛" },
+  { key: "penalties", label: "Штрафы", icon: "⚠️" },
+  { key: "tax", label: "Налоги", icon: "🏛️" },
+];
+
 function riskLevel(margin) {
   var m = Number(margin);
   if (Number.isNaN(m)) return "green";
@@ -102,6 +112,13 @@ export default function DashboardPage() {
     return { revenue: Number(totals.revenue || 0), profit: Number(totals.profit || 0), margin: Number(totals.margin || 0), count: projects.length };
   }, [totals, projects]);
 
+  // Determine which expense columns have non-zero values across all projects
+  var activeExpenseItems = useMemo(function () {
+    return ALL_EXPENSE_ITEMS.filter(function (item) {
+      return projects.some(function (p) { return Number(p[item.key] || 0) > 0; });
+    });
+  }, [projects]);
+
   function handleSort(field) {
     if (sortField === field) setSortDir(function (d) { return d === "asc" ? "desc" : "asc"; });
     else { setSortField(field); setSortDir("desc"); }
@@ -114,18 +131,11 @@ export default function DashboardPage() {
 
   function buildDetails(p) {
     var costs = Number(p.costs) || 1;
-    var items = [
-      { label: "ЗП рабочие", value: p.labor, icon: "👷" },
-      { label: "ЗП менеджмент", value: p.team_payroll, icon: "👔" },
-      { label: "Реклама", value: p.ads, icon: "📢" },
-      { label: "Транспорт", value: p.transport, icon: "🚛" },
-      { label: "Штрафы", value: p.penalties, icon: "⚠️" },
-    ];
-    return items.map(function (item) {
-      var v = Number(item.value) || 0;
+    return activeExpenseItems.map(function (item) {
+      var v = Number(p[item.key] || 0);
       var pct = costs > 0 ? ((v / costs) * 100).toFixed(1) : "0.0";
-      return { label: item.label, value: item.value, icon: item.icon, numValue: v, pct: pct };
-    });
+      return { label: item.label, icon: item.icon, numValue: v, pct: pct };
+    }).filter(function (d) { return d.numValue > 0; });
   }
 
   return (
@@ -250,7 +260,9 @@ export default function DashboardPage() {
                         <tr className="detail-row"><td colSpan={6}>
                           <div className="detail-content">
                             <div className="detail-grid">
-                              {details.map(function (d, j) {
+                              {details.length === 0 ? (
+                                <div style={{ padding: 16, color: "#94a3b8", fontSize: 13 }}>Нет расходов по этому проекту</div>
+                              ) : details.map(function (d, j) {
                                 return (
                                   <div key={j} className="detail-item" style={{ animationDelay: j * 50 + "ms" }}>
                                     <span className="detail-item-icon">{d.icon}</span>
