@@ -177,6 +177,10 @@ export default function VacanciesPage() {
   if (selVac) filtered = filtered.filter(function (r) { return r.vacancy_id === selVac.id; });
   if (search) { var q = search.toLowerCase(); filtered = filtered.filter(function (r) { return (r.author_name || "").toLowerCase().indexOf(q) !== -1 || (r.candidate_name || "").toLowerCase().indexOf(q) !== -1 || (r.phone || "").indexOf(q) !== -1 || (r.vacancy_title || "").toLowerCase().indexOf(q) !== -1 || (r.message || "").toLowerCase().indexOf(q) !== -1; }); }
   filtered.sort(function (a, b) { if (sortBy === "unread") { if (!a.is_read && b.is_read) return -1; if (a.is_read && !b.is_read) return 1; } return new Date(b.created_at || 0) - new Date(a.created_at || 0); });
+
+  var hdr = { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 };
+  var card = { background: "#fff", borderRadius: 16, padding: 16, boxShadow: "0 1px 4px rgba(0,0,0,0.06)", border: "1px solid #f0f0f0" };
+  var btn1 = { background: "linear-gradient(135deg,#6366f1,#8b5cf6)", color: "#fff", border: "none", borderRadius: 12, padding: "10px 24px", fontWeight: 600, fontSize: 14, cursor: "pointer" };
     // RENDER
   var hdr = { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 };
   var card = { background: "#fff", borderRadius: 16, padding: 16, boxShadow: "0 1px 4px rgba(0,0,0,0.06)", border: "1px solid #f0f0f0" };
@@ -523,110 +527,6 @@ export default function VacanciesPage() {
                           );
                         })}
                       </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-        )}
-              {tab === "all" && (
-                <select value={statusFilter} onChange={function (e) { setStatusFilter(e.target.value); }}
-                  style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid #e5e7eb", fontSize: 13 }}>
-                  <option value="all">{S.allStatuses}</option>
-                  <option value="new">{S.newOnes} ({cNew})</option>
-                  <option value="processing">{S.inWork} ({cProc})</option>
-                  <option value="hired">{S.hired} ({cHired})</option>
-                  <option value="rejected">{S.rejected} ({cRej})</option>
-                </select>
-              )}
-              <select value={sortBy} onChange={function (e) { setSortBy(e.target.value); }}
-                style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid #e5e7eb", fontSize: 13 }}>
-                <option value="date">{S.byDate}</option>
-                <option value="unread">{S.unreadFirst}</option>
-              </select>
-              {selVac && (
-                <button onClick={function () { setSelVac(null); }}
-                  style={{ padding: "10px 14px", borderRadius: 10, background: "#f5f3ff", color: "#6366f1", border: "1px solid #c7d2fe", fontSize: 12, cursor: "pointer", fontWeight: 600 }}>
-                  X {selVac.title.slice(0, 30)}
-                </button>
-              )}
-              <div style={{ fontSize: 13, color: "#888", padding: "10px 0" }}>{S.found}: {filtered.length}</div>
-            </div>
-
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12, marginBottom: 16 }}>
-              {[
-                { label: S.newOnes, count: cNew, color: "#3b82f6", bg: "#eff6ff" },
-                { label: S.inWork, count: cProc, color: "#f59e0b", bg: "#fffbeb" },
-                { label: S.hired, count: cHired, color: "#22c55e", bg: "#f0fdf4" },
-                { label: S.rejected, count: cRej, color: "#ef4444", bg: "#fef2f2" },
-              ].map(function (s, i) {
-                return (
-                  <div key={i} style={{ background: s.bg, borderRadius: 12, padding: "14px 16px", display: "flex", alignItems: "center", gap: 10, border: "1px solid " + s.color + "22" }}>
-                    <div style={{ fontSize: 22, fontWeight: 800, color: s.color }}>{s.count}</div>
-                    <div style={{ fontSize: 12, color: "#888" }}>{s.label}</div>
-                  </div>
-                );
-              })}
-            </div>
-
-            {loading ? (
-              <div style={{ textAlign: "center", padding: 40, color: "#888" }}>{S.loading}</div>
-            ) : filtered.length === 0 ? (
-              <div style={{ textAlign: "center", padding: 40, color: "#888", background: "#fff", borderRadius: 16 }}>{S.noResponses}</div>
-            ) : (
-              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                {filtered.slice(0, 100).map(function (r) {
-                  var st = stLabel(r.status || "new");
-                  var ur = !r.is_read;
-                  return (
-                    <div key={r.id} onClick={function () { openResp(r); }}
-                      style={{ background: ur ? "#fefce8" : "#fff", borderRadius: 14, padding: "14px 18px", cursor: "pointer", boxShadow: "0 1px 4px rgba(0,0,0,0.06)", border: ur ? "2px solid #fbbf24" : "1px solid #f0f0f0", transition: "all 0.15s" }}
-                      onMouseEnter={function (e) { e.currentTarget.style.borderColor = "#6366f1"; }}
-                      onMouseLeave={function (e) { e.currentTarget.style.borderColor = ur ? "#fbbf24" : "#f0f0f0"; }}>
-                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-                        <div style={{ display: "flex", alignItems: "center", gap: 12, flex: 1, minWidth: 0 }}>
-                          <div style={{ position: "relative", flexShrink: 0 }}>
-                            <div style={{ width: 46, height: 46, borderRadius: "50%", background: ur ? "linear-gradient(135deg,#f59e0b,#f97316)" : "linear-gradient(135deg,#6366f1,#8b5cf6)", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700, color: "#fff", fontSize: 18 }}>
-                              {(r.candidate_name || r.author_name || "?")[0].toUpperCase()}
-                            </div>
-                            {ur && <div style={{ position: "absolute", top: -2, right: -2, width: 14, height: 14, borderRadius: "50%", background: "#ef4444", border: "2px solid #fff" }} />}
-                          </div>
-                          <div style={{ minWidth: 0, flex: 1 }}>
-                            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                              <span style={{ fontWeight: 700, fontSize: 15 }}>{r.candidate_name || r.author_name || S.noName}</span>
-                              {ur && <span style={{ fontSize: 10, padding: "2px 8px", borderRadius: 6, background: "#fbbf24", color: "#78350f", fontWeight: 700 }}>NEW</span>}
-                            </div>
-                            <div style={{ display: "flex", gap: 8, marginTop: 3, flexWrap: "wrap" }}>
-                              {r.phone && <span style={{ fontSize: 12, color: "#059669", fontWeight: 700 }}>{r.phone}</span>}
-                              {r.candidate_age && <span style={{ fontSize: 11, color: "#888" }}>{r.candidate_age} {S.years}</span>}
-                              {r.candidate_citizenship && <span style={{ fontSize: 11, color: "#888" }}>{r.candidate_citizenship}</span>}
-                            </div>
-                            <div style={{ marginTop: 4, display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-                              <span style={{ fontSize: 11, color: "#6366f1", fontWeight: 600, padding: "2px 8px", background: "#f5f3ff", borderRadius: 6 }}>{r.vacancy_title || "-"}</span>
-                              {r.vacancy_code && <span style={{ fontSize: 10, color: "#888", fontWeight: 600 }}>ID:{r.vacancy_code}</span>}
-                              {(r.vacancy_address || r.vacancy_city) && <span style={{ fontSize: 10, color: "#888" }}>{r.vacancy_address || r.vacancy_city}</span>}
-                            </div>
-                          </div>
-                        </div>
-                        <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 6, flexShrink: 0, marginLeft: 12 }}>
-                          <div style={{ fontSize: 11, color: "#888" }}>{fmtDate(r.created_at)}</div>
-                          <span style={pill(st.bg, st.color)}>{st.icon} {st.label}</span>
-                          <div style={{ display: "flex", gap: 4 }}>
-                            {Object.keys(ST).map(function (key) {
-                              if ((r.status || "new") === key) return null;
-                              var s2 = ST[key];
-                              return (
-                                <button key={key} title={s2.label} onClick={function (e) { e.stopPropagation(); updStatus(r.id, key); }}
-                                  style={{ width: 28, height: 28, borderRadius: 8, border: "1px solid #e5e7eb", background: "#fff", cursor: "pointer", fontSize: 12, display: "flex", alignItems: "center", justifyContent: "center", padding: 0 }}>
-                                  {s2.icon}
-                                </button>
-                              );
-                            })}
-                          </div>
-                        </div>
-                      </div>
-                      {r.message && <div style={{ fontSize: 12, color: "#666", marginTop: 8, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{r.message.slice(0, 150)}</div>}
                     </div>
                   );
                 })}
