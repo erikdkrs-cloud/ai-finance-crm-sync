@@ -23,35 +23,33 @@ export default async function handler(req, res) {
     try {
       var data = null;
       var rawMessages = [];
+      var usedApi = "";
 
-      try {
-        data = await avito.avitoFetch(
-          sql, account,
-          "/messenger/v3/accounts/" + userId + "/chats/" + chatId + "/messages"
-        );
-        rawMessages = data.messages || [];
-      } catch (e3) {
+      // Try all possible endpoints
+      var endpoints = [
+        "/messenger/v1/accounts/" + userId + "/chats/" + chatId + "/messages/",
+        "/messenger/v1/accounts/" + userId + "/chats/" + chatId + "/messages",
+        "/messenger/v2/accounts/" + userId + "/chats/" + chatId + "/messages/",
+        "/messenger/v2/accounts/" + userId + "/chats/" + chatId + "/messages",
+        "/messenger/v3/accounts/" + userId + "/chats/" + chatId + "/messages/",
+        "/messenger/v3/accounts/" + userId + "/chats/" + chatId + "/messages",
+      ];
+
+      var lastError = "";
+      for (var i = 0; i < endpoints.length; i++) {
         try {
-          data = await avito.avitoFetch(
-            sql, account,
-            "/messenger/v2/accounts/" + userId + "/chats/" + chatId + "/messages"
-          );
+          data = await avito.avitoFetch(sql, account, endpoints[i]);
           rawMessages = data.messages || [];
-        } catch (e2) {
-          try {
-            data = await avito.avitoFetch(
-              sql, account,
-              "/messenger/v1/accounts/" + userId + "/chats/" + chatId + "/messages"
-            );
-            rawMessages = data.messages || [];
-          } catch (e1) {
-            return res.json({
-              ok: false,
-              error: "v3: " + e3.message + " | v2: " + e2.message + " | v1: " + e1.message,
-              debug: { userId: userId, chatId: chatId }
-            });
-          }
+          usedApi = endpoints[i];
+          break;
+        } catch (e) {
+          lastError = endpoints[i] + " -> " + e.message;
+          data = null;
         }
+      }
+
+      if (!data) {
+        return res.json({ ok: false, error: lastError, debug: { userId: userId, chatId: chatId } });
       }
 
       var messages = rawMessages.map(function (m) {
@@ -74,7 +72,7 @@ export default async function handler(req, res) {
 
       messages.sort(function (a, b) { return a.created - b.created; });
 
-      return res.json({ ok: true, messages: messages, user_id: userId });
+      return res.json({ ok: true, messages: messages, user_id: userId, api: usedApi });
     } catch (e) {
       return res.status(500).json({ ok: false, error: e.message });
     }
@@ -98,22 +96,39 @@ export default async function handler(req, res) {
     var account2 = accounts2[0];
     var userId2 = await avito.getUserId(sql, account2);
 
-    try {
-      var result = await avito.avitoFetch(
-        sql, account2,
-        "/messenger/v1/accounts/" + userId2 + "/chats/" + chatId2 + "/messages",
-        {
-          method: "POST",
-          body: JSON.stringify({
-            message: { text: text2 },
-            type: "text",
-          }),
+    // Try multiple send endpoints
+    var sendEndpoints = [
+      "/messenger/v1/accounts/" + userId2 + "/chats/" + chatId2 + "/messages",
+      "/messenger/v1/accounts/" + userId2 + "/chats/" + chatId2 + "/messages/",
+      "/messenger/v2/accounts/" + userId2 + "/chats/" + chatId2 + "/messages",
+      "/messenger/v2/accounts/" + userId2 + "/chats/" + chatId2 + "/messages/",
+    ];
+
+    // Try different body formats
+    var bodyFormats = [
+      { message: { text: text2 }, type: "text" },
+      { text: text2, type: "text" },
+      { message: { text: text2 } },
+    ];
+
+    var sent = false;
+    var lastSendError = "";
+
+    for (var si = 0; si < sendEndpoints.length && !sent; si++) {
+      for (var bi = 0; bi < bodyFormats.length && !sent; bi++) {
+        try {
+          var result = await avito.avitoFetch(
+            sql, account2, sendEndpoints[si],
+            { method: "POST", body: JSON.stringify(bodyFormats[bi]) }
+          );
+          return res.json({ ok: true, message: result, api: sendEndpoints[si] });
+        } catch (e) {
+          lastSendError = sendEndpoints[si] + " body" + bi + " -> " + e.message;
         }
-      );
-      return res.json({ ok: true, message: result });
-    } catch (e) {
-      return res.status(500).json({ ok: false, error: e.message });
+      }
     }
+
+    return res.json({ ok: false, error: lastSendError });
   }
 
   return res.status(405).json({ ok: false });
