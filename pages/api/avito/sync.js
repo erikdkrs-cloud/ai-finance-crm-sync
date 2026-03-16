@@ -9,7 +9,7 @@ async function getToken(acc) {
     body: "grant_type=client_credentials&client_id=" + acc.client_id + "&client_secret=" + acc.client_secret,
   });
   var data = await res.json();
-  if (!data.access_token) throw new Error("Token error: " + JSON.stringify(data));
+  if (!data.access_token) throw new Error("Token error");
   var expires = new Date(now + data.expires_in * 1000).toISOString();
   await sql`UPDATE avito_accounts SET access_token=${data.access_token}, token_expires_at=${expires} WHERE id=${acc.id}`;
   return data.access_token;
@@ -20,40 +20,38 @@ async function getUserId(acc, token) {
   var res = await fetch("https://api.avito.ru/core/v1/accounts/self", { headers: { Authorization: "Bearer " + token } });
   var data = await res.json();
   if (data.id) { await sql`UPDATE avito_accounts SET user_id=${String(data.id)} WHERE id=${acc.id}`; return String(data.id); }
-  throw new Error("Cannot get user_id");
+  throw new Error("No user_id");
 }
 
 async function syncItems(acc) {
   var token = await getToken(acc);
   var userId = await getUserId(acc, token);
   var vacCount = 0;
+  var allItems = [];
 
-  for (var st = 0; st < 2; st++) {
-    var status = st === 0 ? "active" : "old";
-    var page = 1;
-    var hasMore = true;
-    while (hasMore) {
-      var res = await fetch("https://api.avito.ru/core/v1/accounts/" + userId + "/items?per_page=25&page=" + page + "&status=" + status, {
-        headers: { Authorization: "Bearer " + token }
-      });
-      var data = await res.json();
-      var items = data.resources || [];
-      for (var i = 0; i < items.length; i++) {
-        var item = items[i];
-        var addr = item.address || "";
-        var itemUrl = item.url || ("https://www.avito.ru/" + item.id);
-        await sql`INSERT INTO avito_vacancies (account_id, avito_id, title, city, salary_from, salary_to, status, address, url)
-          VALUES (${acc.id}, ${String(item.id)}, ${item.title||""}, ${item.city||""}, ${item.salary_from||null}, ${item.salary_to||null}, ${status}, ${addr}, ${itemUrl})
-          ON CONFLICT (account_id, avito_id) DO UPDATE SET
-            title=EXCLUDED.title, city=EXCLUDED.city, salary_from=EXCLUDED.salary_from, salary_to=EXCLUDED.salary_to,
-            status=EXCLUDED.status,
-            address=CASE WHEN EXCLUDED.address!='' THEN EXCLUDED.address ELSE avito_vacancies.address END,
-            url=CASE WHEN EXCLUDED.url!='' THEN EXCLUDED.url ELSE avito_vacancies.url END`;
-        vacCount++;
-      }
-      hasMore = items.length === 25;
-      page++;
-    }
+  // Fetch all items in parallel (active + old)
+  var [activeRes, oldRes] = await Promise.all([
+    fetch("https://api.avito.ru/core/v1/accounts/" + userId + "/items?per_page=100&page=1&status=active", { headers: { Authorization: "Bearer " + token } }),
+    fetch("https://api.avito.ru/core/v1/accounts/" + userId + "/items?per_page=100&page=1&status=old", { headers: { Authorization: "Bearer " + token } })
+  ]);
+
+  var activeData = await activeRes.json();
+  var oldData = await oldRes.json();
+  allItems = (activeData.resources || []).map(function(i) { return Object.assign({}, i, { status: "active" }); });
+  allItems = allItems.concat((oldData.resources || []).map(function(i) { return Object.assign({}, i, { status: "old" }); }));
+
+  // Batch insert
+  for (var i = 0; i < allItems.length; i++) {
+    var item = allItems[i];
+    var addr = item.address || "";
+    var itemUrl = item.url || ("https://www.avito.ru/" + item.id);
+    await sql`INSERT INTO avito_vacancies (account_id, avito_id, title, city, salary_from, salary_to, status, address, url)
+      VALUES (${acc.id}, ${String(item.id)}, ${item.title||""}, ${item.city||""}, ${item.salary_from||null}, ${item.salary_to||null}, ${item.status}, ${addr}, ${itemUrl})
+      ON CONFLICT (account_id, avito_id) DO UPDATE SET
+        title=EXCLUDED.title, city=EXCLUDED.city, salary_from=EXCLUDED.salary_from, salary_to=EXCLUDED.salary_to,
+        status=EXCLUDED.status, address=CASE WHEN EXCLUDED.address!='' THEN EXCLUDED.address ELSE avito_vacancies.address END,
+        url=CASE WHEN EXCLUDED.url!='' THEN EXCLUDED.url ELSE avito_vacancies.url END`;
+    vacCount++;
   }
   return { vacancies: vacCount };
 }
@@ -64,25 +62,45 @@ async function syncChats(acc, chatPage) {
   var respCount = 0;
   var allVac = await sql`SELECT id, avito_id, title, address, city FROM avito_vacancies WHERE account_id=${acc.id}`;
 
-  var offset = (chatPage || 0) * 50;
-  var chatsRes = await fetch("https://api.avito.ru/messenger/v2/accounts/" + userId + "/chats?per_page=50&offset=" + offset + "&chat_type=u2i", {
+  var offset = (chatPage || 0) * 100;
+  var chatsRes = await fetch("https://api.avito.ru/messenger/v2/accounts/" + userId + "/chats?per_page=100&offset=" + offset + "&chat_type=u2i", {
     headers: { Authorization: "Bearer " + token }
   });
   var chatsData = await chatsRes.json();
   var chats = chatsData.chats || [];
 
+  // Batch fetch messages for all chats in parallel (max 5 at a time)
+  var msgPromises = [];
+  var chatMap = {};
   for (var i = 0; i < chats.length; i++) {
     var chat = chats[i];
+    chatMap[chat.id] = chat;
+    if (msgPromises.length < 5) {
+      msgPromises.push(
+        fetch("https://api.avito.ru/messenger/v3/accounts/" + userId + "/chats/" + chat.id + "/messages/?limit=10", {
+          headers: { Authorization: "Bearer " + token }
+        }).then(function(r) { return r.json(); }).then(function(d) { return { chatId: chat.id, messages: d.messages || [] }; }).catch(function() { return { chatId: chat.id, messages: [] }; })
+      );
+    }
+  }
+
+  var msgResults = await Promise.all(msgPromises);
+  var msgMap = {};
+  for (var mi = 0; mi < msgResults.length; mi++) {
+    msgMap[msgResults[mi].chatId] = msgResults[mi].messages;
+  }
+
+  // Process chats
+  for (var ci = 0; ci < chats.length; ci++) {
+    var chat = chats[ci];
     var chatId = chat.id;
-    var itemId = "";
-    if (chat.context && chat.context.value && chat.context.type === "item") itemId = String(chat.context.value);
+    var itemId = chat.context && chat.context.type === "item" ? String(chat.context.value) : "";
     var vacancy = itemId ? allVac.find(function(v){return v.avito_id===itemId;}) : null;
 
     var authorName = "";
-    var authorId = "";
     if (chat.users) {
       for (var u = 0; u < chat.users.length; u++) {
-        if (String(chat.users[u].id) !== userId) { authorName = chat.users[u].name||""; authorId = String(chat.users[u].id); break; }
+        if (String(chat.users[u].id) !== userId) { authorName = chat.users[u].name||""; break; }
       }
     }
 
@@ -90,40 +108,33 @@ async function syncChats(acc, chatPage) {
     var lastMsgDate = null;
     if (chat.last_message) {
       lastMsg = chat.last_message.text || chat.last_message.content || "";
-      if (typeof lastMsg === "object") lastMsg = lastMsg.text || JSON.stringify(lastMsg);
+      if (typeof lastMsg === "object") lastMsg = lastMsg.text || "";
       if (chat.last_message.created) lastMsgDate = new Date(chat.last_message.created * 1000).toISOString();
     }
 
-    // Parse candidate info from messages
+    // Parse candidate info from cached messages
     var candidateName = "";
     var candidateAge = "";
     var candidateCitizenship = "";
     var phone = "";
 
-    try {
-      var msgsRes = await fetch("https://api.avito.ru/messenger/v3/accounts/" + userId + "/chats/" + chatId + "/messages/?limit=20", {
-        headers: { Authorization: "Bearer " + token }
-      });
-      var msgsData = await msgsRes.json();
-      var messages = msgsData.messages || [];
-      for (var mi = 0; mi < messages.length; mi++) {
-        var mx = messages[mi];
-        var txt = "";
-        if (mx.content && mx.content.text) txt = mx.content.text;
-        else if (mx.text) txt = mx.text;
-        if (txt) {
-          var pm = txt.match(/(\+?7[\s-]?\d{3}[\s-]?\d{3}[\s-]?\d{2}[\s-]?\d{2})/);
-          if (pm && !phone) phone = pm[1].replace(/[\s\-()]/g, "");
-          // Parse system messages like: Гражданство — Таджикистан Возраст — 29 лет ФИО — Хамдамов
-          var ctzMatch = txt.match(/[Гг]ражданство\s*[\-—]\s*([^\s,—]+)/);
-          if (ctzMatch && !candidateCitizenship) candidateCitizenship = ctzMatch[1];
-          var ageMatch = txt.match(/[Вв]озраст\s*[\-—]\s*(\d+)/);
-          if (ageMatch && !candidateAge) candidateAge = ageMatch[1];
-          var fioMatch = txt.match(/ФИО\s*[\-—]\s*([^,\n]+)/);
-          if (fioMatch && !candidateName) candidateName = fioMatch[1].trim();
-        }
+    var msgs = msgMap[chatId] || [];
+    for (var mi2 = 0; mi2 < msgs.length; mi2++) {
+      var mx = msgs[mi2];
+      var txt = "";
+      if (mx.content && mx.content.text) txt = mx.content.text;
+      else if (mx.text) txt = mx.text;
+      if (txt) {
+        var pm = txt.match(/(\+?7[\s-]?\d{3}[\s-]?\d{3}[\s-]?\d{2}[\s-]?\d{2})/);
+        if (pm && !phone) phone = pm[1].replace(/[\s-()]/g, "");
+        var ctzMatch = txt.match(/[Гг]ражданство\s*[\-—]\s*([^\s,—]+)/);
+        if (ctzMatch && !candidateCitizenship) candidateCitizenship = ctzMatch[1];
+        var ageMatch = txt.match(/[Вв]озраст\s*[\-—]\s*(\d+)/);
+        if (ageMatch && !candidateAge) candidateAge = ageMatch[1];
+        var fioMatch = txt.match(/ФИО\s*[\-—]\s*([^,\n]+)/);
+        if (fioMatch && !candidateName) candidateName = fioMatch[1].trim();
       }
-    } catch(e){}
+    }
 
     if (!candidateName) candidateName = authorName;
 
@@ -166,17 +177,32 @@ async function syncChats(acc, chatPage) {
 export default async function handler(req, res) {
   try {
     var accounts = await sql`SELECT * FROM avito_accounts`;
-    if (accounts.length === 0) return res.json({ ok: true, synced: { vacancies: 0, responses: 0 }, message: "No accounts" });
+    if (accounts.length === 0) return res.json({ ok: true, synced: { vacancies: 0, responses: 0 } });
+
     var mode = req.query.mode || "all";
     var chatPage = parseInt(req.query.chat_page) || 0;
     var totalVac = 0, totalResp = 0, errors = [];
+
+    // Parallel sync for all accounts
+    var promises = [];
     for (var i = 0; i < accounts.length; i++) {
-      try {
-        if (mode === "items" || mode === "all") { var r1 = await syncItems(accounts[i]); totalVac += r1.vacancies; }
-        if (mode === "chats" || mode === "all") { var r2 = await syncChats(accounts[i], chatPage); totalResp += r2.responses; }
-      } catch(e) { errors.push(accounts[i].name + ": " + e.message); }
+      (function(acc) {
+        var p = Promise.resolve();
+        if (mode === "items" || mode === "all") {
+          p = p.then(function() { return syncItems(acc).then(function(r) { totalVac += r.vacancies; }); });
+        }
+        if (mode === "chats" || mode === "all") {
+          p = p.then(function() { return syncChats(acc, chatPage).then(function(r) { totalResp += r.responses; }); });
+        }
+        p.catch(function(e) { errors.push(acc.name + ": " + e.message); });
+        promises.push(p);
+      })(accounts[i]);
     }
+
+    await Promise.all(promises);
+
     try { await sql`UPDATE avito_vacancies v SET responses_count = (SELECT COUNT(*) FROM avito_responses r WHERE r.vacancy_id = v.id)`; } catch(e){}
+
     return res.json({ ok: true, synced: { vacancies: totalVac, responses: totalResp }, errors: errors.length > 0 ? errors : undefined });
   } catch(e) { return res.status(500).json({ ok: false, error: e.message }); }
 }
