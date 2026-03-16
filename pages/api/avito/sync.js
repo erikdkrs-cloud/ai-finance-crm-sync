@@ -82,7 +82,6 @@ async function syncChats(acc, chatPage) {
       isRead = chat.read === true ? true : false;
     }
 
-    // Get item data
     var vacancyTitle = "";
     var vacancyAddress = "";
     var vacancyCity = "";
@@ -95,7 +94,6 @@ async function syncChats(acc, chatPage) {
       }
     }
 
-    // Get user profile
     var candidateName = authorName;
     var candidateAge = "";
     var candidateCitizenship = "";
@@ -109,17 +107,12 @@ async function syncChats(acc, chatPage) {
         });
         var profileData = await profileRes.json();
         
-        if (profileData) {
-          if (profileData.name) candidateName = profileData.name;
-          if (profileData.phone) phone = profileData.phone.replace(/[\s\-()]/g, "");
-          if (profileData.age) candidateAge = String(profileData.age);
-          if (profileData.citizenship) candidateCitizenship = profileData.citizenship;
-          if (profileData.gender) candidateGender = profileData.gender;
+        if (profileData && profileData.phone) {
+          phone = profileData.phone.replace(/[\s\-()]/g, "");
         }
       } catch(e) {}
     }
 
-    // Parse from messages as backup
     var allMessages = "";
     try {
       var msgRes = await fetch("https://api.avito.ru/messenger/v3/accounts/" + userId + "/chats/" + chatId + "/messages/?limit=50", {
@@ -146,10 +139,15 @@ async function syncChats(acc, chatPage) {
         var ageMatch = allMessages.match(/(\d{2})\s*(?:лет|года|год)/i);
         if (ageMatch) candidateAge = ageMatch[1];
       }
-      if (!candidateCitizenship) {
-        var ctzMatch = allMessages.match(/(?:гражданство|citizenship)\s*[\-—:]\s*([А-Яа-яЁё\s]+?)(?:\.|,|$)/i);
-        if (ctzMatch) candidateCitizenship = ctzMatch[1].trim();
+      
+      var genderMatch = allMessages.match(/(?:пол|gender)\s*[\-—:]\s*(м|ж|male|female|мужчина|женщина)/i);
+      if (genderMatch) {
+        var g = genderMatch[1].toLowerCase();
+        candidateGender = (g === "м" || g === "male" || g === "мужчина") ? "male" : "female";
       }
+      
+      var ctzMatch = allMessages.match(/(?:гражданство|citizenship)\s*[\-—:]\s*([А-Яа-яЁё\s]+?)(?:\.|,|$)/i);
+      if (ctzMatch) candidateCitizenship = ctzMatch[1].trim();
     }
 
     await sql`INSERT INTO avito_responses
@@ -174,14 +172,73 @@ async function syncChats(acc, chatPage) {
   return { responses: respCount };
 }
 
+async function syncItems(acc) {
+  var token = await getToken(acc);
+  var userId = await getUserId(acc, token);
+  var vacCount = 0;
+
+  var offset = 0;
+  var hasMore = true;
+
+  while (hasMore) {
+    var itemsRes = await fetch("https://api.avito.ru/core/v1/accounts/" + userId + "/items?offset=" + offset + "&limit=100", {
+      headers: { Authorization: "Bearer " + token }
+    });
+    var itemsData = await itemsRes.json();
+    var items = itemsData.items || [];
+
+    if (items.length === 0) hasMore = false;
+
+    for (var i = 0; i < items.length; i++) {
+      var item = items[i];
+      var itemId = String(item.id);
+      var title = item.title || "";
+      var address = item.address || "";
+      var city = item.city || "";
+      var salary_from = item.price || null;
+      var url = "https://www.avito.ru/items/" + itemId;
+
+      await sql`INSERT INTO avito_vacancies
+        (account_id, avito_id, title, address, city, salary_from, url, raw_data)
+        VALUES (${acc.id}, ${itemId}, ${title}, ${address}, ${city}, ${salary_from}, ${url}, ${JSON.stringify(item)})
+        ON CONFLICT (account_id, avito_id) DO UPDATE SET
+          title = EXCLUDED.title,
+          address = EXCLUDED.address,
+          city = EXCLUDED.city,
+          salary_from = EXCLUDED.salary_from,
+          raw_data = EXCLUDED.raw_data`;
+
+      vacCount++;
+    }
+
+    offset += 100;
+  }
+
+  return { vacancies: vacCount };
+}
+
 export default async function handler(req, res) {
   try {
     var accounts = await sql`SELECT * FROM avito_accounts`;
     if (accounts.length === 0) return res.json({ ok: true, synced: { responses: 0 } });
 
+    var mode = req.query.mode || "chats";
     var chatPage = parseInt(req.query.chat_page) || 0;
     var totalResp = 0;
+    var totalVac = 0;
     var errors = [];
+
+    if (mode === "items") {
+      for (var i = 0; i < accounts.length; i++) {
+        try {
+          var r = await syncItems(accounts[i]);
+          totalVac += r.vacancies;
+        } catch(e) {
+          errors.push(accounts[i].name + ": " + e.message);
+        }
+      }
+      return res.json({ ok: true, synced: { vacancies: totalVac }, errors: errors.length > 0 ? errors : undefined });
+    }
 
     for (var i = 0; i < accounts.length; i++) {
       try {
