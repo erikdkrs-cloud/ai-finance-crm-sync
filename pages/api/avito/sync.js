@@ -139,9 +139,9 @@ async function syncChats(acc, chatPage) {
     if (!candidateName) candidateName = authorName;
 
     var vacId = vacancy ? vacancy.id : null;
-    var vacTitle = vacancy ? vacancy.title : "";
-    var vacAddress = vacancy ? (vacancy.address || vacancy.city || "") : "";
-    var vacCode = itemId;
+var vacTitle = vacancy ? vacancy.title : "";
+var vacAddress = vacancy ? (vacancy.address || vacancy.city || "") : "";
+var vacCode = itemId ? String(itemId) : "";
 
     var isRead = true;
     if (chat.last_message && chat.last_message.direction === "in") {
@@ -150,10 +150,10 @@ async function syncChats(acc, chatPage) {
     }
 
     await sql`INSERT INTO avito_responses
-      (account_id, avito_chat_id, vacancy_id, vacancy_title, vacancy_code, vacancy_address, vacancy_city,
-       author_name, candidate_name, candidate_age, candidate_citizenship, phone,
-       message, is_read, created_at)
-      VALUES (${acc.id}, ${chatId}, ${vacId}, ${vacTitle}, ${vacCode}, ${vacAddress}, ${vacancy?vacancy.city||"":""},
+  (account_id, avito_chat_id, vacancy_id, vacancy_title, vacancy_code, vacancy_address, vacancy_city,
+   author_name, candidate_name, candidate_age, candidate_citizenship, phone,
+   message, is_read, created_at)
+  VALUES (${acc.id}, ${chatId}, ${vacId}, ${vacTitle}, ${String(vacCode)}, ${vacAddress}, ${vacancy?vacancy.city||"":""},
         ${authorName}, ${candidateName}, ${candidateAge}, ${candidateCitizenship}, ${phone},
         ${lastMsg}, ${isRead}, ${lastMsgDate || new Date().toISOString()})
       ON CONFLICT (account_id, avito_chat_id) DO UPDATE SET
