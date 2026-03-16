@@ -362,104 +362,110 @@ export default function VacanciesPage() {
                   var addr = getAddr(r);
                   return (
                     <div key={r.id} style={{
-                      background: "#fff", borderRadius: 18, padding: 0, cursor: "pointer",
-                      boxShadow: ur ? "0 2px 16px rgba(251,191,36,0.18)" : "0 2px 12px rgba(99,102,241,0.07)",
-                      border: ur ? "2.5px solid #fbbf24" : "1.5px solid #eee",
-                      transition: "all 0.22s cubic-bezier(.4,0,.2,1)", overflow: "hidden", position: "relative",
-                    }}
-                    onMouseEnter={function (e) { e.currentTarget.style.transform = "translateY(-3px) scale(1.007)"; e.currentTarget.style.boxShadow = "0 8px 32px rgba(99,102,241,0.16)"; e.currentTarget.style.borderColor = "#6366f1"; }}
-                    onMouseLeave={function (e) { e.currentTarget.style.transform = ""; e.currentTarget.style.boxShadow = ur ? "0 2px 16px rgba(251,191,36,0.18)" : "0 2px 12px rgba(99,102,241,0.07)"; e.currentTarget.style.borderColor = ur ? "#fbbf24" : "#eee"; }}
-                    >
-                      <div style={{ height: 4, background: ur ? "linear-gradient(90deg,#fbbf24,#f97316)" : "linear-gradient(90deg," + st.color + "," + st.color + "44)", borderRadius: "18px 18px 0 0" }} />
+  background: "#fff", borderRadius: 18, padding: 0, cursor: "pointer",
+  boxShadow: ur ? "0 2px 16px rgba(251,191,36,0.18)" : "0 2px 12px rgba(99,102,241,0.07)",
+  border: ur ? "2.5px solid #fbbf24" : "1.5px solid #eee",
+  transition: "all 0.22s cubic-bezier(.4,0,.2,1)", overflow: "hidden", position: "relative",
+}}
+onMouseEnter={function (e) { e.currentTarget.style.transform = "translateY(-3px) scale(1.007)"; e.currentTarget.style.boxShadow = "0 8px 32px rgba(99,102,241,0.16)"; e.currentTarget.style.borderColor = "#6366f1"; }}
+onMouseLeave={function (e) { e.currentTarget.style.transform = ""; e.currentTarget.style.boxShadow = ur ? "0 2px 16px rgba(251,191,36,0.18)" : "0 2px 12px rgba(99,102,241,0.07)"; e.currentTarget.style.borderColor = ur ? "#fbbf24" : "#eee"; }}
+>
+  <div style={{ height: 4, background: ur ? "linear-gradient(90deg,#fbbf24,#f97316)" : "linear-gradient(90deg," + st.color + "," + st.color + "44)", borderRadius: "18px 18px 0 0" }} />
 
-                      <div style={{ padding: "16px 20px" }} onClick={function () { openResp(r); }}>
-                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 12 }}>
-                          <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-                            <div style={{ position: "relative", flexShrink: 0 }}>
-                              <div style={{ width: 52, height: 52, borderRadius: "50%",
-                                background: ur ? "linear-gradient(135deg,#f59e0b,#f97316)" : "linear-gradient(135deg,#6366f1,#a78bfa)",
-                                display: "flex", alignItems: "center", justifyContent: "center",
-                                fontWeight: 800, color: "#fff", fontSize: 20,
-                                boxShadow: "0 3px 12px " + (ur ? "rgba(245,158,11,0.3)" : "rgba(99,102,241,0.25)"),
-                              }}>{(r.candidate_name || r.author_name || "?")[0].toUpperCase()}</div>
-                              {ur && <div style={{ position: "absolute", top: -3, right: -3, width: 16, height: 16, borderRadius: "50%", background: "#ef4444", border: "2.5px solid #fff", boxShadow: "0 0 6px rgba(239,68,68,0.5)" }} />}
-                            </div>
-                            <div>
-                              <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-                                <span style={{ fontWeight: 800, fontSize: 17, color: "#111" }}>{r.candidate_name || r.author_name || T_NONAME}</span>
-                                {ur && <span style={{ fontSize: 10, padding: "2px 10px", borderRadius: 6, background: "linear-gradient(135deg,#fbbf24,#f97316)", color: "#fff", fontWeight: 700 }}>NEW</span>}
-                              </div>
-                            </div>
-                          </div>
-                          <div style={{ textAlign: "right", flexShrink: 0 }}>
-                            <div style={{ fontSize: 12, color: "#aaa", marginBottom: 4 }}>{fmtDate(r.created_at)}</div>
-                            <span style={{ display: "inline-block", padding: "4px 12px", borderRadius: 20, fontSize: 12, fontWeight: 700, background: st.bg, color: st.color, border: "1px solid " + st.color + "33" }}>{st.icon} {st.label}</span>
-                          </div>
-                        </div>
+  <div style={{ padding: "16px 20px" }} onClick={function () { openResp(r); }}>
+    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 12 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+        <div style={{ position: "relative", flexShrink: 0 }}>
+          <div style={{ width: 52, height: 52, borderRadius: "50%",
+            background: ur ? "linear-gradient(135deg,#f59e0b,#f97316)" : "linear-gradient(135deg,#6366f1,#a78bfa)",
+            display: "flex", alignItems: "center", justifyContent: "center",
+            fontWeight: 800, color: "#fff", fontSize: 20,
+            boxShadow: "0 3px 12px " + (ur ? "rgba(245,158,11,0.3)" : "rgba(99,102,241,0.25)"),
+          }}>{(r.candidate_name || r.author_name || "?")[0].toUpperCase()}</div>
+          {ur && <div style={{ position: "absolute", top: -3, right: -3, width: 16, height: 16, borderRadius: "50%", background: "#ef4444", border: "2.5px solid #fff", boxShadow: "0 0 6px rgba(239,68,68,0.5)" }} />}
+        </div>
+        <div>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+            <span style={{ fontWeight: 800, fontSize: 17, color: "#111" }}>{r.candidate_name || r.author_name || T_NONAME}</span>
+            {ur && <span style={{ fontSize: 10, padding: "2px 10px", borderRadius: 6, background: "linear-gradient(135deg,#fbbf24,#f97316)", color: "#fff", fontWeight: 700 }}>NEW</span>}
+          </div>
+        </div>
+      </div>
+      <div style={{ textAlign: "right", flexShrink: 0 }}>
+        <div style={{ fontSize: 12, color: "#aaa", marginBottom: 4 }}>{fmtDate(r.created_at)}</div>
+        <span style={{ display: "inline-block", padding: "4px 12px", borderRadius: 20, fontSize: 12, fontWeight: 700, background: st.bg, color: st.color, border: "1px solid " + st.color + "33" }}>{st.icon} {st.label}</span>
+      </div>
+    </div>
 
-                        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 10 }}>
-                          <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "6px 12px", borderRadius: 10, background: "linear-gradient(135deg,#f5f3ff,#ede9fe)", border: "1px solid #e0d7fe" }}>
-                            <span style={{ fontSize: 14 }}>{"\uD83D\uDCBC"}</span>
-                            <span style={{ fontSize: 12, fontWeight: 700, color: "#6d28d9", maxWidth: 220, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{getVacTitle(r)}</span>
-                          </div>
-                          {addr && (
-                            <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "6px 12px", borderRadius: 10, background: "#fef3c7", border: "1px solid #fde68a" }}>
-                              <span style={{ fontSize: 14 }}>{"\uD83D\uDCCD"}</span>
-                              <span style={{ fontSize: 12, fontWeight: 600, color: "#92400e" }}>{addr}</span>
-                            </div>
-                          )}
-                          {r.phone && (
-                            <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "6px 12px", borderRadius: 10, background: "#dcfce7", border: "1px solid #86efac" }}>
-                              <span style={{ fontSize: 14 }}>{"\uD83D\uDCDE"}</span>
-                              <span style={{ fontSize: 12, fontWeight: 700, color: "#166534" }}>{r.phone}</span>
-                            </div>
-                          )}
-                          {r.candidate_age && (
-                            <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "6px 12px", borderRadius: 10, background: "#e0f2fe", border: "1px solid #7dd3fc" }}>
-                              <span style={{ fontSize: 14 }}>{"\uD83C\uDF82"}</span>
-                              <span style={{ fontSize: 12, fontWeight: 600, color: "#0c4a6e" }}>{r.candidate_age} {T_YEARS}</span>
-                            </div>
-                          )}
-                          {r.candidate_citizenship && (
-                            <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "6px 12px", borderRadius: 10, background: "#fce7f3", border: "1px solid #f9a8d4" }}>
-                              <span style={{ fontSize: 14 }}>{"\uD83C\uDF0D"}</span>
-                              <span style={{ fontSize: 12, fontWeight: 600, color: "#9d174d" }}>{r.candidate_citizenship}</span>
-                            </div>
-                          )}
-                          {getVacCode(r) && (
-  <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "6px 12px", borderRadius: 10, background: "#f3f4f6", border: "1px solid #e5e7eb" }}>
-    <span style={{ fontSize: 11, fontWeight: 600, color: "#6b7280" }}>ID: {getVacCode(r)}</span>
+    <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 10 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "6px 12px", borderRadius: 10, background: "linear-gradient(135deg,#f5f3ff,#ede9fe)", border: "1px solid #e0d7fe" }}>
+        <span style={{ fontSize: 14 }}>💼</span>
+        <span style={{ fontSize: 12, fontWeight: 700, color: "#6d28d9", maxWidth: 220, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{getVacTitle(r)}</span>
+      </div>
+      {addr && (
+        <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "6px 12px", borderRadius: 10, background: "#fef3c7", border: "1px solid #fde68a" }}>
+          <span style={{ fontSize: 14 }}>📍</span>
+          <span style={{ fontSize: 12, fontWeight: 600, color: "#92400e" }}>{addr}</span>
+        </div>
+      )}
+      {r.phone && (
+        <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "6px 12px", borderRadius: 10, background: "#dcfce7", border: "1px solid #86efac" }}>
+          <span style={{ fontSize: 14 }}>📞</span>
+          <span style={{ fontSize: 12, fontWeight: 700, color: "#166534" }}>{r.phone}</span>
+        </div>
+      )}
+      {r.candidate_age && (
+        <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "6px 12px", borderRadius: 10, background: "#e0f2fe", border: "1px solid #7dd3fc" }}>
+          <span style={{ fontSize: 14 }}>🎂</span>
+          <span style={{ fontSize: 12, fontWeight: 600, color: "#0c4a6e" }}>{r.candidate_age} {T_YEARS}</span>
+        </div>
+      )}
+      {r.candidate_gender && (
+        <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "6px 12px", borderRadius: 10, background: "#fce7f3", border: "1px solid #f9a8d4" }}>
+          <span style={{ fontSize: 14 }}>{r.candidate_gender === "male" ? "👨" : "👩"}</span>
+          <span style={{ fontSize: 12, fontWeight: 600, color: "#9d174d" }}>{r.candidate_gender === "male" ? "М" : "Ж"}</span>
+        </div>
+      )}
+      {r.candidate_citizenship && (
+        <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "6px 12px", borderRadius: 10, background: "#fce7f3", border: "1px solid #f9a8d4" }}>
+          <span style={{ fontSize: 14 }}>🌍</span>
+          <span style={{ fontSize: 12, fontWeight: 600, color: "#9d174d" }}>{r.candidate_citizenship}</span>
+        </div>
+      )}
+      {getVacCode(r) && (
+        <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "6px 12px", borderRadius: 10, background: "#f3f4f6", border: "1px solid #e5e7eb" }}>
+          <span style={{ fontSize: 11, fontWeight: 600, color: "#6b7280" }}>ID: {getVacCode(r)}</span>
+        </div>
+      )}
+    </div>
+
+    {r.message && (
+      <div style={{ fontSize: 13, color: "#777", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", padding: "8px 12px", background: "#f8fafc", borderRadius: 10, border: "1px solid #f0f0f0" }}>{r.message.slice(0, 160)}</div>
+    )}
   </div>
-)}
-                        </div>
 
-                        {r.message && (
-                          <div style={{ fontSize: 13, color: "#777", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", padding: "8px 12px", background: "#f8fafc", borderRadius: 10, border: "1px solid #f0f0f0" }}>{r.message.slice(0, 160)}</div>
-                        )}
-                      </div>
-
-                      <div style={{ display: "flex", justifyContent: "flex-end", alignItems: "center", gap: 6, padding: "8px 20px 14px", borderTop: "1px solid #f5f5f5" }}>
-                        <span style={{ fontSize: 11, color: "#bbb", marginRight: "auto", fontWeight: 500 }}>{T_STATUS}:</span>
-                        {Object.keys(ST).map(function (key) {
-                          var s2 = ST[key]; var isA = (r.status || "new") === key;
-                          return (<button key={key} title={s2.label}
-                            onClick={function (e) { e.stopPropagation(); updStatus(r.id, key); }}
-                            style={{
-                              width: isA ? "auto" : 34, height: 34, borderRadius: 10,
-                              border: isA ? "2px solid " + s2.color : "1.5px solid #e5e7eb",
-                              background: isA ? s2.bg : "#fff", cursor: "pointer",
-                              fontSize: isA ? 12 : 15, fontWeight: isA ? 700 : 400, color: isA ? s2.color : "#666",
-                              display: "flex", alignItems: "center", justifyContent: "center",
-                              gap: 4, padding: isA ? "0 12px" : 0,
-                              transition: "all 0.18s ease",
-                              boxShadow: isA ? "0 2px 8px " + s2.color + "22" : "none",
-                            }}
-                            onMouseEnter={function (e) { if (!isA) { e.currentTarget.style.background = s2.bg; e.currentTarget.style.borderColor = s2.color; e.currentTarget.style.transform = "scale(1.12)"; } }}
-                            onMouseLeave={function (e) { if (!isA) { e.currentTarget.style.background = "#fff"; e.currentTarget.style.borderColor = "#e5e7eb"; e.currentTarget.style.transform = ""; } }}
-                          >{s2.icon} {isA && s2.label}</button>);
-                        })}
-                      </div>
-                    </div>
+  <div style={{ display: "flex", justifyContent: "flex-end", alignItems: "center", gap: 6, padding: "8px 20px 14px", borderTop: "1px solid #f5f5f5" }}>
+    <span style={{ fontSize: 11, color: "#bbb", marginRight: "auto", fontWeight: 500 }}>{T_STATUS}:</span>
+    {Object.keys(ST).map(function (key) {
+      var s2 = ST[key]; var isA = (r.status || "new") === key;
+      return (<button key={key} title={s2.label}
+        onClick={function (e) { e.stopPropagation(); updStatus(r.id, key); }}
+        style={{
+          width: isA ? "auto" : 34, height: 34, borderRadius: 10,
+          border: isA ? "2px solid " + s2.color : "1.5px solid #e5e7eb",
+          background: isA ? s2.bg : "#fff", cursor: "pointer",
+          fontSize: isA ? 12 : 15, fontWeight: isA ? 700 : 400, color: isA ? s2.color : "#666",
+          display: "flex", alignItems: "center", justifyContent: "center",
+          gap: 4, padding: isA ? "0 12px" : 0,
+          transition: "all 0.18s ease",
+          boxShadow: isA ? "0 2px 8px " + s2.color + "22" : "none",
+        }}
+        onMouseEnter={function (e) { if (!isA) { e.currentTarget.style.background = s2.bg; e.currentTarget.style.borderColor = s2.color; e.currentTarget.style.transform = "scale(1.12)"; } }}
+        onMouseLeave={function (e) { if (!isA) { e.currentTarget.style.background = "#fff"; e.currentTarget.style.borderColor = "#e5e7eb"; e.currentTarget.style.transform = ""; } }}
+      >{s2.icon} {isA && s2.label}</button>);
+    })}
+  </div>
+</div>
                   );
                 })}
               </div>
