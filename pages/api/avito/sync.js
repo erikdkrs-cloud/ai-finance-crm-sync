@@ -72,9 +72,16 @@ async function syncChats(acc, chatPage) {
     var lastMsg = "";
     var lastMsgDate = new Date().toISOString();
     if (chat.last_message) {
-      if (typeof chat.last_message.text === "string") lastMsg = chat.last_message.text;
-      else if (chat.last_message.content && typeof chat.last_message.content === "string") lastMsg = chat.last_message.content;
-      if (chat.last_message.created) lastMsgDate = new Date(chat.last_message.created * 1000).toISOString();
+      var msgContent = chat.last_message;
+      
+      if (msgContent.text) lastMsg = msgContent.text;
+      else if (msgContent.content) {
+        if (typeof msgContent.content === "string") lastMsg = msgContent.content;
+        else if (msgContent.content.text) lastMsg = msgContent.content.text;
+      }
+      
+      if (msgContent.created_at) lastMsgDate = new Date(msgContent.created_at).toISOString();
+      else if (msgContent.created) lastMsgDate = new Date(msgContent.created * 1000).toISOString();
     }
 
     var isRead = true;
@@ -115,7 +122,7 @@ async function syncChats(acc, chatPage) {
 
     var allMessages = "";
     try {
-      var msgRes = await fetch("https://api.avito.ru/messenger/v3/accounts/" + userId + "/chats/" + chatId + "/messages/?limit=50", {
+      var msgRes = await fetch("https://api.avito.ru/messenger/v3/accounts/" + userId + "/chats/" + chatId + "/messages/?limit=100", {
         headers: { Authorization: "Bearer " + token }
       });
       var msgData = await msgRes.json();
@@ -136,7 +143,7 @@ async function syncChats(acc, chatPage) {
         if (phoneMatch) phone = phoneMatch[1].replace(/[\s\-()]/g, "");
       }
       if (!candidateAge) {
-        var ageMatch = allMessages.match(/(\d{2})\s*(?:лет|года|год)/i);
+        var ageMatch = allMessages.match(/(\d{1,3})\s*(?:лет|года|год|age)/i);
         if (ageMatch) candidateAge = ageMatch[1];
       }
       
@@ -146,7 +153,7 @@ async function syncChats(acc, chatPage) {
         candidateGender = (g === "м" || g === "male" || g === "мужчина") ? "male" : "female";
       }
       
-      var ctzMatch = allMessages.match(/(?:гражданство|citizenship)\s*[\-—:]\s*([А-Яа-яЁё\s]+?)(?:\.|,|$)/i);
+      var ctzMatch = allMessages.match(/(?:гражданство|citizenship|страна|country)\s*[\-—:]\s*([А-Яа-яЁё\s]+?)(?:\.|,|$)/i);
       if (ctzMatch) candidateCitizenship = ctzMatch[1].trim();
     }
 
