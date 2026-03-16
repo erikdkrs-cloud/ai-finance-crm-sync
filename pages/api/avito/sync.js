@@ -47,11 +47,13 @@ async function syncChats(acc, chatPage) {
     }
 
     var authorName = "";
+    var authorId = "";
     if (chat.users && Array.isArray(chat.users)) {
       for (var u = 0; u < chat.users.length; u++) {
         var user = chat.users[u];
         if (String(user.id) !== userId) {
           authorName = user.name || "";
+          authorId = String(user.id);
           break;
         }
       }
@@ -70,7 +72,29 @@ async function syncChats(acc, chatPage) {
       isRead = chat.read === true ? true : false;
     }
 
-    // Fetch full messages to parse candidate info
+    // Get user profile to extract phone, age, etc
+    var candidateName = authorName;
+    var candidateAge = "";
+    var candidateCitizenship = "";
+    var phone = "";
+
+    if (authorId) {
+      try {
+        var profileRes = await fetch("https://api.avito.ru/core/v1/accounts/" + authorId + "/profile", {
+          headers: { Authorization: "Bearer " + token }
+        });
+        var profileData = await profileRes.json();
+        
+        if (profileData) {
+          if (profileData.name) candidateName = profileData.name;
+          if (profileData.phone) phone = profileData.phone.replace(/[\s\-()]/g, "");
+          if (profileData.age) candidateAge = String(profileData.age);
+          if (profileData.citizenship) candidateCitizenship = profileData.citizenship;
+        }
+      } catch(e) {}
+    }
+
+    // Also parse from messages as backup
     var allMessages = "";
     try {
       var msgRes = await fetch("https://api.avito.ru/messenger/v3/accounts/" + userId + "/chats/" + chatId + "/messages/?limit=50", {
@@ -88,24 +112,20 @@ async function syncChats(acc, chatPage) {
       }
     } catch(e) {}
 
-    // Parse candidate info
-    var candidateName = authorName;
-    var candidateAge = "";
-    var candidateCitizenship = "";
-    var phone = "";
-
+    // Parse from messages if not found in profile
     if (allMessages) {
-      var phoneMatch = allMessages.match(/(\+?7[\s\-]?\d{3}[\s\-]?\d{3}[\s\-]?\d{2}[\s\-]?\d{2})/);
-      if (phoneMatch) phone = phoneMatch[1].replace(/[\s\-()]/g, "");
-
-      var ageMatch = allMessages.match(/(\d{2})\s*(?:лет|года|год|age)/i);
-      if (ageMatch) candidateAge = ageMatch[1];
-
-      var ctzMatch = allMessages.match(/(?:гражданство|citizenship)\s*[\-—:]\s*([А-Яа-яЁё\s]+?)(?:\.|,|$)/i);
-      if (ctzMatch) candidateCitizenship = ctzMatch[1].trim();
-
-      var nameMatch = allMessages.match(/(?:ФИО|имя|name)\s*[\-—:]\s*([А-Яа-яЁё\s]+?)(?:\.|,|$)/i);
-      if (nameMatch) candidateName = nameMatch[1].trim();
+      if (!phone) {
+        var phoneMatch = allMessages.match(/(\+?7[\s\-]?\d{3}[\s\-]?\d{3}[\s\-]?\d{2}[\s\-]?\d{2})/);
+        if (phoneMatch) phone = phoneMatch[1].replace(/[\s\-()]/g, "");
+      }
+      if (!candidateAge) {
+        var ageMatch = allMessages.match(/(\d{2})\s*(?:лет|года|год)/i);
+        if (ageMatch) candidateAge = ageMatch[1];
+      }
+      if (!candidateCitizenship) {
+        var ctzMatch = allMessages.match(/(?:гражданство|citizenship)\s*[\-—:]\s*([А-Яа-яЁё\s]+?)(?:\.|,|$)/i);
+        if (ctzMatch) candidateCitizenship = ctzMatch[1].trim();
+      }
     }
 
     await sql`INSERT INTO avito_responses
