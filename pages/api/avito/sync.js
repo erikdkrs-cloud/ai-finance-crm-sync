@@ -94,7 +94,11 @@ async function syncChats(acc, chatPage) {
   for (var ci = 0; ci < chats.length; ci++) {
     var chat = chats[ci];
     var chatId = chat.id;
-    var itemId = chat.context && chat.context.type === "item" ? String(chat.context.value) : "";
+    var itemId = "";
+if (chat.context && chat.context.type === "item") {
+  var val = chat.context.value;
+  itemId = typeof val === "object" ? String(val.id || val.value || "") : String(val);
+}
     var vacancy = itemId ? allVac.find(function(v){return v.avito_id===itemId;}) : null;
 
     var authorName = "";
