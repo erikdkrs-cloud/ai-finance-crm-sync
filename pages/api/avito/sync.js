@@ -112,8 +112,8 @@ async function syncChats(acc, chatPage) {
         if (mx.content && mx.content.text) txt = mx.content.text;
         else if (mx.text) txt = mx.text;
         if (txt) {
-          var pm = txt.match(/(\+?7[\s\-]?$?\d{3}$?[\s\-]?\d{3}[\s\-]?\d{2}[\s\-]?\d{2})/);
-          if (pm && !phone) phone = pm[1].replace(/[\s\-\(\)]/g, "");
+          var pm = txt.match(/(\+?7[\s-]?\d{3}[\s-]?\d{3}[\s-]?\d{2}[\s-]?\d{2})/);
+          if (pm && !phone) phone = pm[1].replace(/[\s\-()]/g, "");
           // Parse system messages like: Гражданство — Таджикистан Возраст — 29 лет ФИО — Хамдамов
           var ctzMatch = txt.match(/[Гг]ражданство\s*[\-—]\s*([^\s,—]+)/);
           if (ctzMatch && !candidateCitizenship) candidateCitizenship = ctzMatch[1];
