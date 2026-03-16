@@ -1,292 +1,308 @@
 import { neon } from "@neondatabase/serverless";
-var avito = require("../../../lib/avito");
 
-function findPhone(text) {
-  if (!text) return null;
-  var cleaned = text.replace(/[^\d+]/g, "");
-  var m = cleaned.match(/[+]?[78]\d{10}/);
-  return m ? m[0] : null;
+const sql = neon(process.env.DATABASE_URL);
+
+async function getToken(acc) {
+  var now = Date.now();
+  if (acc.access_token && acc.token_expires_at && new Date(acc.token_expires_at).getTime() > now + 60000) {
+    return acc.access_token;
+  }
+  var res = await fetch("https://api.avito.ru/token", {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: "grant_type=client_credentials&client_id=" + acc.client_id + "&client_secret=" + acc.client_secret,
+  });
+  var data = await res.json();
+  if (!data.access_token) throw new Error("Token error: " + JSON.stringify(data));
+  var expires = new Date(now + data.expires_in * 1000).toISOString();
+  await sql`UPDATE avito_accounts SET access_token=${data.access_token}, token_expires_at=${expires} WHERE id=${acc.id}`;
+  return data.access_token;
 }
 
-function parseName(text) {
-  if (!text) return null;
-  var m = text.match(/(?:ФИО|Имя|Меня зовут|Я)\s*[\n\u2014:\-]+\s*(.+)/i);
-  return m ? m[1].trim().slice(0, 100) : null;
+async function getUserId(acc, token) {
+  if (acc.user_id) return acc.user_id;
+  var res = await fetch("https://api.avito.ru/core/v1/accounts/self", {
+    headers: { Authorization: "Bearer " + token },
+  });
+  var data = await res.json();
+  if (data.id) {
+    await sql`UPDATE avito_accounts SET user_id=${String(data.id)} WHERE id=${acc.id}`;
+    return String(data.id);
+  }
+  throw new Error("Cannot get user_id");
 }
 
-function parseAge(text) {
-  if (!text) return null;
-  var m = text.match(/(?:Возраст|Мне|Лет)\s*[\n\u2014:\-]+\s*(\d{1,2})/i);
-  return m ? m[1] : null;
+async function syncItems(acc) {
+  var token = await getToken(acc);
+  var userId = await getUserId(acc, token);
+  var vacCount = 0;
+
+  // Get all items (vacancies)
+  var page = 0;
+  var hasMore = true;
+
+  while (hasMore) {
+    var url = "https://api.avito.ru/core/v1/accounts/" + userId + "/items?per_page=50&page=" + (page + 1) + "&status=active";
+    var res = await fetch(url, { headers: { Authorization: "Bearer " + token } });
+    var data = await res.json();
+    var items = data.resources || [];
+
+    for (var i = 0; i < items.length; i++) {
+      var item = items[i];
+
+      // Get detailed info for address and url
+      var itemAddress = "";
+      var itemUrl = "";
+      try {
+        var detailRes = await fetch("https://api.avito.ru/core/v1/accounts/" + userId + "/items/" + item.id, {
+          headers: { Authorization: "Bearer " + token },
+        });
+        var detail = await detailRes.json();
+        if (detail) {
+          itemAddress = detail.address || "";
+          itemUrl = detail.url || ("https://www.avito.ru/" + item.id);
+        }
+      } catch (e) {
+        itemUrl = "https://www.avito.ru/" + item.id;
+      }
+
+      await sql`INSERT INTO avito_vacancies (account_id, avito_id, title, city, salary_from, salary_to, status, address, url)
+        VALUES (${acc.id}, ${String(item.id)}, ${item.title || ""}, ${item.city || ""}, ${item.salary_from || null}, ${item.salary_to || null}, ${item.status || "active"}, ${itemAddress}, ${itemUrl})
+        ON CONFLICT (account_id, avito_id) DO UPDATE SET
+          title = EXCLUDED.title, city = EXCLUDED.city,
+          salary_from = EXCLUDED.salary_from, salary_to = EXCLUDED.salary_to,
+          status = EXCLUDED.status, address = EXCLUDED.address, url = EXCLUDED.url`;
+      vacCount++;
+    }
+
+    hasMore = items.length === 50;
+    page++;
+  }
+
+  // Also fetch old/closed items
+  try {
+    var res2 = await fetch("https://api.avito.ru/core/v1/accounts/" + userId + "/items?per_page=50&page=1&status=old", {
+      headers: { Authorization: "Bearer " + token },
+    });
+    var data2 = await res2.json();
+    var items2 = data2.resources || [];
+    for (var j = 0; j < items2.length; j++) {
+      var it2 = items2[j];
+
+      var addr2 = "";
+      var url2 = "";
+      try {
+        var dr2 = await fetch("https://api.avito.ru/core/v1/accounts/" + userId + "/items/" + it2.id, {
+          headers: { Authorization: "Bearer " + token },
+        });
+        var dd2 = await dr2.json();
+        if (dd2) { addr2 = dd2.address || ""; url2 = dd2.url || ("https://www.avito.ru/" + it2.id); }
+      } catch (e) { url2 = "https://www.avito.ru/" + it2.id; }
+
+      await sql`INSERT INTO avito_vacancies (account_id, avito_id, title, city, salary_from, salary_to, status, address, url)
+        VALUES (${acc.id}, ${String(it2.id)}, ${it2.title || ""}, ${it2.city || ""}, ${it2.salary_from || null}, ${it2.salary_to || null}, ${"old"}, ${addr2}, ${url2})
+        ON CONFLICT (account_id, avito_id) DO UPDATE SET
+          title = EXCLUDED.title, city = EXCLUDED.city,
+          salary_from = EXCLUDED.salary_from, salary_to = EXCLUDED.salary_to,
+          status = EXCLUDED.status, address = EXCLUDED.address, url = EXCLUDED.url`;
+      vacCount++;
+    }
+  } catch (e) {}
+
+  return { vacancies: vacCount };
 }
 
-function parseCitizenship(text) {
-  if (!text) return null;
-  var m = text.match(/(?:Гражданство)\s*[\n\u2014:\-]+\s*(.+)/i);
-  return m ? m[1].trim().slice(0, 100) : null;
+async function syncChats(acc, chatPage) {
+  var token = await getToken(acc);
+  var userId = await getUserId(acc, token);
+  var respCount = 0;
+
+  // Load all vacancies for matching
+  var allVac = await sql`SELECT id, avito_id, title, address, city FROM avito_vacancies WHERE account_id = ${acc.id}`;
+
+  var offset = (chatPage || 0) * 50;
+  var chatsRes = await fetch("https://api.avito.ru/messenger/v2/accounts/" + userId + "/chats?per_page=50&offset=" + offset + "&chat_type=u2i", {
+    headers: { Authorization: "Bearer " + token },
+  });
+  var chatsData = await chatsRes.json();
+  var chats = chatsData.chats || [];
+
+  for (var i = 0; i < chats.length; i++) {
+    var chat = chats[i];
+    var chatId = chat.id;
+    var itemId = "";
+    var contextValue = "";
+
+    // Extract item ID from context
+    if (chat.context && chat.context.value) {
+      contextValue = chat.context.value;
+      var ctxType = chat.context.type;
+      if (ctxType === "item") itemId = String(contextValue);
+    }
+
+    // Find vacancy
+    var vacancy = null;
+    if (itemId) {
+      vacancy = allVac.find(function (v) { return v.avito_id === itemId; });
+    }
+
+    // Get author info
+    var authorName = "";
+    var authorId = "";
+    if (chat.users && chat.users.length > 0) {
+      for (var u = 0; u < chat.users.length; u++) {
+        if (String(chat.users[u].id) !== userId) {
+          authorName = chat.users[u].name || "";
+          authorId = String(chat.users[u].id);
+          break;
+        }
+      }
+    }
+
+    // Get last message
+    var lastMsg = "";
+    var lastMsgDate = null;
+    if (chat.last_message) {
+      lastMsg = chat.last_message.text || chat.last_message.content || "";
+      if (chat.last_message.created) lastMsgDate = new Date(chat.last_message.created * 1000).toISOString();
+    }
+
+    // Get candidate details from chat context
+    var candidateName = "";
+    var candidateAge = "";
+    var candidateCitizenship = "";
+    var phone = "";
+
+    // Try to get candidate info from CV
+    try {
+      var msgsRes = await fetch("https://api.avito.ru/messenger/v3/accounts/" + userId + "/chats/" + chatId + "/messages/?limit=30", {
+        headers: { Authorization: "Bearer " + token },
+      });
+      var msgsData = await msgsRes.json();
+      var messages = msgsData.messages || [];
+
+      for (var mi = 0; mi < messages.length; mi++) {
+        var mx = messages[mi];
+        // Check for phone in system messages or text
+        if (mx.type === "system" && mx.text) {
+          var phoneMatch = mx.text.match(/(\+?7[\s\-]?\d{3}[\s\-]?\d{3}[\s\-]?\d{2}[\s\-]?\d{2})/);
+          if (phoneMatch) phone = phoneMatch[1].replace(/[\s\-]/g, "");
+        }
+        if (mx.content && mx.content.text) {
+          var pm2 = mx.content.text.match(/(\+?7[\s\-]?\d{3}[\s\-]?\d{3}[\s\-]?\d{2}[\s\-]?\d{2})/);
+          if (pm2 && !phone) phone = pm2[1].replace(/[\s\-]/g, "");
+        }
+        // Check for candidate info in link/apply messages
+        if (mx.type === "link" || mx.type === "apply") {
+          if (mx.candidate) {
+            candidateName = mx.candidate.name || candidateName;
+            candidateAge = mx.candidate.age || candidateAge;
+          }
+        }
+      }
+    } catch (e) {}
+
+    // Try to get CV / application info
+    try {
+      var applyRes = await fetch("https://api.avito.ru/job/v1/accounts/" + userId + "/responses/incoming?per_page=100", {
+        headers: { Authorization: "Bearer " + token },
+      });
+      var applyData = await applyRes.json();
+      var applies = applyData.responses || [];
+      for (var ai = 0; ai < applies.length; ai++) {
+        var app = applies[ai];
+        if (app.chat_id === chatId || (app.author && String(app.author.id) === authorId)) {
+          candidateName = candidateName || (app.author && app.author.name) || "";
+          phone = phone || (app.author && app.author.phone) || "";
+          if (app.author && app.author.age) candidateAge = String(app.author.age);
+          if (app.author && app.author.citizenship) candidateCitizenship = app.author.citizenship;
+          break;
+        }
+      }
+    } catch (e) {}
+
+    if (!candidateName) candidateName = authorName;
+
+    // Determine vacancy info
+    var vacId = vacancy ? vacancy.id : null;
+    var vacTitle = vacancy ? vacancy.title : "";
+    var vacAddress = vacancy ? (vacancy.address || vacancy.city || "") : "";
+    var vacCode = itemId;
+
+    // Check unread
+    var isRead = true;
+    if (chat.last_message && chat.last_message.direction === "in") {
+      isRead = !!(chat.read);
+    }
+
+    // Upsert response
+    await sql`INSERT INTO avito_responses
+      (account_id, avito_chat_id, vacancy_id, vacancy_title, vacancy_code, vacancy_address, vacancy_city,
+       author_name, candidate_name, candidate_age, candidate_citizenship, phone,
+       message, is_read, created_at)
+      VALUES (${acc.id}, ${chatId}, ${vacId}, ${vacTitle}, ${vacCode}, ${vacAddress}, ${vacancy ? vacancy.city || "" : ""},
+        ${authorName}, ${candidateName}, ${candidateAge}, ${candidateCitizenship}, ${phone},
+        ${lastMsg}, ${isRead}, ${lastMsgDate || new Date().toISOString()})
+      ON CONFLICT (account_id, avito_chat_id) DO UPDATE SET
+        vacancy_id = COALESCE(EXCLUDED.vacancy_id, avito_responses.vacancy_id),
+        vacancy_title = CASE WHEN EXCLUDED.vacancy_title != '' THEN EXCLUDED.vacancy_title ELSE avito_responses.vacancy_title END,
+        vacancy_code = CASE WHEN EXCLUDED.vacancy_code != '' THEN EXCLUDED.vacancy_code ELSE avito_responses.vacancy_code END,
+        vacancy_address = CASE WHEN EXCLUDED.vacancy_address != '' THEN EXCLUDED.vacancy_address ELSE avito_responses.vacancy_address END,
+        vacancy_city = CASE WHEN EXCLUDED.vacancy_city != '' THEN EXCLUDED.vacancy_city ELSE avito_responses.vacancy_city END,
+        author_name = CASE WHEN EXCLUDED.author_name != '' THEN EXCLUDED.author_name ELSE avito_responses.author_name END,
+        candidate_name = CASE WHEN EXCLUDED.candidate_name != '' THEN EXCLUDED.candidate_name ELSE avito_responses.candidate_name END,
+        candidate_age = CASE WHEN EXCLUDED.candidate_age != '' THEN EXCLUDED.candidate_age ELSE avito_responses.candidate_age END,
+        candidate_citizenship = CASE WHEN EXCLUDED.candidate_citizenship != '' THEN EXCLUDED.candidate_citizenship ELSE avito_responses.candidate_citizenship END,
+        phone = CASE WHEN EXCLUDED.phone != '' THEN EXCLUDED.phone ELSE avito_responses.phone END,
+        message = EXCLUDED.message,
+        is_read = CASE WHEN avito_responses.is_read = true THEN true ELSE EXCLUDED.is_read END`;
+
+    respCount++;
+  }
+
+  return { responses: respCount };
 }
 
 export default async function handler(req, res) {
   try {
-    var sql = neon(process.env.DATABASE_URL);
-    var mode = req.query.mode || "all";
-    var chatPage = Number(req.query.chat_page || 0);
-
     var accounts = await sql`SELECT * FROM avito_accounts`;
-    if (!accounts || accounts.length === 0) {
-      return res.json({ ok: false, error: "No accounts" });
-    }
+    if (accounts.length === 0) return res.json({ ok: true, synced: { vacancies: 0, responses: 0 }, message: "No accounts" });
 
-    var totalVacancies = 0;
-    var totalResponses = 0;
+    var mode = req.query.mode || "all";
+    var chatPage = parseInt(req.query.chat_page) || 0;
+    var totalVac = 0;
+    var totalResp = 0;
     var errors = [];
-    var hasMoreChats = false;
 
     for (var i = 0; i < accounts.length; i++) {
-      var account = accounts[i];
+      var acc = accounts[i];
       try {
-        var userId = await avito.getUserId(sql, account);
-
-        // ===== ITEMS =====
-        if (mode === "all" || mode === "items") {
-          var page = 1;
-          var more = true;
-          while (more) {
-            var data;
-            try {
-              data = await avito.avitoFetch(sql, account, "/core/v1/items?per_page=50&page=" + page);
-            } catch (e) { break; }
-
-            var items = data.resources || [];
-            if (items.length === 0) break;
-
-            for (var j = 0; j < items.length; j++) {
-              var item = items[j];
-              var city = "";
-              var address = "";
-              if (typeof item.address === "string") {
-                address = item.address;
-                city = item.address.split(",")[0].trim();
-              }
-
-              await sql`
-                INSERT INTO avito_vacancies (account_id, avito_id, title, url, status, category, city, salary_from, created_at, updated_at, raw_data)
-                VALUES (
-                  ${account.id}, ${Number(item.id)}, ${item.title || ""},
-                  ${item.url || ""}, ${item.status || "unknown"},
-                  ${item.category ? (item.category.name || "") : ""},
-                  ${city}, ${item.price ? Number(item.price) : null},
-                  ${item.created ? new Date(item.created * 1000).toISOString() : null},
-                  ${new Date().toISOString()}, ${JSON.stringify(item)}
-                )
-                ON CONFLICT (avito_id) DO UPDATE SET
-                  title=EXCLUDED.title, url=EXCLUDED.url, status=EXCLUDED.status,
-                  city=EXCLUDED.city, salary_from=EXCLUDED.salary_from,
-                  updated_at=EXCLUDED.updated_at, raw_data=EXCLUDED.raw_data
-              `;
-              totalVacancies++;
-            }
-            page++;
-            if (items.length < 50) more = false;
-            if (page > 50) break;
-          }
+        if (mode === "items" || mode === "all") {
+          var r1 = await syncItems(acc);
+          totalVac += r1.vacancies;
         }
-
-        // ===== CHATS =====
-        if (mode === "all" || mode === "chats") {
-          try {
-            var savedOffset = null;
-            if (chatPage > 0) {
-              var offRow = await sql`SELECT value FROM app_settings WHERE key = ${'chat_offset_' + account.id} LIMIT 1`;
-              if (offRow && offRow[0]) savedOffset = offRow[0].value;
-            }
-
-            var fetched = 0;
-            var lastId = savedOffset;
-            var keepGoing = true;
-            var maxPages = 5;
-
-            while (keepGoing && fetched < maxPages) {
-              var url = "/messenger/v2/accounts/" + userId + "/chats?limit=100";
-              if (lastId) url += "&offset=" + encodeURIComponent(lastId);
-
-              var chatsData = await avito.avitoFetch(sql, account, url);
-              var chats = chatsData.chats || [];
-              fetched++;
-
-              if (chats.length === 0) { keepGoing = false; break; }
-
-              for (var c = 0; c < chats.length; c++) {
-                var chat = chats[c];
-                var chatId = String(chat.id);
-
-                var chatItemId = null;
-                if (chat.context && chat.context.value) {
-                  chatItemId = chat.context.value.id;
-                }
-
-                var vacRow = null;
-                if (chatItemId) {
-                  vacRow = await sql`SELECT id, title, city FROM avito_vacancies WHERE avito_id=${Number(chatItemId)} AND account_id=${account.id} LIMIT 1`;
-                }
-                var vacDbId = vacRow && vacRow[0] ? vacRow[0].id : null;
-                var vacTitle = "";
-                var vacCity = "";
-                var vacAddress = "";
-                var vacCode = "";
-
-                if (vacRow && vacRow[0]) {
-                  vacTitle = vacRow[0].title || "";
-                  vacCity = vacRow[0].city || "";
-                }
-                if (chat.context && chat.context.value) {
-                  if (!vacTitle) vacTitle = chat.context.value.title || "";
-                  vacCode = String(chatItemId || "");
-                  if (chat.context.value.location) {
-                    vacAddress = chat.context.value.location.title || "";
-                  }
-                }
-
-                // Get candidate info
-                var authorName = "";
-                var candidateUserId = null;
-                if (chat.users) {
-                  for (var u = 0; u < chat.users.length; u++) {
-                    if (String(chat.users[u].id) !== String(userId)) {
-                      authorName = chat.users[u].name || "";
-                      candidateUserId = chat.users[u].id;
-                      break;
-                    }
-                  }
-                }
-
-                // Load first messages to extract candidate data
-                var fullMessage = "";
-                var candidatePhone = null;
-                var candidateName = null;
-                var candidateAge = null;
-                var candidateCitizenship = null;
-                var chatIsRead = true;
-
-                try {
-                  var msgsData = await avito.avitoFetch(
-                    sql, account,
-                    "/messenger/v1/accounts/" + userId + "/chats/" + chatId + "/messages/"
-                  );
-                  var msgs = msgsData.messages || [];
-                  msgs.sort(function (a, b) { return a.created - b.created; });
-
-                  // Check unread
-                  for (var mi = 0; mi < msgs.length; mi++) {
-                    if (String(msgs[mi].author_id) !== String(userId) && !msgs[mi].is_read) {
-                      chatIsRead = false;
-                    }
-                  }
-
-                  // Parse candidate messages
-                  var allCandidateText = "";
-                  for (var mi2 = 0; mi2 < msgs.length; mi2++) {
-                    var mItem = msgs[mi2];
-                    var mText = mItem.content ? (typeof mItem.content === "string" ? mItem.content : (mItem.content.text || "")) : "";
-                    if (!mText && mItem.text) mText = mItem.text;
-
-                    if (String(mItem.author_id) !== String(userId)) {
-                      if (!fullMessage) fullMessage = mText;
-                      allCandidateText += "\n" + mText;
-                    }
-                  }
-
-                  candidatePhone = findPhone(allCandidateText);
-                  candidateName = parseName(allCandidateText) || authorName;
-                  candidateAge = parseAge(allCandidateText);
-                  candidateCitizenship = parseCitizenship(allCandidateText);
-
-                } catch (msgErr) {
-                  if (chat.last_message) {
-                    fullMessage = chat.last_message.text || "";
-                    if (!fullMessage && chat.last_message.content) {
-                      fullMessage = typeof chat.last_message.content === "string"
-                        ? chat.last_message.content
-                        : (chat.last_message.content.text || "");
-                    }
-                  }
-                }
-
-                if (!fullMessage && chat.last_message) {
-                  fullMessage = chat.last_message.text || "";
-                  if (!fullMessage && chat.last_message.content) {
-                    fullMessage = typeof chat.last_message.content === "string"
-                      ? chat.last_message.content
-                      : (chat.last_message.content.text || "");
-                  }
-                }
-
-                var created = chat.created ? new Date(chat.created * 1000).toISOString() : null;
-
-                await sql`
-                  INSERT INTO avito_responses (
-                    vacancy_id, account_id, avito_chat_id, author_name, message,
-                    phone, candidate_name, candidate_age, candidate_citizenship,
-                    is_read, vacancy_address, vacancy_code,
-                    created_at, raw_data
-                  ) VALUES (
-                    ${vacDbId}, ${account.id}, ${chatId}, ${authorName}, ${fullMessage},
-                    ${candidatePhone}, ${candidateName || authorName}, ${candidateAge}, ${candidateCitizenship},
-                    ${chatIsRead}, ${vacAddress || vacCity}, ${vacCode},
-                    ${created},
-                    ${JSON.stringify({ vacancy_title: vacTitle, vacancy_avito_id: chatItemId, location: vacAddress, candidate_user_id: candidateUserId })}
-                  )
-                  ON CONFLICT (avito_chat_id) DO UPDATE SET
-                    author_name=EXCLUDED.author_name,
-                    message=EXCLUDED.message,
-                    phone=COALESCE(EXCLUDED.phone, avito_responses.phone),
-                    candidate_name=COALESCE(EXCLUDED.candidate_name, avito_responses.candidate_name),
-                    candidate_age=COALESCE(EXCLUDED.candidate_age, avito_responses.candidate_age),
-                    candidate_citizenship=COALESCE(EXCLUDED.candidate_citizenship, avito_responses.candidate_citizenship),
-                    is_read=CASE WHEN avito_responses.status = 'new' THEN EXCLUDED.is_read ELSE avito_responses.is_read END,
-                    vacancy_id=COALESCE(EXCLUDED.vacancy_id, avito_responses.vacancy_id),
-                    vacancy_address=COALESCE(EXCLUDED.vacancy_address, avito_responses.vacancy_address),
-                    vacancy_code=COALESCE(EXCLUDED.vacancy_code, avito_responses.vacancy_code),
-                    raw_data=EXCLUDED.raw_data
-                `;
-                totalResponses++;
-              }
-
-              lastId = chats[chats.length - 1].id;
-              if (!chatsData.meta || !chatsData.meta.has_more) { keepGoing = false; }
-            }
-
-            hasMoreChats = keepGoing;
-            if (lastId) {
-              await sql`
-                INSERT INTO app_settings (key, value) VALUES (${'chat_offset_' + account.id}, ${lastId})
-                ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value
-              `;
-            }
-
-            await sql`
-              UPDATE avito_vacancies v SET responses_count = (
-                SELECT COUNT(*) FROM avito_responses r WHERE r.vacancy_id = v.id
-              ) WHERE v.account_id = ${account.id}
-            `;
-
-          } catch (chatErr) {
-            errors.push({ account: account.name, warning: "Chats: " + chatErr.message });
-          }
+        if (mode === "chats" || mode === "all") {
+          var r2 = await syncChats(acc, chatPage);
+          totalResp += r2.responses;
         }
-
-      } catch (accErr) {
-        errors.push({ account: account.name, error: accErr.message });
+      } catch (e) {
+        errors.push(acc.name + ": " + e.message);
       }
     }
 
+    // Update response counts on vacancies
+    try {
+      await sql`UPDATE avito_vacancies v SET responses_count = (
+        SELECT COUNT(*) FROM avito_responses r WHERE r.vacancy_id = v.id
+      )`;
+    } catch (e) {}
+
     return res.json({
       ok: true,
-      synced: { vacancies: totalVacancies, responses: totalResponses },
-      hasMoreChats: hasMoreChats,
+      synced: { vacancies: totalVac, responses: totalResp },
       errors: errors.length > 0 ? errors : undefined,
     });
   } catch (e) {
-    return res.status(500).json({ ok: false, error: String(e) });
+    return res.status(500).json({ ok: false, error: e.message });
   }
 }
