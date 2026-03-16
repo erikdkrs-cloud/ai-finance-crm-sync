@@ -39,7 +39,6 @@ async function syncChats(acc, chatPage) {
     var chat = chats[i];
     var chatId = String(chat.id);
     
-    // Extract item ID safely
     var itemId = "";
     if (chat.context) {
       if (typeof chat.context.value === "number") itemId = String(chat.context.value);
@@ -47,21 +46,17 @@ async function syncChats(acc, chatPage) {
       else if (chat.context.value && chat.context.value.id) itemId = String(chat.context.value.id);
     }
 
-    // Get author info
     var authorName = "";
-    var authorId = "";
     if (chat.users && Array.isArray(chat.users)) {
       for (var u = 0; u < chat.users.length; u++) {
         var user = chat.users[u];
         if (String(user.id) !== userId) {
           authorName = user.name || "";
-          authorId = String(user.id);
           break;
         }
       }
     }
 
-    // Get last message
     var lastMsg = "";
     var lastMsgDate = new Date().toISOString();
     if (chat.last_message) {
@@ -70,18 +65,58 @@ async function syncChats(acc, chatPage) {
       if (chat.last_message.created) lastMsgDate = new Date(chat.last_message.created * 1000).toISOString();
     }
 
-    // Check if unread
     var isRead = true;
     if (chat.last_message && chat.last_message.direction === "in") {
       isRead = chat.read === true ? true : false;
     }
 
-    // Insert with minimal data
+    // Fetch full messages to parse candidate info
+    var allMessages = "";
+    try {
+      var msgRes = await fetch("https://api.avito.ru/messenger/v3/accounts/" + userId + "/chats/" + chatId + "/messages/?limit=50", {
+        headers: { Authorization: "Bearer " + token }
+      });
+      var msgData = await msgRes.json();
+      if (msgData.messages && Array.isArray(msgData.messages)) {
+        for (var m = 0; m < msgData.messages.length; m++) {
+          var msg = msgData.messages[m];
+          var txt = "";
+          if (msg.content && msg.content.text) txt = msg.content.text;
+          else if (msg.text) txt = msg.text;
+          if (txt) allMessages += txt + " ";
+        }
+      }
+    } catch(e) {}
+
+    // Parse candidate info
+    var candidateName = authorName;
+    var candidateAge = "";
+    var candidateCitizenship = "";
+    var phone = "";
+
+    if (allMessages) {
+      var phoneMatch = allMessages.match(/(\+?7[\s\-]?\d{3}[\s\-]?\d{3}[\s\-]?\d{2}[\s\-]?\d{2})/);
+      if (phoneMatch) phone = phoneMatch[1].replace(/[\s\-()]/g, "");
+
+      var ageMatch = allMessages.match(/(\d{2})\s*(?:лет|года|год|age)/i);
+      if (ageMatch) candidateAge = ageMatch[1];
+
+      var ctzMatch = allMessages.match(/(?:гражданство|citizenship)\s*[\-—:]\s*([А-Яа-яЁё\s]+?)(?:\.|,|$)/i);
+      if (ctzMatch) candidateCitizenship = ctzMatch[1].trim();
+
+      var nameMatch = allMessages.match(/(?:ФИО|имя|name)\s*[\-—:]\s*([А-Яа-яЁё\s]+?)(?:\.|,|$)/i);
+      if (nameMatch) candidateName = nameMatch[1].trim();
+    }
+
     await sql`INSERT INTO avito_responses
-      (account_id, avito_chat_id, author_name, message, is_read, created_at, vacancy_code)
-      VALUES (${acc.id}, ${chatId}, ${authorName}, ${lastMsg}, ${isRead}, ${lastMsgDate}, ${itemId})
+      (account_id, avito_chat_id, author_name, candidate_name, candidate_age, candidate_citizenship, phone, message, is_read, created_at, vacancy_code)
+      VALUES (${acc.id}, ${chatId}, ${authorName}, ${candidateName}, ${candidateAge}, ${candidateCitizenship}, ${phone}, ${lastMsg}, ${isRead}, ${lastMsgDate}, ${itemId})
       ON CONFLICT (account_id, avito_chat_id) DO UPDATE SET
         author_name = CASE WHEN EXCLUDED.author_name != '' THEN EXCLUDED.author_name ELSE avito_responses.author_name END,
+        candidate_name = CASE WHEN EXCLUDED.candidate_name != '' THEN EXCLUDED.candidate_name ELSE avito_responses.candidate_name END,
+        candidate_age = CASE WHEN EXCLUDED.candidate_age != '' THEN EXCLUDED.candidate_age ELSE avito_responses.candidate_age END,
+        candidate_citizenship = CASE WHEN EXCLUDED.candidate_citizenship != '' THEN EXCLUDED.candidate_citizenship ELSE avito_responses.candidate_citizenship END,
+        phone = CASE WHEN EXCLUDED.phone != '' THEN EXCLUDED.phone ELSE avito_responses.phone END,
         message = EXCLUDED.message,
         is_read = CASE WHEN avito_responses.is_read = true THEN true ELSE EXCLUDED.is_read END`;
 
