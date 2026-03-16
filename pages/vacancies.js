@@ -400,7 +400,7 @@ export default function VacanciesPage() {
                         <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 10 }}>
                           <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "6px 12px", borderRadius: 10, background: "linear-gradient(135deg,#f5f3ff,#ede9fe)", border: "1px solid #e0d7fe" }}>
                             <span style={{ fontSize: 14 }}>{"\uD83D\uDCBC"}</span>
-                            <span style={{ fontSize: 12, fontWeight: 700, color: "#6d28d9", maxWidth: 220, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.vacancy_title || "-"}</span>
+                            <span style={{ fontSize: 12, fontWeight: 700, color: "#6d28d9", maxWidth: 220, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{getVacTitle(r)}</span>
                           </div>
                           {addr && (
                             <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "6px 12px", borderRadius: 10, background: "#fef3c7", border: "1px solid #fde68a" }}>
@@ -426,11 +426,11 @@ export default function VacanciesPage() {
                               <span style={{ fontSize: 12, fontWeight: 600, color: "#9d174d" }}>{r.candidate_citizenship}</span>
                             </div>
                           )}
-                          {r.vacancy_code && (
-                            <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "6px 12px", borderRadius: 10, background: "#f3f4f6", border: "1px solid #e5e7eb" }}>
-                              <span style={{ fontSize: 11, fontWeight: 600, color: "#6b7280" }}>ID: {r.vacancy_code}</span>
-                            </div>
-                          )}
+                          {getVacCode(r) && (
+  <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "6px 12px", borderRadius: 10, background: "#f3f4f6", border: "1px solid #e5e7eb" }}>
+    <span style={{ fontSize: 11, fontWeight: 600, color: "#6b7280" }}>ID: {getVacCode(r)}</span>
+  </div>
+)}
                         </div>
 
                         {r.message && (
