@@ -163,10 +163,28 @@ export default function VacanciesPage() {
   }
   function delAcc(id) { if (!confirm(T_DELCONF)) return; fetch("/api/avito/accounts?id=" + id, { method: "DELETE" }).then(function () { fetchData(); }); }
 
-  function getAddr(r) {
-    if (r.vacancy_address) return r.vacancy_address;
+    function getAddr(r) {
+    if (r.vacancy_address && r.vacancy_address.length > 3) return r.vacancy_address;
     var v = vacancies.find(function (vv) { return vv.id === r.vacancy_id; });
-    return (v && v.address) || (v && v.city) || r.vacancy_city || "";
+    if (v) {
+      if (v.raw_data && v.raw_data.address) return v.raw_data.address;
+      if (v.address) return v.address;
+      if (v.city) return v.city;
+    }
+    return r.vacancy_city || "";
+  }
+
+  function getVacTitle(r) {
+    if (r.vacancy_title && r.vacancy_title.length > 1) return r.vacancy_title;
+    var v = vacancies.find(function (vv) { return vv.id === r.vacancy_id; });
+    return v ? v.title : "-";
+  }
+
+  function getVacCode(r) {
+    var code = r.vacancy_code;
+    if (!code) return "";
+    if (typeof code === "object") return String(code.id || code.value || JSON.stringify(code));
+    return String(code);
   }
 
   var unread = responses.filter(function (r) { return !r.is_read; }).length;
