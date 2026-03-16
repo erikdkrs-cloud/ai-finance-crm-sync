@@ -44,10 +44,11 @@ async function syncChats(acc, chatPage) {
     }
     var authorName = "";
     var authorId = "";
+    var phone = "";
     if (chat.users && Array.isArray(chat.users)) {
       for (var u = 0; u < chat.users.length; u++) {
         var user = chat.users[u];
-        if (String(user.id) !== userId) { authorName = user.name || ""; authorId = String(user.id); break; }
+        if (String(user.id) !== userId) { authorName = user.name || ""; authorId = String(user.id); if (user.phone) phone = user.phone.replace(/[\s\-()]/g, ""); break; }
       }
     }
     var lastMsg = "";
@@ -72,7 +73,6 @@ async function syncChats(acc, chatPage) {
     var candidateAge = "";
     var candidateCitizenship = "";
     var candidateGender = "";
-    var phone = "";
     var allMessages = "";
     try {
       var msgRes = await fetch("https://api.avito.ru/messenger/v3/accounts/" + userId + "/chats/" + chatId + "/messages/?limit=100", { headers: { Authorization: "Bearer " + token } });
