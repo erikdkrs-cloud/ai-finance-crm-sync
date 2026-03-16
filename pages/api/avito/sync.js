@@ -23,6 +23,16 @@ async function getUserId(acc, token) {
   throw new Error("No user_id");
 }
 
+async function getItemData(token, userId, itemId) {
+  try {
+    var res = await fetch("https://api.avito.ru/core/v1/accounts/" + userId + "/items/" + itemId, {
+      headers: { Authorization: "Bearer " + token }
+    });
+    var data = await res.json();
+    return data;
+  } catch(e) { return null; }
+}
+
 async function syncChats(acc, chatPage) {
   var token = await getToken(acc);
   var userId = await getUserId(acc, token);
@@ -72,10 +82,24 @@ async function syncChats(acc, chatPage) {
       isRead = chat.read === true ? true : false;
     }
 
-    // Get user profile to extract phone, age, etc
+    // Get item data
+    var vacancyTitle = "";
+    var vacancyAddress = "";
+    var vacancyCity = "";
+    if (itemId) {
+      var itemData = await getItemData(token, userId, itemId);
+      if (itemData) {
+        vacancyTitle = itemData.title || "";
+        vacancyAddress = itemData.address || "";
+        vacancyCity = itemData.city || "";
+      }
+    }
+
+    // Get user profile
     var candidateName = authorName;
     var candidateAge = "";
     var candidateCitizenship = "";
+    var candidateGender = "";
     var phone = "";
 
     if (authorId) {
@@ -90,11 +114,12 @@ async function syncChats(acc, chatPage) {
           if (profileData.phone) phone = profileData.phone.replace(/[\s\-()]/g, "");
           if (profileData.age) candidateAge = String(profileData.age);
           if (profileData.citizenship) candidateCitizenship = profileData.citizenship;
+          if (profileData.gender) candidateGender = profileData.gender;
         }
       } catch(e) {}
     }
 
-    // Also parse from messages as backup
+    // Parse from messages as backup
     var allMessages = "";
     try {
       var msgRes = await fetch("https://api.avito.ru/messenger/v3/accounts/" + userId + "/chats/" + chatId + "/messages/?limit=50", {
@@ -112,7 +137,6 @@ async function syncChats(acc, chatPage) {
       }
     } catch(e) {}
 
-    // Parse from messages if not found in profile
     if (allMessages) {
       if (!phone) {
         var phoneMatch = allMessages.match(/(\+?7[\s\-]?\d{3}[\s\-]?\d{3}[\s\-]?\d{2}[\s\-]?\d{2})/);
@@ -129,16 +153,20 @@ async function syncChats(acc, chatPage) {
     }
 
     await sql`INSERT INTO avito_responses
-      (account_id, avito_chat_id, author_name, candidate_name, candidate_age, candidate_citizenship, phone, message, is_read, created_at, vacancy_code)
-      VALUES (${acc.id}, ${chatId}, ${authorName}, ${candidateName}, ${candidateAge}, ${candidateCitizenship}, ${phone}, ${lastMsg}, ${isRead}, ${lastMsgDate}, ${itemId})
+      (account_id, avito_chat_id, author_name, candidate_name, candidate_age, candidate_citizenship, candidate_gender, phone, message, is_read, created_at, vacancy_code, vacancy_title, vacancy_address, vacancy_city)
+      VALUES (${acc.id}, ${chatId}, ${authorName}, ${candidateName}, ${candidateAge}, ${candidateCitizenship}, ${candidateGender}, ${phone}, ${lastMsg}, ${isRead}, ${lastMsgDate}, ${itemId}, ${vacancyTitle}, ${vacancyAddress}, ${vacancyCity})
       ON CONFLICT (account_id, avito_chat_id) DO UPDATE SET
         author_name = CASE WHEN EXCLUDED.author_name != '' THEN EXCLUDED.author_name ELSE avito_responses.author_name END,
         candidate_name = CASE WHEN EXCLUDED.candidate_name != '' THEN EXCLUDED.candidate_name ELSE avito_responses.candidate_name END,
         candidate_age = CASE WHEN EXCLUDED.candidate_age != '' THEN EXCLUDED.candidate_age ELSE avito_responses.candidate_age END,
         candidate_citizenship = CASE WHEN EXCLUDED.candidate_citizenship != '' THEN EXCLUDED.candidate_citizenship ELSE avito_responses.candidate_citizenship END,
+        candidate_gender = CASE WHEN EXCLUDED.candidate_gender != '' THEN EXCLUDED.candidate_gender ELSE avito_responses.candidate_gender END,
         phone = CASE WHEN EXCLUDED.phone != '' THEN EXCLUDED.phone ELSE avito_responses.phone END,
         message = EXCLUDED.message,
-        is_read = CASE WHEN avito_responses.is_read = true THEN true ELSE EXCLUDED.is_read END`;
+        is_read = CASE WHEN avito_responses.is_read = true THEN true ELSE EXCLUDED.is_read END,
+        vacancy_title = CASE WHEN EXCLUDED.vacancy_title != '' THEN EXCLUDED.vacancy_title ELSE avito_responses.vacancy_title END,
+        vacancy_address = CASE WHEN EXCLUDED.vacancy_address != '' THEN EXCLUDED.vacancy_address ELSE avito_responses.vacancy_address END,
+        vacancy_city = CASE WHEN EXCLUDED.vacancy_city != '' THEN EXCLUDED.vacancy_city ELSE avito_responses.vacancy_city END`;
 
     respCount++;
   }
