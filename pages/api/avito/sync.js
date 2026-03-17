@@ -68,35 +68,36 @@ async function syncChats(acc, chatPage, mode) {
   var skipped = 0;
   var offset = (chatPage || 0) * 100;
 
-  // Load existing chats from DB for this account
+  // Load existing chats from DB
   var existing = {};
-  if (mode === "fast") {
-    var rows = await sql`SELECT avito_chat_id, updated_at, candidate_name, candidate_age, candidate_citizenship, vacancy_title FROM avito_responses WHERE account_id = ${acc.id}`;
-    for (var r = 0; r < rows.length; r++) {
-      existing[rows[r].avito_chat_id] = rows[r];
-    }
+  var rows = await sql`SELECT avito_chat_id, updated_at, candidate_name, candidate_age, candidate_citizenship, vacancy_title FROM avito_responses WHERE account_id = ${acc.id}`;
+  for (var r = 0; r < rows.length; r++) {
+    existing[rows[r].avito_chat_id] = rows[r];
   }
 
-  // Item cache to avoid duplicate API calls
+  // Item cache
   var itemCache = {};
 
   var chatsRes = await fetch("https://api.avito.ru/messenger/v2/accounts/" + userId + "/chats?per_page=100&offset=" + offset + "&chat_type=u2i", { headers: { Authorization: "Bearer " + token } });
   var chatsData = await chatsRes.json();
   var chats = chatsData.chats || [];
 
+  // In fast mode: count consecutive skips - if 20 in a row, stop
+  var consecutiveSkips = 0;
+
   for (var i = 0; i < chats.length; i++) {
     var chat = chats[i];
     var chatId = String(chat.id);
 
-    // FAST MODE: skip chats not updated since last sync
-    if (mode === "fast" && existing[chatId]) {
+    // Check if chat needs update
+    var needsFullUpdate = true;
+    if (existing[chatId]) {
       var dbRow = existing[chatId];
       var chatUpdated = chat.updated ? new Date(chat.updated * 1000) : new Date(0);
       var dbUpdated = dbRow.updated_at ? new Date(dbRow.updated_at) : new Date(0);
 
-      // Skip if chat not updated AND we already have key data
-      if (chatUpdated <= dbUpdated && dbRow.candidate_name && dbRow.vacancy_title) {
-        // Only update read status and last message
+      if (mode === "fast" && chatUpdated <= dbUpdated && dbRow.candidate_name && dbRow.vacancy_title) {
+        // Quick update - only message and read status
         var isReadNow = true;
         if (chat.last_message && chat.last_message.direction === "in") isReadNow = chat.read === true;
         var lastMsgNow = "";
@@ -107,9 +108,13 @@ async function syncChats(acc, chatPage, mode) {
         await sql`UPDATE avito_responses SET message = ${lastMsgNow}, is_read = CASE WHEN avito_responses.is_read = true THEN true ELSE ${isReadNow} END, updated_at = NOW() WHERE account_id = ${acc.id} AND avito_chat_id = ${chatId}`;
         skipped++;
         respCount++;
+        consecutiveSkips++;
+        if (consecutiveSkips >= 20) break;
         continue;
       }
     }
+
+    consecutiveSkips = 0;
 
     // Item ID + vacancy from context
     var itemId = "";
@@ -155,7 +160,7 @@ async function syncChats(acc, chatPage, mode) {
     var isRead = true;
     if (chat.last_message && chat.last_message.direction === "in") isRead = chat.read === true;
 
-    // Vacancy from cache or API
+    // Vacancy - from context first, then cache, then API
     if (!vacancyTitle && itemId) {
       if (itemCache[itemId]) {
         var cached = itemCache[itemId];
@@ -176,7 +181,7 @@ async function syncChats(acc, chatPage, mode) {
       }
     }
 
-    // Parse messages for candidate data
+    // Parse messages
     var candidateName = authorName;
     var candidateAge = "";
     var candidateCitizenship = "";
@@ -238,7 +243,7 @@ async function syncChats(acc, chatPage, mode) {
 
     respCount++;
   }
-  return { responses: respCount, skipped: skipped };
+  return { responses: respCount, skipped: skipped, stopped: consecutiveSkips >= 20 };
 }
 
 async function syncItems(acc) {
