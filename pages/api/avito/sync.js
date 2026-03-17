@@ -6,7 +6,7 @@ async function getToken(acc) {
   if (acc.access_token && acc.token_expires_at && new Date(acc.token_expires_at).getTime() > now + 60000) return acc.access_token;
   var res = await fetch("https://api.avito.ru/token", { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body: "grant_type=client_credentials&client_id=" + acc.client_id + "&client_secret=" + acc.client_secret });
   var data = await res.json();
-  if (!data.access_token) throw new Error("Token error: " + JSON.stringify(data));
+  if (!data.access_token) throw new Error("Token error");
   var expires = new Date(now + data.expires_in * 1000).toISOString();
   await sql`UPDATE avito_accounts SET access_token=${data.access_token}, token_expires_at=${expires} WHERE id=${acc.id}`;
   return data.access_token;
@@ -20,90 +20,63 @@ async function getUserId(acc, token) {
   throw new Error("No user_id");
 }
 
-async function getItemData(token, userId, itemId) {
-  try {
-    var res = await fetch("https://api.avito.ru/core/v1/accounts/" + userId + "/items/" + itemId, { headers: { Authorization: "Bearer " + token } });
-    return await res.json();
-  } catch(e) { return null; }
-}
-
 async function getPhone(token, userId, chatId) {
   try {
     var res = await fetch("https://api.avito.ru/messenger/v1/accounts/" + userId + "/chats/" + chatId + "/phone", { headers: { Authorization: "Bearer " + token } });
-    var data = await res.json();
-    if (data.phone) return data.phone.replace(/[\s\-()]/g, "");
-    if (data.phones && data.phones.length > 0) return data.phones[0].phone.replace(/[\s\-()]/g, "");
+    var text = await res.text();
+    try {
+      var data = JSON.parse(text);
+      if (data.phone) return data.phone.replace(/[\s\-]/g, "");
+      if (data.phones && data.phones.length > 0) return data.phones[0].phone.replace(/[\s\-]/g, "");
+    } catch(e) {}
   } catch(e) {}
   return "";
 }
 
-function parseCandidate(allText) {
-  var result = { name: "", age: "", gender: "", citizenship: "", phone: "" };
+function parseSystemText(text) {
+  var result = { name: "", age: "", gender: "", citizenship: "" };
+  if (!text) return result;
 
-  // Phone
-  var pm = allText.match(/(\+7\d{10})/);
-  if (!pm) pm = allText.match(/(8\d{10})/);
-  if (!pm) pm = allText.match(/(\+7[\s\-]\d{3}[\s\-]\d{3}[\s\-]\d{2}[\s\-]\d{2})/);
-  if (!pm) pm = allText.match(/(8[\s\-]\d{3}[\s\-]\d{3}[\s\-]\d{2}[\s\-]\d{2})/);
-  if (pm) result.phone = pm[1].replace(/[\s\-]/g, "");
+  var ctzMatch = text.match(/[Гг]ражданство\s*\n?\s*[—\-:]\s*([^\n]+)/);
+  if (ctzMatch) result.citizenship = ctzMatch[1].trim();
 
-  // Age
-  var am = allText.match(/(?:возраст|age)[\s\-:]*(\d{1,2})/i);
-  if (!am) am = allText.match(/(\d{1,2})\s*(?:лет|года|год)/i);
-  if (!am) am = allText.match(/(?:мне)\s*(\d{1,2})/i);
-  if (am) { var age = parseInt(am[1]); if (age >= 14 && age <= 80) result.age = String(age); }
-
-  // Gender
-  var gm = allText.match(/(?:пол|gender)[\s\-:]*(муж|жен|male|female)/i);
-  if (!gm) gm = allText.match(/(мужчина|женщина|мужской|женский)/i);
-  if (gm) {
-    var gv = gm[1].toLowerCase();
-    if (gv.indexOf("муж") === 0 || gv === "male") result.gender = "male";
-    else result.gender = "female";
+  var ageMatch = text.match(/[Вв]озраст\s*\n?\s*[—\-:]\s*(\d{1,3})/);
+  if (ageMatch) {
+    var age = parseInt(ageMatch[1]);
+    if (age >= 14 && age <= 80) result.age = String(age);
   }
 
-  // Citizenship
-  var cm = allText.match(/(?:гражданство|citizenship)[\s\-:]*([А-Яа-яЁё\s]{2,30})/i);
-  if (!cm) cm = allText.match(/(?:гр\.)[\s\-:]*([А-Яа-яЁё\s]{2,30})/i);
-  if (cm) {
-    var ctz = cm[1].trim().replace(/\s+/g, " ");
-    ctz = ctz.replace(/\s+(возраст|пол|телефон|опыт|стаж|адрес|город).*/i, "").trim();
-    if (ctz.length > 1 && ctz.length < 40) result.citizenship = ctz;
-  }
+  var fioMatch = text.match(/[ФфFf][ИиIi][ОоOo]\s*\n?\s*[—\-:]\s*([^\n]+)/);
+  if (fioMatch) result.name = fioMatch[1].trim();
 
-  // Name
-  var nm = allText.match(/(?:имя|name|ФИО|фио)[\s\-:]*([А-Яа-яЁёA-Za-z\s]{2,40})/i);
-  if (!nm) nm = allText.match(/(?:зовут|меня зовут)\s+([А-Яа-яЁё]{2,20}(?:\s+[А-Яа-яЁё]{2,20})?)/i);
-  if (nm) {
-    var name = nm[1].trim().replace(/\s+/g, " ");
-    name = name.replace(/\s+(возраст|пол|телефон|гражданство|опыт).*/i, "").trim();
-    if (name.length > 1 && name.length < 40) result.name = name;
+  var polMatch = text.match(/[Пп]ол\s*\n?\s*[—\-:]\s*([^\n]+)/);
+  if (polMatch) {
+    var pv = polMatch[1].trim().toLowerCase();
+    if (pv.indexOf("муж") !== -1 || pv === "м") result.gender = "male";
+    else if (pv.indexOf("жен") !== -1 || pv === "ж") result.gender = "female";
   }
 
   return result;
 }
 
-function parseSystemMessage(msg) {
-  // Avito sends structured system messages with candidate data
-  var result = { name: "", age: "", gender: "", citizenship: "", phone: "" };
-  try {
-    if (msg.type === "system" || msg.type === "item_call") {
-      if (msg.content && typeof msg.content === "object") {
-        if (msg.content.name) result.name = msg.content.name;
-        if (msg.content.phone) result.phone = msg.content.phone.replace(/[\s\-()]/g, "");
-      }
-    }
-    // Check for link type messages with candidate info
-    if (msg.type === "link" && msg.content && msg.content.text) {
-      var txt = msg.content.text;
-      var parsed = parseCandidate(txt);
-      if (parsed.name) result.name = parsed.name;
-      if (parsed.phone) result.phone = parsed.phone;
-      if (parsed.age) result.age = parsed.age;
-      if (parsed.gender) result.gender = parsed.gender;
-      if (parsed.citizenship) result.citizenship = parsed.citizenship;
-    }
-  } catch(e) {}
+function parseTextFallback(allText) {
+  var result = { phone: "", age: "", gender: "", citizenship: "", name: "" };
+  if (!allText) return result;
+
+  var pm = allText.match(/(\+7\d{10})/);
+  if (!pm) pm = allText.match(/(8\d{10})/);
+  if (!pm) pm = allText.match(/(\+7[\s\-]\d{3}[\s\-]\d{3}[\s\-]\d{2}[\s\-]\d{2})/);
+  if (pm) result.phone = pm[1].replace(/[\s\-]/g, "");
+
+  var am = allText.match(/(\d{1,2})\s*(?:лет|года|год)/i);
+  if (am) { var age = parseInt(am[1]); if (age >= 14 && age <= 80) result.age = String(age); }
+
+  var gm = allText.match(/(мужчина|женщина|мужской|женский)/i);
+  if (gm) { result.gender = gm[1].toLowerCase().indexOf("муж") !== -1 ? "male" : "female"; }
+
+  var cm = allText.match(/[Гг]ражданство[\s\-:]*([А-Яа-яЁё\s]{2,30})/);
+  if (cm) { var c = cm[1].trim(); if (c.length > 1 && c.length < 40) result.citizenship = c; }
+
   return result;
 }
 
@@ -121,15 +94,23 @@ async function syncChats(acc, chatPage) {
     var chat = chats[i];
     var chatId = String(chat.id);
 
-    // Item ID
+    // Item ID + vacancy from context
     var itemId = "";
-    if (chat.context) {
-      if (typeof chat.context.value === "number") itemId = String(chat.context.value);
-      else if (typeof chat.context.value === "string") itemId = chat.context.value;
-      else if (chat.context.value && chat.context.value.id) itemId = String(chat.context.value.id);
+    var vacancyTitle = "";
+    var vacancyCity = "";
+    var vacancyAddress = "";
+    if (chat.context && chat.context.value) {
+      var ctx = chat.context.value;
+      if (typeof ctx === "number") itemId = String(ctx);
+      else if (typeof ctx === "string") itemId = ctx;
+      else if (ctx.id) {
+        itemId = String(ctx.id);
+        if (ctx.title) vacancyTitle = ctx.title;
+        if (ctx.location && ctx.location.title) vacancyCity = ctx.location.title;
+      }
     }
 
-    // Author from chat users
+    // Author
     var authorName = "";
     var authorId = "";
     var phone = "";
@@ -139,7 +120,7 @@ async function syncChats(acc, chatPage) {
         if (String(user.id) !== userId) {
           authorName = user.name || "";
           authorId = String(user.id);
-          if (user.phone) phone = user.phone.replace(/[\s\-()]/g, "");
+          if (user.phone) phone = user.phone.replace(/[\s\-]/g, "");
           break;
         }
       }
@@ -149,46 +130,26 @@ async function syncChats(acc, chatPage) {
     var lastMsg = "";
     var lastMsgDate = new Date().toISOString();
     if (chat.last_message) {
-      var msgContent = chat.last_message;
-      if (msgContent.text) lastMsg = msgContent.text;
-      else if (msgContent.content) {
-        if (typeof msgContent.content === "string") lastMsg = msgContent.content;
-        else if (msgContent.content.text) lastMsg = msgContent.content.text;
-      }
-      if (msgContent.created_at) lastMsgDate = new Date(msgContent.created_at).toISOString();
-      else if (msgContent.created) lastMsgDate = new Date(msgContent.created * 1000).toISOString();
+      var lm = chat.last_message;
+      if (lm.content && lm.content.text) lastMsg = lm.content.text;
+      else if (lm.text) lastMsg = lm.text;
+      if (lm.created) lastMsgDate = new Date(lm.created * 1000).toISOString();
+      else if (lm.created_at) lastMsgDate = new Date(lm.created_at).toISOString();
     }
 
-    // Read status
+    // Read
     var isRead = true;
-    if (chat.last_message && chat.last_message.direction === "in") {
-      isRead = chat.read === true;
-    }
+    if (chat.last_message && chat.last_message.direction === "in") isRead = chat.read === true;
 
-    // Vacancy data from item
-    var vacancyTitle = "";
-    var vacancyAddress = "";
-    var vacancyCity = "";
-    if (itemId) {
-      var itemData = await getItemData(token, userId, itemId);
-      if (itemData) {
-        vacancyTitle = itemData.title || "";
-        vacancyAddress = itemData.address || "";
-        vacancyCity = itemData.city || "";
-      }
-    }
+    // Phone API
+    if (!phone) phone = await getPhone(token, userId, chatId);
 
-    // Try to get phone via API
-    if (!phone) {
-      phone = await getPhone(token, userId, chatId);
-    }
-
-    // Parse all messages for candidate data
+    // Messages — parse system messages
     var candidateName = authorName;
     var candidateAge = "";
     var candidateCitizenship = "";
     var candidateGender = "";
-    var allMessages = "";
+    var allIncoming = "";
 
     try {
       var msgRes = await fetch("https://api.avito.ru/messenger/v3/accounts/" + userId + "/chats/" + chatId + "/messages/?limit=50", { headers: { Authorization: "Bearer " + token } });
@@ -196,38 +157,47 @@ async function syncChats(acc, chatPage) {
       if (msgData.messages && Array.isArray(msgData.messages)) {
         for (var m = 0; m < msgData.messages.length; m++) {
           var msg = msgData.messages[m];
+          var msgText = "";
+          if (msg.content && msg.content.text) msgText = msg.content.text;
+          else if (msg.text) msgText = msg.text;
 
-          // Check system messages for structured data
-          var sysData = parseSystemMessage(msg);
-          if (sysData.name && !candidateName) candidateName = sysData.name;
-          if (sysData.phone && !phone) phone = sysData.phone;
-          if (sysData.age && !candidateAge) candidateAge = sysData.age;
-          if (sysData.gender && !candidateGender) candidateGender = sysData.gender;
-          if (sysData.citizenship && !candidateCitizenship) candidateCitizenship = sysData.citizenship;
-
-          // Collect incoming text messages
-          if (msg.direction === "in") {
-            var txt = "";
-            if (msg.content && typeof msg.content === "object" && msg.content.text) txt = msg.content.text;
-            else if (msg.content && typeof msg.content === "string") txt = msg.content;
-            else if (msg.text) txt = msg.text;
-            if (txt) allMessages += txt + "\n";
+          // Parse system messages with structured data
+          if (msg.type === "system" && msgText) {
+            var sys = parseSystemText(msgText);
+            if (sys.name) candidateName = sys.name;
+            if (sys.age) candidateAge = sys.age;
+            if (sys.citizenship) candidateCitizenship = sys.citizenship;
+            if (sys.gender) candidateGender = sys.gender;
           }
+
+          // Collect incoming text
+          if (msg.direction === "in" && msgText) allIncoming += msgText + "\n";
         }
       }
     } catch(e) {}
 
-    // Parse text for missing fields
-    if (allMessages) {
-      var parsed = parseCandidate(allMessages);
-      if (!phone && parsed.phone) phone = parsed.phone;
-      if (!candidateAge && parsed.age) candidateAge = parsed.age;
-      if (!candidateCitizenship && parsed.citizenship) candidateCitizenship = parsed.citizenship;
-      if (!candidateGender && parsed.gender) candidateGender = parsed.gender;
-      if (parsed.name && candidateName === authorName) candidateName = parsed.name;
+    // Fallback parse from all text
+    if (allIncoming) {
+      var fb = parseTextFallback(allIncoming);
+      if (!phone && fb.phone) phone = fb.phone;
+      if (!candidateAge && fb.age) candidateAge = fb.age;
+      if (!candidateCitizenship && fb.citizenship) candidateCitizenship = fb.citizenship;
+      if (!candidateGender && fb.gender) candidateGender = fb.gender;
     }
 
-    // Save
+    // If no vacancy title from context, try item API
+    if (!vacancyTitle && itemId) {
+      try {
+        var itemRes = await fetch("https://api.avito.ru/core/v1/accounts/" + userId + "/items/" + itemId, { headers: { Authorization: "Bearer " + token } });
+        var itemData = await itemRes.json();
+        if (itemData) {
+          if (itemData.title) vacancyTitle = itemData.title;
+          if (itemData.address) vacancyAddress = itemData.address;
+          if (itemData.city) vacancyCity = itemData.city || vacancyCity;
+        }
+      } catch(e) {}
+    }
+
     await sql`INSERT INTO avito_responses
       (account_id, avito_chat_id, author_name, candidate_name,
        candidate_age, candidate_citizenship, candidate_gender,
@@ -270,14 +240,9 @@ async function syncItems(acc) {
     for (var i = 0; i < items.length; i++) {
       var item = items[i];
       var itemId = String(item.id);
-      var title = item.title || "";
-      var address = item.address || "";
-      var city = item.city || "";
-      var salary_from = item.price || null;
-      var url = "https://www.avito.ru/items/" + itemId;
       await sql`INSERT INTO avito_vacancies
         (account_id, avito_id, title, address, city, salary_from, url, raw_data)
-        VALUES (${acc.id}, ${itemId}, ${title}, ${address}, ${city}, ${salary_from}, ${url}, ${JSON.stringify(item)})
+        VALUES (${acc.id}, ${itemId}, ${item.title || ""}, ${item.address || ""}, ${item.city || ""}, ${item.price || null}, ${"https://www.avito.ru/items/" + itemId}, ${JSON.stringify(item)})
         ON CONFLICT (account_id, avito_id) DO UPDATE SET
           title = EXCLUDED.title, address = EXCLUDED.address,
           city = EXCLUDED.city, salary_from = EXCLUDED.salary_from,
