@@ -309,10 +309,12 @@ export default function VacanciesPage(){
         fetch("/api/avito/sync?mode=chats&chat_page="+pn+"&sync_mode="+sm).then(function(r){return r.json();}).then(function(d){
           var b=d.synced?d.synced.responses:0;
           var sk=d.synced?d.synced.skipped||0:0;
+          var stopped=d.synced?d.synced.stopped:false;
           tR+=b;tS+=sk;
           setXmsg({type:"success",text:tR+" resp ("+tS+" cached)..."});
-          if(b>0&&!d.errors){pn++;go();}
-          else{setSyncing(false);setXmsg({type:"success",text:vc+" vac, "+tR+" resp, "+tS+" cached"});fetchData();}
+          if(b>0&&!d.errors&&!stopped&&sm==="full"){pn++;go();}
+          else if(b>0&&!d.errors&&!stopped&&sm==="fast"&&sk<b){pn++;go();}
+          else{setSyncing(false);setXmsg({type:"success",text:"✅ "+vc+" vac, "+tR+" resp, "+tS+" cached"});fetchData();}
         }).catch(function(){setSyncing(false);fetchData();});
       }
       go();
