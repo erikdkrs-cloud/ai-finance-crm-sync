@@ -298,18 +298,21 @@ export default function VacanciesPage(){
 
   useEffect(function(){fetchData();},[fetchData]);
 
-  function doSync(){
+  function doSync(syncMode){
     setSyncing(true);setXmsg(null);
+    var sm=syncMode||"fast";
     fetch("/api/avito/sync?mode=items").then(function(r){return r.json();}).then(function(d1){
       var vc=d1.synced?d1.synced.vacancies:0;
       setXmsg({type:"success",text:"Vac: "+vc+"..."});
-      var tR=0;var pn=0;
+      var tR=0;var tS=0;var pn=0;
       function go(){
-        fetch("/api/avito/sync?mode=chats&chat_page="+pn).then(function(r){return r.json();}).then(function(d){
-          var b=d.synced?d.synced.responses:0;tR+=b;
-          setXmsg({type:"success",text:tR+" responses..."});
+        fetch("/api/avito/sync?mode=chats&chat_page="+pn+"&sync_mode="+sm).then(function(r){return r.json();}).then(function(d){
+          var b=d.synced?d.synced.responses:0;
+          var sk=d.synced?d.synced.skipped||0:0;
+          tR+=b;tS+=sk;
+          setXmsg({type:"success",text:tR+" resp ("+tS+" cached)..."});
           if(b>0&&!d.errors){pn++;go();}
-          else{setSyncing(false);setXmsg({type:"success",text:vc+" vac, "+tR+" resp"});fetchData();}
+          else{setSyncing(false);setXmsg({type:"success",text:vc+" vac, "+tR+" resp, "+tS+" cached"});fetchData();}
         }).catch(function(){setSyncing(false);fetchData();});
       }
       go();
