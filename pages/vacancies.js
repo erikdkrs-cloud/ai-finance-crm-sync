@@ -390,7 +390,7 @@ export default function VacanciesPage(){
 
   return(
     <DkrsAppShell>
-      <div style={{maxWidth:1500,margin:"0 auto"}}>
+            <div style={{maxWidth:1500,margin:"0 auto"}}>
 
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
           <div>
@@ -399,8 +399,9 @@ export default function VacanciesPage(){
           </div>
           <div style={{display:"flex",gap:8}}>
             <button onClick={function(){doSync("fast");}} disabled={syncing} style={Object.assign({},B1,{opacity:syncing?0.7:1})}>{syncing?T_SYNCING:"⚡ "+T_SYNC}</button>
-            <button onClick={function(){doSync("full");}} disabled={syncing} style={{background:"#fff",color:"#6366f1",border:"2px solid #6366f1",borderRadius:12,padding:"10px 16px",fontWeight:600,fontSize:13,cursor:syncing?"default":"pointer",opacity:syncing?0.5:1}}>🔄 Полная</button>
+            <button onClick={function(){doSync("full");}} disabled={syncing} style={{background:"#fff",color:"#6366f1",border:"2px solid #6366f1",borderRadius:12,padding:"10px 16px",fontWeight:600,fontSize:13,cursor:syncing?"default":"pointer",opacity:syncing?0.5:1}}>{"🔄 Полная"}</button>
           </div>
+        </div>
 
         {xmsg&&<div style={{padding:"10px 14px",borderRadius:10,marginBottom:12,fontSize:13,fontWeight:500,background:xmsg.type==="success"?"#f0fdf4":"#fef2f2",color:xmsg.type==="success"?"#16a34a":"#dc2626"}}>{xmsg.text}</div>}
 
