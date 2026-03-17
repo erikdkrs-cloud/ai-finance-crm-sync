@@ -41,70 +41,43 @@ function parseCandidate(allText) {
   var result = { name: "", age: "", gender: "", citizenship: "", phone: "" };
 
   // Phone
-  var phonePatterns = [
-    /(\+7[\s\-]?$?\d{3}$?[\s\-]?\d{3}[\s\-]?\d{2}[\s\-]?\d{2})/,
-    /(8[\s\-]?$?\d{3}$?[\s\-]?\d{3}[\s\-]?\d{2}[\s\-]?\d{2})/,
-    /(\+7\d{10})/,
-    /(8\d{10})/
-  ];
-  for (var p = 0; p < phonePatterns.length; p++) {
-    var pm = allText.match(phonePatterns[p]);
-    if (pm) { result.phone = pm[1].replace(/[\s\-()]/g, ""); break; }
-  }
+  var pm = allText.match(/(\+7\d{10})/);
+  if (!pm) pm = allText.match(/(8\d{10})/);
+  if (!pm) pm = allText.match(/(\+7[\s\-]\d{3}[\s\-]\d{3}[\s\-]\d{2}[\s\-]\d{2})/);
+  if (!pm) pm = allText.match(/(8[\s\-]\d{3}[\s\-]\d{3}[\s\-]\d{2}[\s\-]\d{2})/);
+  if (pm) result.phone = pm[1].replace(/[\s\-]/g, "");
 
   // Age
-  var agePatterns = [
-    /(?:возраст|age)\s*[\-—:]*\s*(\d{1,2})/i,
-    /(\d{1,2})\s*(?:лет|года|год|г\.)/i,
-    /(?:мне|мне\s)\s*(\d{1,2})/i
-  ];
-  for (var a = 0; a < agePatterns.length; a++) {
-    var am = allText.match(agePatterns[a]);
-    if (am) { var age = parseInt(am[1]); if (age >= 14 && age <= 80) { result.age = String(age); break; } }
-  }
+  var am = allText.match(/(?:возраст|age)[\s\-:]*(\d{1,2})/i);
+  if (!am) am = allText.match(/(\d{1,2})\s*(?:лет|года|год)/i);
+  if (!am) am = allText.match(/(?:мне)\s*(\d{1,2})/i);
+  if (am) { var age = parseInt(am[1]); if (age >= 14 && age <= 80) result.age = String(age); }
 
   // Gender
-  var genderPatterns = [
-    /(?:пол|gender)\s*[\-—:]*\s*(муж|жен|male|female|м|ж)/i,
-    /\b(мужчина|женщина|мужской|женский)\b/i
-  ];
-  for (var g = 0; g < genderPatterns.length; g++) {
-    var gm = allText.match(genderPatterns[g]);
-    if (gm) {
-      var gv = gm[1].toLowerCase();
-      if (gv === "муж" || gv === "м" || gv === "male" || gv === "мужчина" || gv === "мужской") result.gender = "male";
-      else result.gender = "female";
-      break;
-    }
+  var gm = allText.match(/(?:пол|gender)[\s\-:]*(муж|жен|male|female)/i);
+  if (!gm) gm = allText.match(/(мужчина|женщина|мужской|женский)/i);
+  if (gm) {
+    var gv = gm[1].toLowerCase();
+    if (gv.indexOf("муж") === 0 || gv === "male") result.gender = "male";
+    else result.gender = "female";
   }
 
   // Citizenship
-  var ctzPatterns = [
-    /(?:гражданство|citizenship)\s*[\-—:]*\s*([А-Яа-яЁёA-Za-z\s]{2,30})/i,
-    /(?:гр\.|гр\s)[\-—:]*\s*([А-Яа-яЁё\s]{2,30})/i
-  ];
-  for (var c = 0; c < ctzPatterns.length; c++) {
-    var cm = allText.match(ctzPatterns[c]);
-    if (cm) {
-      var ctz = cm[1].trim().replace(/\s+/g, " ");
-      // Clean trailing words
-      ctz = ctz.replace(/\s+(возраст|пол|телефон|опыт|стаж|адрес|город|age|phone).*/i, "").trim();
-      if (ctz.length > 1 && ctz.length < 40) { result.citizenship = ctz; break; }
-    }
+  var cm = allText.match(/(?:гражданство|citizenship)[\s\-:]*([А-Яа-яЁё\s]{2,30})/i);
+  if (!cm) cm = allText.match(/(?:гр\.)[\s\-:]*([А-Яа-яЁё\s]{2,30})/i);
+  if (cm) {
+    var ctz = cm[1].trim().replace(/\s+/g, " ");
+    ctz = ctz.replace(/\s+(возраст|пол|телефон|опыт|стаж|адрес|город).*/i, "").trim();
+    if (ctz.length > 1 && ctz.length < 40) result.citizenship = ctz;
   }
 
-  // Name from structured messages
-  var namePatterns = [
-    /(?:имя|name|ФИО|фио)\s*[\-—:]*\s*([А-Яа-яЁёA-Za-z\s]{2,40})/i,
-    /(?:зовут|меня зовут)\s+([А-Яа-яЁё]{2,20}(?:\s+[А-Яа-яЁё]{2,20})?)/i
-  ];
-  for (var n = 0; n < namePatterns.length; n++) {
-    var nm = allText.match(namePatterns[n]);
-    if (nm) {
-      var name = nm[1].trim().replace(/\s+/g, " ");
-      name = name.replace(/\s+(возраст|пол|телефон|гражданство|опыт).*/i, "").trim();
-      if (name.length > 1 && name.length < 40) { result.name = name; break; }
-    }
+  // Name
+  var nm = allText.match(/(?:имя|name|ФИО|фио)[\s\-:]*([А-Яа-яЁёA-Za-z\s]{2,40})/i);
+  if (!nm) nm = allText.match(/(?:зовут|меня зовут)\s+([А-Яа-яЁё]{2,20}(?:\s+[А-Яа-яЁё]{2,20})?)/i);
+  if (nm) {
+    var name = nm[1].trim().replace(/\s+/g, " ");
+    name = name.replace(/\s+(возраст|пол|телефон|гражданство|опыт).*/i, "").trim();
+    if (name.length > 1 && name.length < 40) result.name = name;
   }
 
   return result;
