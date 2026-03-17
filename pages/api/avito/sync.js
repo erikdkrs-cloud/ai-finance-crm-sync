@@ -63,17 +63,35 @@ function parseTextFallback(allText) {
   var result = { phone: "", age: "", gender: "", citizenship: "", name: "" };
   if (!allText) return result;
 
-  var pm = allText.match(/(\+7\d{10})/);
-  if (!pm) pm = allText.match(/(8\d{10})/);
-  if (!pm) pm = allText.match(/(\+7[\s\-]\d{3}[\s\-]\d{3}[\s\-]\d{2}[\s\-]\d{2})/);
-  if (pm) result.phone = pm[1].replace(/[\s\-]/g, "");
+  // Phone - only from clean text, not from IDs
+  var lines = allText.split("\n");
+  for (var i = 0; i < lines.length; i++) {
+    var line = lines[i].trim();
+    // Skip system message markers
+    if (line.indexOf("[") !== -1 && line.indexOf("]") !== -1) continue;
+    var pm = line.match(/(?:^|[\s,.:])(\+7\d{10})(?:[\s,.]|$)/);
+    if (!pm) pm = line.match(/(?:^|[\s,.:])(\+7[\s\-]\d{3}[\s\-]\d{3}[\s\-]\d{2}[\s\-]\d{2})(?:[\s,.]|$)/);
+    if (!pm) pm = line.match(/(?:^|[\s,.:])(8\d{10})(?:[\s,.]|$)/);
+    if (pm) {
+      var clean = pm[1].replace(/[\s\-]/g, "");
+      // Validate: must start with +7 or 8, be 11-12 digits
+      var digits = clean.replace(/\D/g, "");
+      if (digits.length === 11 || digits.length === 12) {
+        result.phone = clean;
+        break;
+      }
+    }
+  }
 
+  // Age
   var am = allText.match(/(\d{1,2})\s*(?:лет|года|год)/i);
   if (am) { var age = parseInt(am[1]); if (age >= 14 && age <= 80) result.age = String(age); }
 
+  // Gender
   var gm = allText.match(/(мужчина|женщина|мужской|женский)/i);
   if (gm) { result.gender = gm[1].toLowerCase().indexOf("муж") !== -1 ? "male" : "female"; }
 
+  // Citizenship
   var cm = allText.match(/[Гг]ражданство[\s\-:]*([А-Яа-яЁё\s]{2,30})/);
   if (cm) { var c = cm[1].trim(); if (c.length > 1 && c.length < 40) result.citizenship = c; }
 
