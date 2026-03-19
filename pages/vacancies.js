@@ -232,10 +232,10 @@ export default function VacanciesPage(){
   function addAcc(e){e.preventDefault();fetch("/api/avito/accounts",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(accForm)}).then(function(r){return r.json();}).then(function(d){if(d.ok){setShowAdd(false);setAccForm({name:"",client_id:"",client_secret:""});fetchData();}});}
   function delAcc(id){if(!confirm(T.delconf))return;fetch("/api/avito/accounts?id="+id,{method:"DELETE"}).then(function(){fetchData();});}
 
-  function matchVac(r){return vacancies.find(function(v){return v.id===r.vacancy_id||String(v.avito_id)===String(r.vacancy_id)||v.title===r.vacancy_title;});}
-  function getAddr(r){if(r.vacancy_address&&r.vacancy_address.length>3)return r.vacancy_address;var v=matchVac(r);if(v){if(v.raw_data&&v.raw_data.address)return v.raw_data.address;if(v.address)return v.address;if(v.city)return v.city;}return r.vacancy_city||"";}
+  function matchVac(r){return vacancies.find(function(v){return String(v.avito_id)===String(r.vacancy_code);});}
   function getVacTitle(r){if(r.vacancy_title&&r.vacancy_title.length>2)return r.vacancy_title;var v=matchVac(r);if(v&&v.title)return v.title;return"—";}
-  function getVacCode(r){var v=matchVac(r);if(v&&v.avito_id)return v.avito_id;return"";}
+  function getAddr(r){if(r.vacancy_address&&r.vacancy_address.length>3)return r.vacancy_address;var v=matchVac(r);if(v){if(v.address)return v.address;if(v.city)return v.city;}return r.vacancy_city||"";}
+  function getVacCode(r){return"";}
 
   var unread=responses.filter(function(r){return!r.is_read;}).length;
   var cNew=responses.filter(function(r){return r.status==="new"||!r.status;}).length;
@@ -250,7 +250,7 @@ export default function VacanciesPage(){
     if(tab==="all"){if(statusFilter!=="all")return r.status===statusFilter;return true;}
     return true;
   });
-   if(selVac)filtered=filtered.filter(function(r){return r.vacancy_title===selVac.title||(selVac.id&&r.vacancy_id===selVac.id)||String(r.vacancy_id)===String(selVac.avito_id);});
+   if(selVac)filtered=filtered.filter(function(r){return String(r.vacancy_code)===String(selVac.avito_id);});
   if(search){var q=search.toLowerCase();filtered=filtered.filter(function(r){return(r.author_name||"").toLowerCase().indexOf(q)!==-1||(r.candidate_name||"").toLowerCase().indexOf(q)!==-1||(r.phone||"").indexOf(q)!==-1||(r.vacancy_title||"").toLowerCase().indexOf(q)!==-1||(r.vacancy_city||"").toLowerCase().indexOf(q)!==-1;});}
   filtered.sort(function(a,b){if(sortBy==="unread"){if(!a.is_read&&b.is_read)return-1;if(a.is_read&&!b.is_read)return 1;}return new Date(b.created_at||0)-new Date(a.created_at||0);});
     var navItems=[
@@ -361,9 +361,9 @@ export default function VacanciesPage(){
                   {tab==="all"&&<option value="hired">{T.hired+" ("+cHired+")"}</option>}
                   {tab==="all"&&<option value="rejected">{T.rejected+" ("+cRej+")"}</option>}
                 </select>)}
-                 <select value={selVac?selVac.title:""} onChange={function(e){if(!e.target.value){setSelVac(null);}else{var found=vacancies.find(function(v){return v.title===e.target.value;});setSelVac(found||{title:e.target.value});}}} style={{padding:"12px 16px",borderRadius:14,border:"2px solid #f1f5f9",fontSize:13,background:"#fff",cursor:"pointer",maxWidth:280}}>
+                  <select value={selVac?selVac.id:""} onChange={function(e){if(!e.target.value){setSelVac(null);}else{var found=vacancies.find(function(v){return String(v.id)===e.target.value;});setSelVac(found||null);}}} style={{padding:"12px 16px",borderRadius:14,border:"2px solid #f1f5f9",fontSize:13,background:"#fff",cursor:"pointer",maxWidth:280}}>
                 <option value="">{"🏢 Все вакансии"}</option>
-                {(function(){var titles={};responses.forEach(function(r){var t=r.vacancy_title||"—";if(!titles[t])titles[t]=0;titles[t]++;});return Object.entries(titles).sort(function(a,b){return b[1]-a[1];}).map(function(e){return <option key={e[0]} value={e[0]}>{e[0]+" ("+e[1]+")"}</option>;});})()}
+                {vacancies.map(function(v){var rc=responses.filter(function(r){return String(r.vacancy_code)===String(v.avito_id);}).length;return <option key={v.id} value={v.id}>{v.title+" ("+rc+")"}</option>;})}
               </select>
               <select value={sortBy} onChange={function(e){setSortBy(e.target.value);}} style={{padding:"12px 16px",borderRadius:14,border:"2px solid #f1f5f9",fontSize:13,background:"#fff",cursor:"pointer"}}>
                 <option value="date">{T.bydate}</option>
