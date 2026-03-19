@@ -2,7 +2,8 @@ import { NextResponse } from "next/server";
 import { jwtVerify } from "jose";
 
 function roleRank(role) {
-  if (role === "admin") return 3;
+  if (role === "admin") return 4;
+  if (role === "director") return 3;
   if (role === "manager") return 2;
   return 1;
 }
@@ -36,14 +37,16 @@ function requiredRoleForApi(pathname) {
     if (pathname.startsWith(viewerPaths[i])) return "viewer";
   }
 
-  if (pathname.startsWith("/api/report")) return "manager";
-  if (pathname.startsWith("/api/ai")) return "manager";
-  if (pathname.startsWith("/api/import")) return "manager";
-  if (pathname.startsWith("/api/update-row")) return "manager";
   if (pathname.startsWith("/api/avito")) return "manager";
+
+  if (pathname.startsWith("/api/report")) return "director";
+  if (pathname.startsWith("/api/ai")) return "director";
+  if (pathname.startsWith("/api/import")) return "director";
+  if (pathname.startsWith("/api/update-row")) return "director";
 
   if (pathname.startsWith("/api/sync")) return "admin";
   if (pathname.startsWith("/api/users")) return "admin";
+  if (pathname.startsWith("/api/user-projects")) return "admin";
   if (pathname.startsWith("/api/data-management")) return "admin";
 
   if (pathname.startsWith("/api/")) return "viewer";
@@ -79,7 +82,7 @@ export async function middleware(req) {
     pathname.startsWith("/analytics") ||
     pathname.startsWith("/budget") ||
     pathname.startsWith("/users") ||
-pathname.startsWith("/vacancies");
+    pathname.startsWith("/vacancies");
 
   var requiredApiRole = requiredRoleForApi(pathname);
   var needsAuth = isProtectedPage || !!requiredApiRole;
@@ -113,10 +116,22 @@ pathname.startsWith("/vacancies");
       return NextResponse.redirect(urlDm);
     }
 
-    if (pathname.startsWith("/import") && roleRank(role) < roleRank("manager")) {
+    if (pathname.startsWith("/import") && roleRank(role) < roleRank("director")) {
       var urlImport = req.nextUrl.clone();
-      urlImport.pathname = "/dashboard";
+      urlImport.pathname = role === "manager" ? "/vacancies" : "/dashboard";
       return NextResponse.redirect(urlImport);
+    }
+
+    // Manager can only access /vacancies
+    var managerBlockedPages = ["/dashboard", "/summary", "/assistant", "/reports", "/analytics", "/budget"];
+    if (role === "manager") {
+      for (var i = 0; i < managerBlockedPages.length; i++) {
+        if (pathname.startsWith(managerBlockedPages[i])) {
+          var urlVac = req.nextUrl.clone();
+          urlVac.pathname = "/vacancies";
+          return NextResponse.redirect(urlVac);
+        }
+      }
     }
 
     if (requiredApiRole) {
