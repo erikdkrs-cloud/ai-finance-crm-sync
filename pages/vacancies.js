@@ -107,13 +107,11 @@ function CandidateModal(props){
             </div>
           </div>
           <button onClick={onClose} style={{background:"rgba(255,255,255,0.15)",border:"none",color:"#fff",width:44,height:44,borderRadius:"50%",cursor:"pointer",fontSize:20}
-
         <div style={{display:"flex",borderBottom:"2px solid #f0f0f0"}}>
           {[{key:"info",label:"📋 "+T_INFO},{key:"chat",label:"💬 "+T_CHAT},{key:"notes",label:"📝 "+T_NOTES+" ("+notes.length+")"}].map(function(t){
             return <button key={t.key} onClick={function(){setModalTab(t.key);if(t.key==="chat"&&chatMsgs.length===0)loadChat();}} style={{flex:1,padding:"14px",border:"none",background:modalTab===t.key?"#6366f1":"#fff",color:modalTab===t.key?"#fff":"#666",cursor:"pointer",fontWeight:700,fontSize:13}}>{t.label}</button>;
           })}
         </div>
-
         <div style={{flex:1,overflow:"auto",padding:modalTab==="chat"?0:"24px 28px"}}>
           {modalTab==="info"&&(<div>
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16}}>
