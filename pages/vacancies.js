@@ -267,7 +267,29 @@ export default function VacanciesPage(){
       }
     }).catch(function(e){setRejecting(false);alert("Ошибка: "+e.message);});
   }
-  function openModal(r){setModalResp(r);if(!r.is_read){fetch("/api/avito/response-update",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({id:r.id,is_read:true,mark_read:true})}).then(function(){setResponses(function(p){return p.map(function(x){return x.id===r.id?Object.assign({},x,{is_read:true}):x;});});});}}
+  function openModal(r){
+  fetch("/api/avito/candidate/"+r.id)
+    .then(function(res){return res.json();})
+    .then(function(data){
+      if(data.candidate){
+        setModalResp(data.candidate);
+      } else {
+        setModalResp(r);
+      }
+      if(!r.is_read){
+        fetch("/api/avito/response-update",{
+          method:"POST",
+          headers:{"Content-Type":"application/json"},
+          body:JSON.stringify({id:r.id,is_read:true,mark_read:true})
+        }).then(function(){
+          setResponses(function(p){return p.map(function(x){return x.id===r.id?Object.assign({},x,{is_read:true}):x;});});
+        });
+      }
+    })
+    .catch(function(){
+      setModalResp(r);
+    });
+}
   function addAcc(e){e.preventDefault();fetch("/api/avito/accounts",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(accForm)}).then(function(r){return r.json();}).then(function(d){if(d.ok){setShowAdd(false);setAccForm({name:"",client_id:"",client_secret:""});fetchData();}});}
   function delAcc(id){if(!confirm(T.delconf))return;fetch("/api/avito/accounts?id="+id,{method:"DELETE"}).then(function(){fetchData();});}
 
