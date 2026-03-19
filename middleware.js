@@ -104,36 +104,41 @@ export async function middleware(req) {
     var payload = await verify(token);
     var role = String(payload.role || "viewer");
 
+    // Admin-only pages
     if (pathname.startsWith("/users") && role !== "admin") {
       var url403 = req.nextUrl.clone();
-      url403.pathname = "/dashboard";
+      url403.pathname = role === "manager" ? "/vacancies" : "/dashboard";
       return NextResponse.redirect(url403);
     }
 
     if (pathname.startsWith("/data-management") && role !== "admin") {
       var urlDm = req.nextUrl.clone();
-      urlDm.pathname = "/dashboard";
+      urlDm.pathname = role === "manager" ? "/vacancies" : "/dashboard";
       return NextResponse.redirect(urlDm);
     }
 
+    // Director+ only pages
     if (pathname.startsWith("/import") && roleRank(role) < roleRank("director")) {
       var urlImport = req.nextUrl.clone();
       urlImport.pathname = role === "manager" ? "/vacancies" : "/dashboard";
       return NextResponse.redirect(urlImport);
     }
 
-    // Manager can only access /vacancies
-    var managerBlockedPages = ["/dashboard", "/summary", "/assistant", "/reports", "/analytics", "/budget"];
+    // Manager can ONLY access /vacancies
     if (role === "manager") {
-      for (var i = 0; i < managerBlockedPages.length; i++) {
-        if (pathname.startsWith(managerBlockedPages[i])) {
-          var urlVac = req.nextUrl.clone();
-          urlVac.pathname = "/vacancies";
-          return NextResponse.redirect(urlVac);
-        }
+      var allowed = ["/vacancies", "/api/"];
+      var isAllowed = false;
+      for (var i = 0; i < allowed.length; i++) {
+        if (pathname.startsWith(allowed[i])) { isAllowed = true; break; }
+      }
+      if (!isAllowed) {
+        var urlVac = req.nextUrl.clone();
+        urlVac.pathname = "/vacancies";
+        return NextResponse.redirect(urlVac);
       }
     }
 
+    // API role check
     if (requiredApiRole) {
       var ok = roleRank(role) >= roleRank(requiredApiRole);
       if (!ok) return NextResponse.json({ ok: false, error: "Forbidden" }, { status: 403 });
