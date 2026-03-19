@@ -90,23 +90,24 @@ function CandidateModal(props){
   var addr="";
   if(resp.vacancy_address&&resp.vacancy_address.length>3)addr=resp.vacancy_address;
   else{var v=vacancies.find(function(vv){return vv.id===resp.vacancy_id;});if(v){if(v.raw_data&&v.raw_data.address)addr=v.raw_data.address;else if(v.address)addr=v.address;else if(v.city)addr=v.city;}if(!addr)addr=resp.vacancy_city||"";}
-
+  
   return(
     <div style={{position:"fixed",top:0,left:0,right:0,bottom:0,background:"rgba(0,0,0,0.5)",zIndex:1000,display:"flex",alignItems:"center",justifyContent:"center",backdropFilter:"blur(4px)"}} onClick={onClose}>
       <div style={{background:"#fff",borderRadius:24,width:"95%",maxWidth:820,maxHeight:"92vh",overflow:"hidden",display:"flex",flexDirection:"column",boxShadow:"0 25px 60px rgba(0,0,0,0.3)"}} onClick={function(e){e.stopPropagation();}}>
-                <div style={{background:"linear-gradient(135deg,#1e1b4b,#312e81)",padding:"24px 28px",color:"#fff",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+        <div style={{background:"linear-gradient(135deg,#1e1b4b,#312e81)",padding:"24px 28px",color:"#fff",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
           <div style={{display:"flex",alignItems:"center",gap:16}}>
-            <div style={{width:60,height:60,borderRadius:"50%",background:"rgba(255,255,255,0.15)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:30}}>👤</div>
+            <div style={{width:60,height:60,borderRadius:"50%",background:"rgba(255,255,255,0.15)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:30}}>{"👤"}</div>
             <div>
               <h2 style={{margin:0,fontSize:22,fontWeight:800}}>{form.candidate_name||T_NONAME}</h2>
               <div style={{display:"flex",gap:8,marginTop:6,flexWrap:"wrap"}}>
-                {form.candidate_age&&<span style={{padding:"2px 10px",borderRadius:6,background:"rgba(255,255,255,0.15)",fontSize:12}}>{form.candidate_age} лет</span>}
+                {form.candidate_age&&<span style={{padding:"2px 10px",borderRadius:6,background:"rgba(255,255,255,0.15)",fontSize:12}}>{form.candidate_age+" лет"}</span>}
                 {form.candidate_citizenship&&<span style={{padding:"2px 10px",borderRadius:6,background:"rgba(255,255,255,0.15)",fontSize:12}}>{form.candidate_citizenship}</span>}
-                {resp.vacancy_city&&<span style={{padding:"2px 10px",borderRadius:6,background:"rgba(255,255,255,0.15)",fontSize:12}}>📍 {resp.vacancy_city}</span>}
+                {resp.vacancy_city&&<span style={{padding:"2px 10px",borderRadius:6,background:"rgba(255,255,255,0.15)",fontSize:12}}>{"📍 "+resp.vacancy_city}</span>}
               </div>
             </div>
           </div>
-          <button onClick={onClose} style={{background:"rgba(255,255,255,0.15)",border:"none",color:"#fff",width:44,height:44,borderRadius:"50%",cursor:"pointer",fontSize:20}}>✕</button>
+          <button onClick={onClose} style={{background:"rgba(255,255,255,0.15)",border:"none",color:"#fff",width:44,height:44,borderRadius:"50%",cursor:"pointer",fontSize:20}}>{"✕"}</button>
+        </div>
         <div style={{display:"flex",borderBottom:"2px solid #f0f0f0"}}>
           {[{key:"info",label:"📋 "+T_INFO},{key:"chat",label:"💬 "+T_CHAT},{key:"notes",label:"📝 "+T_NOTES+" ("+notes.length+")"}].map(function(t){
             return <button key={t.key} onClick={function(){setModalTab(t.key);if(t.key==="chat"&&chatMsgs.length===0)loadChat();}} style={{flex:1,padding:"14px",border:"none",background:modalTab===t.key?"#6366f1":"#fff",color:modalTab===t.key?"#fff":"#666",cursor:"pointer",fontWeight:700,fontSize:13}}>{t.label}</button>;
@@ -115,57 +116,52 @@ function CandidateModal(props){
         <div style={{flex:1,overflow:"auto",padding:modalTab==="chat"?0:"24px 28px"}}>
           {modalTab==="info"&&(<div>
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16}}>
-              <div><label style={{fontSize:11,color:"#888",fontWeight:700,textTransform:"uppercase"}}>ИМЯ</label>
-                <input value={form.candidate_name} onChange={function(e){setForm(Object.assign({},form,{candidate_name:e.target.value}));}} onBlur={function(){saveField("candidate_name",form.candidate_name);}} style={{width:"100%",padding:"12px 14px",border:"2px solid #e5e7eb",borderRadius:12,fontSize:15,marginTop:6,boxSizing:"border-box"}}/></div>
-              <div><label style={{fontSize:11,color:"#888",fontWeight:700,textTransform:"uppercase"}}>{T_AGE}</label>
-                <input value={form.candidate_age} onChange={function(e){setForm(Object.assign({},form,{candidate_age:e.target.value}));}} onBlur={function(){saveField("candidate_age",form.candidate_age);}} style={{width:"100%",padding:"12px 14px",border:"2px solid #e5e7eb",borderRadius:12,fontSize:15,marginTop:6,boxSizing:"border-box"}}/></div>
-              <div><label style={{fontSize:11,color:"#888",fontWeight:700,textTransform:"uppercase"}}>{T_GENDER}</label>
-                <select value={form.candidate_gender} onChange={function(e){setForm(Object.assign({},form,{candidate_gender:e.target.value}));saveField("candidate_gender",e.target.value);}} style={{width:"100%",padding:"12px 14px",border:"2px solid #e5e7eb",borderRadius:12,fontSize:15,marginTop:6,boxSizing:"border-box",background:"#fff"}}>
-                  <option value="">{T_NOTSET}</option><option value="male">{T_MALE}</option><option value="female">{T_FEMALE}</option></select></div>
-              <div><label style={{fontSize:11,color:"#888",fontWeight:700,textTransform:"uppercase"}}>{T_CITIZEN}</label>
-                <input value={form.candidate_citizenship} onChange={function(e){setForm(Object.assign({},form,{candidate_citizenship:e.target.value}));}} onBlur={function(){saveField("candidate_citizenship",form.candidate_citizenship);}} style={{width:"100%",padding:"12px 14px",border:"2px solid #e5e7eb",borderRadius:12,fontSize:15,marginTop:6,boxSizing:"border-box"}}/></div>
+              <div><label style={{fontSize:11,color:"#888",fontWeight:700,textTransform:"uppercase"}}>{"ИМЯ"}</label><input value={form.candidate_name} onChange={function(e){setForm(Object.assign({},form,{candidate_name:e.target.value}));}} onBlur={function(){saveField("candidate_name",form.candidate_name);}} style={{width:"100%",padding:"12px 14px",border:"2px solid #e5e7eb",borderRadius:12,fontSize:15,marginTop:6,boxSizing:"border-box"}}/></div>
+              <div><label style={{fontSize:11,color:"#888",fontWeight:700,textTransform:"uppercase"}}>{T_AGE}</label><input value={form.candidate_age} onChange={function(e){setForm(Object.assign({},form,{candidate_age:e.target.value}));}} onBlur={function(){saveField("candidate_age",form.candidate_age);}} style={{width:"100%",padding:"12px 14px",border:"2px solid #e5e7eb",borderRadius:12,fontSize:15,marginTop:6,boxSizing:"border-box"}}/></div>
+              <div><label style={{fontSize:11,color:"#888",fontWeight:700,textTransform:"uppercase"}}>{T_GENDER}</label><select value={form.candidate_gender} onChange={function(e){setForm(Object.assign({},form,{candidate_gender:e.target.value}));saveField("candidate_gender",e.target.value);}} style={{width:"100%",padding:"12px 14px",border:"2px solid #e5e7eb",borderRadius:12,fontSize:15,marginTop:6,boxSizing:"border-box",background:"#fff"}}><option value="">{T_NOTSET}</option><option value="male">{T_MALE}</option><option value="female">{T_FEMALE}</option></select></div>
+              <div><label style={{fontSize:11,color:"#888",fontWeight:700,textTransform:"uppercase"}}>{T_CITIZEN}</label><input value={form.candidate_citizenship} onChange={function(e){setForm(Object.assign({},form,{candidate_citizenship:e.target.value}));}} onBlur={function(){saveField("candidate_citizenship",form.candidate_citizenship);}} style={{width:"100%",padding:"12px 14px",border:"2px solid #e5e7eb",borderRadius:12,fontSize:15,marginTop:6,boxSizing:"border-box"}}/></div>
             </div>
             <div style={{marginTop:16}}><label style={{fontSize:11,color:"#888",fontWeight:700,textTransform:"uppercase"}}>{T_PHONE}</label>
               <div style={{display:"flex",gap:8,marginTop:6}}>
                 <input value={form.phone} onChange={function(e){setForm(Object.assign({},form,{phone:e.target.value}));}} onBlur={function(){saveField("phone",form.phone);}} style={{flex:1,padding:"12px 14px",border:"2px solid #e5e7eb",borderRadius:12,fontSize:15,boxSizing:"border-box"}} placeholder="+7..."/>
                 <button onClick={copyPhone} style={{padding:"12px 18px",background:copied?"#22c55e":"#6366f1",color:"#fff",border:"none",borderRadius:12,cursor:"pointer",fontWeight:700}}>{copied?"✓":"📋"}</button>
-                {form.phone&&<a href={"tel:"+form.phone} style={{padding:"12px 18px",background:"#22c55e",color:"#fff",borderRadius:12,textDecoration:"none",display:"flex",alignItems:"center"}}>📞</a>}
-                {form.phone&&<a href={"https://wa.me/"+form.phone.replace(/[^0-9]/g,"")} target="_blank" rel="noreferrer" style={{padding:"12px 18px",background:"#25d366",color:"#fff",borderRadius:12,textDecoration:"none",display:"flex",alignItems:"center",fontWeight:700}}>WA</a>}
+                {form.phone&&<a href={"tel:"+form.phone} style={{padding:"12px 18px",background:"#22c55e",color:"#fff",borderRadius:12,textDecoration:"none",display:"flex",alignItems:"center"}}>{"📞"}</a>}
+                {form.phone&&<a href={"https://wa.me/"+form.phone.replace(/[^0-9]/g,"")} target="_blank" rel="noreferrer" style={{padding:"12px 18px",background:"#25d366",color:"#fff",borderRadius:12,textDecoration:"none",display:"flex",alignItems:"center",fontWeight:700}}>{"WA"}</a>}
               </div>
             </div>
             <div style={{marginTop:20,padding:18,background:"linear-gradient(135deg,#f5f3ff,#ede9fe)",borderRadius:16,border:"1px solid #e0d7fe"}}>
-              <div style={{fontSize:11,color:"#888",fontWeight:700,marginBottom:6}}>ВАКАНСИЯ</div>
+              <div style={{fontSize:11,color:"#888",fontWeight:700,marginBottom:6}}>{"ВАКАНСИЯ"}</div>
               <div style={{fontWeight:700,fontSize:16}}>{resp.vacancy_title||"-"}</div>
-              {addr&&<div style={{fontSize:13,color:"#666",marginTop:4}}>📍 {addr}</div>}
+              {addr&&<div style={{fontSize:13,color:"#666",marginTop:4}}>{"📍 "+addr}</div>}
             </div>
-            <div style={{marginTop:20}}><div style={{fontSize:11,color:"#888",fontWeight:700,marginBottom:10}}>СТАТУС</div>
+            <div style={{marginTop:20}}>
+              <div style={{fontSize:11,color:"#888",fontWeight:700,marginBottom:10}}>{"СТАТУС"}</div>
               <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr 1fr",gap:8}}>
-                {Object.keys(ST).map(function(key){var s=ST[key];var act=(resp.status||"new")===key;return <button key={key} onClick={function(){onStatusChange(resp.id,key);}} style={{padding:"14px",borderRadius:14,border:act?"2px solid "+s.color:"2px solid #e5e7eb",background:act?s.bg:"#fff",cursor:"pointer",fontWeight:act?700:500,fontSize:13,color:act?s.color:"#374151"}}>{s.icon} {s.label}</button>;})}
+                {Object.keys(ST).map(function(key){var s=ST[key];var act=(resp.status||"new")===key;return <button key={key} onClick={function(){onStatusChange(resp.id,key);}} style={{padding:"14px",borderRadius:14,border:act?"2px solid "+s.color:"2px solid #e5e7eb",background:act?s.bg:"#fff",cursor:"pointer",fontWeight:act?700:500,fontSize:13,color:act?s.color:"#374151"}}>{s.icon+" "+s.label}</button>;})}
               </div>
             </div>
-            {saving&&<div style={{marginTop:8,color:"#6366f1",fontSize:12}}>Сохранение...</div>}
+            {saving&&<div style={{marginTop:8,color:"#6366f1",fontSize:12}}>{"Сохранение..."}</div>}
           </div>)}
-
           {modalTab==="chat"&&(<div style={{display:"flex",flexDirection:"column",height:500}}>
             <div style={{flex:1,overflowY:"auto",padding:16,display:"flex",flexDirection:"column",gap:8,background:"#f8fafc"}}>
-              {chatLoad?<div style={{textAlign:"center",color:"#888",paddingTop:60}}>{T_LOAD}</div>
-              :chatMsgs.length===0?<div style={{textAlign:"center",color:"#888",paddingTop:60}}>{T_NOMSG}</div>
-              :chatMsgs.map(function(m){var out=m.direction==="out";return <div key={m.id} style={{display:"flex",justifyContent:out?"flex-end":"flex-start"}}><div style={{maxWidth:"75%",padding:"10px 14px",borderRadius:14,background:out?"linear-gradient(135deg,#6366f1,#8b5cf6)":"#fff",color:out?"#fff":"#111",boxShadow:"0 1px 3px rgba(0,0,0,0.08)"}}><div style={{fontSize:13,whiteSpace:"pre-line",lineHeight:1.5}}>{m.content}</div><div style={{fontSize:10,marginTop:3,opacity:0.6,textAlign:"right"}}>{fmtDT(m.created)}</div></div></div>;})}<div ref={chatEndRef}/>
+              {chatLoad&&<div style={{textAlign:"center",color:"#888",paddingTop:60}}>{T_LOAD}</div>}
+              {!chatLoad&&chatMsgs.length===0&&<div style={{textAlign:"center",color:"#888",paddingTop:60}}>{T_NOMSG}</div>}
+              {!chatLoad&&chatMsgs.map(function(m){var out=m.direction==="out";return <div key={m.id} style={{display:"flex",justifyContent:out?"flex-end":"flex-start"}}><div style={{maxWidth:"75%",padding:"10px 14px",borderRadius:14,background:out?"linear-gradient(135deg,#6366f1,#8b5cf6)":"#fff",color:out?"#fff":"#111",boxShadow:"0 1px 3px rgba(0,0,0,0.08)"}}><div style={{fontSize:13,whiteSpace:"pre-line",lineHeight:1.5}}>{m.content}</div><div style={{fontSize:10,marginTop:3,opacity:0.6,textAlign:"right"}}>{fmtDT(m.created)}</div></div></div>;})}
+              <div ref={chatEndRef}/>
             </div>
             <div style={{padding:"12px 16px",borderTop:"1px solid #f0f0f0",display:"flex",gap:8,background:"#fff"}}>
               <input value={chatText} onChange={function(e){setChatText(e.target.value);}} onKeyDown={function(e){if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();sendMsg();}}} placeholder={T_MSGPH} style={{flex:1,padding:"12px 14px",borderRadius:12,border:"1px solid #e5e7eb",fontSize:14}}/>
               <button onClick={sendMsg} disabled={sending||!chatText.trim()} style={{padding:"12px 20px",borderRadius:12,border:"none",background:chatText.trim()?"#6366f1":"#e5e7eb",color:chatText.trim()?"#fff":"#999",fontWeight:700,cursor:chatText.trim()?"pointer":"default"}}>{sending?"...":"➤"}</button>
             </div>
           </div>)}
-
           {modalTab==="notes"&&(<div>
             <div style={{display:"flex",gap:8,marginBottom:16}}>
               <input value={noteText} onChange={function(e){setNoteText(e.target.value);}} onKeyDown={function(e){if(e.key==="Enter")addNote();}} placeholder={T_NOTESPH} style={{flex:1,padding:"12px 14px",border:"2px solid #e5e7eb",borderRadius:12,fontSize:14}}/>
               <button onClick={addNote} style={{padding:"12px 20px",background:"#6366f1",color:"#fff",border:"none",borderRadius:12,cursor:"pointer",fontWeight:700}}>{T_ADD}</button>
             </div>
             {notes.length===0&&<div style={{textAlign:"center",color:"#888",padding:32}}>{T_NONOTES}</div>}
-            {notes.map(function(note){return <div key={note.id} style={{padding:14,background:"#fffbeb",borderRadius:12,marginBottom:8,display:"flex",justifyContent:"space-between",border:"1px solid #fde68a"}}><div><div style={{fontSize:14}}>{note.text}</div><div style={{fontSize:11,color:"#999",marginTop:4}}>{new Date(note.created_at).toLocaleString("ru")}</div></div><button onClick={function(){deleteNote(note.id);}} style={{background:"none",border:"none",cursor:"pointer",color:"#999",fontSize:16}}>✕</button></div>;})}
-                   </div>)}
+            {notes.map(function(note){return <div key={note.id} style={{padding:14,background:"#fffbeb",borderRadius:12,marginBottom:8,display:"flex",justifyContent:"space-between",border:"1px solid #fde68a"}}><div><div style={{fontSize:14}}>{note.text}</div><div style={{fontSize:11,color:"#999",marginTop:4}}>{new Date(note.created_at).toLocaleString("ru")}</div></div><button onClick={function(){deleteNote(note.id);}} style={{background:"none",border:"none",cursor:"pointer",color:"#999",fontSize:16}}>{"✕"}</button></div>;})}
+          </div>)}
         </div>
       </div>
     </div>
