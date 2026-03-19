@@ -245,7 +245,7 @@ export default function VacanciesPage(){
       var r=responses.find(function(x){return x.id===id;});
       var vacTitle=r?getVacTitle(r):"";
       setRejectConfirm({id:id,name:r?(r.candidate_name||r.author_name||""):"",vacTitle:vacTitle});
-      setRejectText('Здравствуйте! К сожалению, по вакансии "'+vacTitle+'" мы вынуждены отказать. Благодарим за интерес к нашей компании и желаем успехов в поиске работы!');
+      setRejectText('Здравствуйте! К сожалению, вакансия "'+vacTitle+'" уже неактуальна. Благодарим за интерес к нашей компании и желаем успехов в поиске работы!');
       return;
     }
     fetch("/api/avito/response-update",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({id:id,status:st})}).then(function(){setResponses(function(p){return p.map(function(x){return x.id===id?Object.assign({},x,{status:st}):x;});});if(modalResp&&modalResp.id===id)setModalResp(Object.assign({},modalResp,{status:st}));});
