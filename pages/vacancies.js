@@ -83,7 +83,7 @@ function CandidateModal(props){
   var _ct=useState(""),chatText=_ct[0],setChatText=_ct[1];
   var _sn=useState(false),sending=_sn[0],setSending=_sn[1];
   var chatEndRef=useRef(null);
-
+  var _vd=React.useState(false),vacDrop=_vd[0],setVacDrop=_vd[1];
   useEffect(function(){fetch("/api/avito/candidate/"+resp.id).then(function(r){return r.json();}).then(function(d){if(d.notes)setNotes(d.notes);}).catch(function(){});},[resp.id]);
   useEffect(function(){if(chatEndRef.current)chatEndRef.current.scrollIntoView({behavior:"smooth"});},[chatMsgs]);
 
@@ -361,10 +361,24 @@ export default function VacanciesPage(){
                   {tab==="all"&&<option value="hired">{T.hired+" ("+cHired+")"}</option>}
                   {tab==="all"&&<option value="rejected">{T.rejected+" ("+cRej+")"}</option>}
                 </select>)}
-                  <select value={selVac?selVac.id:""} onChange={function(e){if(!e.target.value){setSelVac(null);}else{var found=vacancies.find(function(v){return String(v.id)===e.target.value;});setSelVac(found||null);}}} style={{padding:"12px 16px",borderRadius:14,border:"2px solid #f1f5f9",fontSize:13,background:"#fff",cursor:"pointer",maxWidth:280}}>
-                <option value="">{"🏢 Все вакансии"}</option>
-                {vacancies.map(function(v){var rc=responses.filter(function(r){return String(r.vacancy_code)===String(v.avito_id);}).length;return <option key={v.id} value={v.id}>{v.title+" ("+rc+")"}</option>;})}
-              </select>
+                                <div style={{position:"relative",minWidth:220}}>
+                <div onClick={function(){setVacDrop(!vacDrop);}} style={{padding:"12px 16px",borderRadius:14,border:"2px solid #f1f5f9",fontSize:13,background:"#fff",cursor:"pointer",display:"flex",alignItems:"center",gap:8,justifyContent:"space-between",minWidth:220}}>
+                  <span style={{overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{selVac?selVac.title:"🏢 Все вакансии"}</span>
+                  <span style={{fontSize:10}}>{"▼"}</span>
+                </div>
+                {vacDrop&&<div style={{position:"absolute",top:"100%",left:0,right:0,zIndex:999,background:"#fff",border:"2px solid #e2e8f0",borderRadius:14,marginTop:4,boxShadow:"0 8px 32px rgba(0,0,0,0.12)",maxHeight:400,overflow:"hidden",minWidth:340}}>
+                  <div style={{padding:8,borderBottom:"1px solid #f1f5f9"}}>
+                    <input placeholder={"🔍 Поиск вакансии..."} value={vacSearch||""} onChange={function(e){setVacSearch(e.target.value);}} style={{width:"100%",padding:"10px 14px",border:"2px solid #f1f5f9",borderRadius:10,fontSize:13,outline:"none",boxSizing:"border-box"}} autoFocus/>
+                  </div>
+                  <div style={{maxHeight:340,overflowY:"auto"}}>
+                    <div onClick={function(){setSelVac(null);setVacDrop(false);setVacSearch("");}} style={{padding:"10px 16px",cursor:"pointer",fontSize:13,fontWeight:600,borderBottom:"1px solid #f8fafc",background:!selVac?"#f0f9ff":"#fff"}}>{"🏢 Все вакансии ("+responses.length+")"}</div>
+                    {vacancies.filter(function(v){var q=(vacSearch||"").toLowerCase();if(!q)return true;return v.title.toLowerCase().indexOf(q)>-1||(v.city||"").toLowerCase().indexOf(q)>-1;}).sort(function(a,b){var ac=responses.filter(function(r){return String(r.vacancy_code)===String(a.avito_id);}).length;var bc=responses.filter(function(r){return String(r.vacancy_code)===String(b.avito_id);}).length;return bc-ac;}).map(function(v){var rc=responses.filter(function(r){return String(r.vacancy_code)===String(v.avito_id);}).length;return <div key={v.id} onClick={function(){setSelVac(v);setVacDrop(false);setVacSearch("");}} style={{padding:"10px 16px",cursor:"pointer",fontSize:12,borderBottom:"1px solid #f8fafc",background:selVac&&selVac.id===v.id?"#f0f9ff":"#fff"}} onMouseEnter={function(e){e.currentTarget.style.background="#f8fafc";}} onMouseLeave={function(e){e.currentTarget.style.background=selVac&&selVac.id===v.id?"#f0f9ff":"#fff";}}>
+                      <div style={{fontWeight:600}}>{v.title}</div>
+                      <div style={{fontSize:11,color:"#94a3b8",display:"flex",justifyContent:"space-between"}}><span>{v.city?"📍 "+v.city:""}</span><span style={{fontWeight:700,color:"#6366f1"}}>{rc+" откл."}</span></div>
+                    </div>;})}
+                  </div>
+                </div>}
+              </div>
               <select value={sortBy} onChange={function(e){setSortBy(e.target.value);}} style={{padding:"12px 16px",borderRadius:14,border:"2px solid #f1f5f9",fontSize:13,background:"#fff",cursor:"pointer"}}>
                 <option value="date">{T.bydate}</option>
                 <option value="unread">{T.unrfirst}</option>
