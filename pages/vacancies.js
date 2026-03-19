@@ -361,9 +361,9 @@ export default function VacanciesPage(){
                   {tab==="all"&&<option value="hired">{T.hired+" ("+cHired+")"}</option>}
                   {tab==="all"&&<option value="rejected">{T.rejected+" ("+cRej+")"}</option>}
                 </select>)}
-                    <select value={selVac?String(selVac.id):""} onChange={function(e){if(!e.target.value){setSelVac(null);}else{var found=vacancies.find(function(v){return String(v.id)===e.target.value;});setSelVac(found||null);}}} style={{padding:"12px 16px",borderRadius:14,border:"2px solid #f1f5f9",fontSize:13,background:"#fff",cursor:"pointer",maxWidth:320}}>
+                   <select value={selVac?String(selVac.id):""} onChange={function(e){if(!e.target.value){setSelVac(null);}else{var found=vacancies.find(function(v){return String(v.id)===e.target.value;});setSelVac(found||null);}}} style={{padding:"12px 16px",borderRadius:14,border:"2px solid #f1f5f9",fontSize:13,background:"#fff",cursor:"pointer",maxWidth:420}}>
                 <option value="">{"🏢 Все вакансии"}</option>
-                {vacancies.sort(function(a,b){var ac=responses.filter(function(r){return String(r.vacancy_code)===String(a.avito_id);}).length;var bc=responses.filter(function(r){return String(r.vacancy_code)===String(b.avito_id);}).length;return bc-ac;}).map(function(v){var rc=responses.filter(function(r){return String(r.vacancy_code)===String(v.avito_id);}).length;return <option key={v.id} value={String(v.id)}>{v.title+" ("+rc+")"}</option>;})}
+                {vacancies.sort(function(a,b){var ac=responses.filter(function(r){return String(r.vacancy_code)===String(a.avito_id);}).length;var bc=responses.filter(function(r){return String(r.vacancy_code)===String(b.avito_id);}).length;return bc-ac;}).map(function(v){var rc=responses.filter(function(r){return String(r.vacancy_code)===String(v.avito_id);}).length;var addr=v.address||v.city||"";return <option key={v.id} value={String(v.id)}>{v.title+(addr?" — "+addr:"")+" ("+rc+")"}</option>;})}
               </select>
               <select value={sortBy} onChange={function(e){setSortBy(e.target.value);}} style={{padding:"12px 16px",borderRadius:14,border:"2px solid #f1f5f9",fontSize:13,background:"#fff",cursor:"pointer"}}>
                 <option value="date">{T.bydate}</option>
