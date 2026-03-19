@@ -49,20 +49,28 @@ var DkrsAppShell = function (props) {
     { href: "/reports", icon: <ReportsIcon />, label: "Отчёты", minRole: "viewer" },
     { href: "/analytics", icon: <AnalyticsIcon />, label: "Аналитика", minRole: "viewer" },
     { href: "/vacancies", icon: <VacancyIcon />, label: "Вакансии", minRole: "manager" },
-    { href: "/import", icon: <ImportIcon />, label: "Импорт", minRole: "manager" },
+    { href: "/import", icon: <ImportIcon />, label: "Импорт", minRole: "director" },
     { href: "/data-management", icon: <DataIcon />, label: "Данные", minRole: "admin" },
     { href: "/users", icon: <UsersIcon />, label: "Пользователи", minRole: "admin" },
   ];
 
   function rankOf(role) {
-    if (role === "admin") return 3;
+    if (role === "admin") return 4;
+    if (role === "director") return 3;
     if (role === "manager") return 2;
     return 1;
   }
 
-  var navLinks = allNavLinks.filter(function (link) {
-    return rankOf(userRole) >= rankOf(link.minRole);
-  });
+  var navLinks;
+  if (userRole === "manager") {
+    navLinks = allNavLinks.filter(function (link) {
+      return link.href === "/vacancies";
+    });
+  } else {
+    navLinks = allNavLinks.filter(function (link) {
+      return rankOf(userRole) >= rankOf(link.minRole);
+    });
+  }
 
   return (
     <div className="dkrs-app">
