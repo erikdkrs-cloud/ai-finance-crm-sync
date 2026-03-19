@@ -80,6 +80,9 @@ function CandidateModal(props){
   var _cp=useState(false),copied=_cp[0],setCopied=_cp[1];
   var _cm=useState([]),chatMsgs=_cm[0],setChatMsgs=_cm[1];
   var _cl=useState(false),chatLoad=_cl[0],setChatLoad=_cl[1];
+  var _rj=useState(null),rejectConfirm=_rj[0],setRejectConfirm=_rj[1];
+  var _rjt=useState(""),rejectText=_rjt[0],setRejectText=_rjt[1];
+  var _rjs=useState(false),rejecting=_rjs[0],setRejecting=_rjs[1];
   var _ct=useState(""),chatText=_ct[0],setChatText=_ct[1];
   var _sn=useState(false),sending=_sn[0],setSending=_sn[1];
   var chatEndRef=useRef(null);
@@ -234,8 +237,31 @@ export default function VacanciesPage(){
     }).catch(function(e){setSyncing(false);setXmsg({type:"error",text:e.message});});
   }
 
-  function updStatus(id,st){fetch("/api/avito/response-update",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({id:id,status:st})}).then(function(){setResponses(function(p){return p.map(function(x){return x.id===id?Object.assign({},x,{status:st}):x;});});if(modalResp&&modalResp.id===id)setModalResp(Object.assign({},modalResp,{status:st}));});}
-  function onModalUpdate(updated){setResponses(function(p){return p.map(function(x){return x.id===updated.id?Object.assign({},x,updated):x;});});setModalResp(Object.assign({},modalResp,updated));}
+    function updStatus(id,st){
+    if(st==="rejected"){
+      var r=responses.find(function(x){return x.id===id;});
+      var vacTitle=r?getVacTitle(r):"";
+      setRejectConfirm({id:id,name:r?(r.candidate_name||r.author_name||""):"",vacTitle:vacTitle});
+      setRejectText('Здравствуйте! К сожалению, вакансия "'+vacTitle+'" уже неактуальна. Благодарим за интерес к нашей компании и желаем успехов в поиске работы!');
+      return;
+    }
+    fetch("/api/avito/response-update",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({id:id,status:st})}).then(function(){setResponses(function(p){return p.map(function(x){return x.id===id?Object.assign({},x,{status:st}):x;});});if(modalResp&&modalResp.id===id)setModalResp(Object.assign({},modalResp,{status:st}));});
+  }
+
+  function doReject(){
+    if(!rejectConfirm||rejecting)return;
+    setRejecting(true);
+    fetch("/api/avito/respond-reject",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({response_id:rejectConfirm.id,message_template:rejectText})}).then(function(r){return r.json();}).then(function(d){
+      setRejecting(false);
+      if(d.ok){
+        setResponses(function(p){return p.map(function(x){return x.id===rejectConfirm.id?Object.assign({},x,{status:"rejected"}):x;});});
+        if(modalResp&&modalResp.id===rejectConfirm.id)setModalResp(Object.assign({},modalResp,{status:"rejected"}));
+        setRejectConfirm(null);setRejectText("");
+      }else{
+        alert("Ошибка: "+(d.error||"Неизвестная ошибка"));
+      }
+    }).catch(function(e){setRejecting(false);alert("Ошибка: "+e.message);});
+  }
   function openModal(r){setModalResp(r);if(!r.is_read){fetch("/api/avito/response-update",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({id:r.id,is_read:true,mark_read:true})}).then(function(){setResponses(function(p){return p.map(function(x){return x.id===r.id?Object.assign({},x,{is_read:true}):x;});});});}}
   function addAcc(e){e.preventDefault();fetch("/api/avito/accounts",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(accForm)}).then(function(r){return r.json();}).then(function(d){if(d.ok){setShowAdd(false);setAccForm({name:"",client_id:"",client_secret:""});fetchData();}});}
   function delAcc(id){if(!confirm(T.delconf))return;fetch("/api/avito/accounts?id="+id,{method:"DELETE"}).then(function(){fetchData();});}
@@ -593,7 +619,27 @@ export default function VacanciesPage(){
 
         {/* STATS FULL PAGE */}
         {tab==="stats"&&<StatsPanel responses={responses} vacancies={vacancies}/>}
-
+        {rejectConfirm&&(
+          <div style={{position:"fixed",top:0,left:0,right:0,bottom:0,background:"rgba(15,23,42,0.6)",zIndex:1100,display:"flex",alignItems:"center",justifyContent:"center",backdropFilter:"blur(8px)"}} onClick={function(){if(!rejecting){setRejectConfirm(null);}}}>
+            <div style={{background:"#fff",borderRadius:24,width:"95%",maxWidth:540,padding:"32px",boxShadow:"0 25px 80px rgba(0,0,0,0.25)"}} onClick={function(e){e.stopPropagation();}}>
+              <div style={{display:"flex",alignItems:"center",gap:14,marginBottom:24}}>
+                <div style={{width:52,height:52,borderRadius:16,background:"linear-gradient(135deg,#ef4444,#f87171)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:26}}>{"❌"}</div>
+                <div>
+                  <div style={{fontSize:18,fontWeight:800,color:"#1e293b"}}>{"Отказ кандидату"}</div>
+                  <div style={{fontSize:13,color:"#64748b",marginTop:2}}>{rejectConfirm.name}</div>
+                </div>
+              </div>
+              <div style={{marginBottom:8}}>
+                <label style={{fontSize:11,color:"#94a3b8",fontWeight:700,textTransform:"uppercase",letterSpacing:0.8}}>{"Сообщение кандидату (отправится в Avito чат):"}</label>
+              </div>
+              <textarea value={rejectText} onChange={function(e){setRejectText(e.target.value);}} rows={5} style={{width:"100%",padding:"14px 16px",border:"2px solid #fecaca",borderRadius:16,fontSize:14,lineHeight:1.6,resize:"vertical",outline:"none",boxSizing:"border-box",fontFamily:"inherit",transition:"border-color 0.2s"}}/>
+              <div style={{display:"flex",gap:10,marginTop:20}}>
+                <button onClick={function(){setRejectConfirm(null);}} disabled={rejecting} style={{flex:1,padding:"14px",borderRadius:14,border:"2px solid #e2e8f0",background:"#fff",color:"#64748b",fontWeight:700,fontSize:14,cursor:"pointer"}}>{"Отмена"}</button>
+                <button onClick={doReject} disabled={rejecting||!rejectText.trim()} style={{flex:1,padding:"14px",borderRadius:14,border:"none",background:rejecting?"#fca5a5":"linear-gradient(135deg,#ef4444,#f87171)",color:"#fff",fontWeight:700,fontSize:14,cursor:rejecting?"default":"pointer",boxShadow:"0 4px 16px rgba(239,68,68,0.3)",transition:"all 0.2s"}}>{rejecting?"⏳ Отправка...":"❌ Отказать и отправить"}</button>
+              </div>
+            </div>
+          </div>
+        )}
         {/* MODAL */}
         {modalResp&&<CandidateModal resp={modalResp} vacancies={vacancies} onClose={function(){setModalResp(null);}} onUpdate={onModalUpdate} onStatusChange={updStatus}/>}
       </div>
