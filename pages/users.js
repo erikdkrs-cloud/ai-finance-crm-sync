@@ -4,6 +4,7 @@ import { useAuth } from "../components/AuthProvider";
 
 var ROLES = [
   { value: "admin", label: "Администратор", icon: "👑", color: "#ef4444" },
+  { value: "director", label: "Руководитель", icon: "🏢", color: "#8b5cf6" },
   { value: "manager", label: "Менеджер", icon: "👔", color: "#f97316" },
   { value: "viewer", label: "Наблюдатель", icon: "👁️", color: "#6366f1" },
 ];
@@ -419,6 +420,10 @@ export default function UsersPage() {
           <div className="users-stat">
             <span className="users-stat-num">{users.filter(function (u) { return u.role === "admin"; }).length}</span>
             <span className="users-stat-label">👑 Админы</span>
+          </div>
+          <div className="users-stat">
+            <span className="users-stat-num">{users.filter(function (u) { return u.role === "director"; }).length}</span>
+            <span className="users-stat-label">🏢 Руководители</span>
           </div>
           <div className="users-stat">
             <span className="users-stat-num">{users.filter(function (u) { return u.role === "manager"; }).length}</span>
