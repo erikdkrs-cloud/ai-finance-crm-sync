@@ -165,7 +165,7 @@ function CandidateModal(props){
             </div>
             {notes.length===0&&<div style={{textAlign:"center",color:"#888",padding:32}}>{T_NONOTES}</div>}
             {notes.map(function(note){return <div key={note.id} style={{padding:14,background:"#fffbeb",borderRadius:12,marginBottom:8,display:"flex",justifyContent:"space-between",border:"1px solid #fde68a"}}><div><div style={{fontSize:14}}>{note.text}</div><div style={{fontSize:11,color:"#999",marginTop:4}}>{new Date(note.created_at).toLocaleString("ru")}</div></div><button onClick={function(){deleteNote(note.id);}} style={{background:"none",border:"none",cursor:"pointer",color:"#999",fontSize:16}}>✕</button></div>;})}
-          </div>)}
+                   </div>)}
         </div>
       </div>
     </div>
