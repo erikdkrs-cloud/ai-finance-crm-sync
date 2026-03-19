@@ -11,7 +11,7 @@ export default async function handler(req, res) {
       data = await sql`
 SELECT r.*, v.title as vacancy_title, v.city as vacancy_city, v.address as vacancy_address, a.name as account_name
 FROM avito_responses r
-LEFT JOIN avito_vacancies v ON v.id = r.vacancy_id
+LEFT JOIN avito_vacancies v ON CAST(v.avito_id AS TEXT) = CAST(r.vacancy_code AS TEXT)
 LEFT JOIN avito_accounts a ON a.id = r.account_id
 INNER JOIN user_projects up ON up.project_id = v.project_id AND up.user_id = ${userId}
 ORDER BY r.created_at DESC
@@ -20,7 +20,7 @@ ORDER BY r.created_at DESC
       data = await sql`
 SELECT r.*, v.title as vacancy_title, v.city as vacancy_city, v.address as vacancy_address, a.name as account_name
 FROM avito_responses r
-LEFT JOIN avito_vacancies v ON v.id = r.vacancy_id
+LEFT JOIN avito_vacancies v ON CAST(v.avito_id AS TEXT) = CAST(r.vacancy_code AS TEXT)
 LEFT JOIN avito_accounts a ON a.id = r.account_id
 ORDER BY r.created_at DESC
       `;
