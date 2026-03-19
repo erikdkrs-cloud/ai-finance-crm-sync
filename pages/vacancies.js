@@ -94,20 +94,19 @@ function CandidateModal(props){
   return(
     <div style={{position:"fixed",top:0,left:0,right:0,bottom:0,background:"rgba(0,0,0,0.5)",zIndex:1000,display:"flex",alignItems:"center",justifyContent:"center",backdropFilter:"blur(4px)"}} onClick={onClose}>
       <div style={{background:"#fff",borderRadius:24,width:"95%",maxWidth:820,maxHeight:"92vh",overflow:"hidden",display:"flex",flexDirection:"column",boxShadow:"0 25px 60px rgba(0,0,0,0.3)"}} onClick={function(e){e.stopPropagation();}}>
-        <div style={{background:"linear-gradient(135deg,#6366f1,#8b5cf6)",padding:"24px 28px",color:"#fff",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                <div style={{background:"linear-gradient(135deg,#1e1b4b,#312e81)",padding:"24px 28px",color:"#fff",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
           <div style={{display:"flex",alignItems:"center",gap:16}}>
-            <div style={{width:60,height:60,borderRadius:"50%",background:"rgba(255,255,255,0.2)",display:"flex",alignItems:"center",justifyContent:"center",fontWeight:800,fontSize:26}}>{(form.candidate_name||"?")[0].toUpperCase()}</div>
+            <div style={{width:60,height:60,borderRadius:"50%",background:"rgba(255,255,255,0.15)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:30}}>👤</div>
             <div>
               <h2 style={{margin:0,fontSize:22,fontWeight:800}}>{form.candidate_name||T_NONAME}</h2>
               <div style={{display:"flex",gap:8,marginTop:6,flexWrap:"wrap"}}>
-                {form.candidate_age&&<span style={{padding:"2px 10px",borderRadius:6,background:"rgba(255,255,255,0.2)",fontSize:12}}>{form.candidate_age} лет</span>}
-                {form.candidate_citizenship&&<span style={{padding:"2px 10px",borderRadius:6,background:"rgba(255,255,255,0.2)",fontSize:12}}>{form.candidate_citizenship}</span>}
-                {resp.vacancy_city&&<span style={{padding:"2px 10px",borderRadius:6,background:"rgba(255,255,255,0.2)",fontSize:12}}>📍 {resp.vacancy_city}</span>}
+                {form.candidate_age&&<span style={{padding:"2px 10px",borderRadius:6,background:"rgba(255,255,255,0.15)",fontSize:12}}>{form.candidate_age} лет</span>}
+                {form.candidate_citizenship&&<span style={{padding:"2px 10px",borderRadius:6,background:"rgba(255,255,255,0.15)",fontSize:12}}>{form.candidate_citizenship}</span>}
+                {resp.vacancy_city&&<span style={{padding:"2px 10px",borderRadius:6,background:"rgba(255,255,255,0.15)",fontSize:12}}>📍 {resp.vacancy_city}</span>}
               </div>
             </div>
           </div>
-          <button onClick={onClose} style={{background:"rgba(255,255,255,0.2)",border:"none",color:"#fff",width:44,height:44,borderRadius:"50%",cursor:"pointer",fontSize:20}}>✕</button>
-        </div>
+          <button onClick={onClose} style={{background:"rgba(255,255,255,0.15)",border:"none",color:"#fff",width:44,height:44,borderRadius:"50%",cursor:"pointer",fontSize:20}
 
         <div style={{display:"flex",borderBottom:"2px solid #f0f0f0"}}>
           {[{key:"info",label:"📋 "+T_INFO},{key:"chat",label:"💬 "+T_CHAT},{key:"notes",label:"📝 "+T_NOTES+" ("+notes.length+")"}].map(function(t){
@@ -303,7 +302,7 @@ export default function VacanciesPage(){
                         <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:10}}>
                           <div style={{display:"flex",alignItems:"center",gap:14}}>
                             <div style={{position:"relative",flexShrink:0}}>
-                              <div style={{width:48,height:48,borderRadius:"50%",background:ur?"linear-gradient(135deg,#f59e0b,#f97316)":"linear-gradient(135deg,#6366f1,#a78bfa)",display:"flex",alignItems:"center",justifyContent:"center",fontWeight:800,color:"#fff",fontSize:18}}>{(r.candidate_name||r.author_name||"?")[0].toUpperCase()}</div>
+                              <div style={{width:48,height:48,borderRadius:"50%",background:ur?"linear-gradient(135deg,#f59e0b,#f97316)":"linear-gradient(135deg,#6366f1,#a78bfa)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:24}}>👤</div>
                               {ur&&<div style={{position:"absolute",top:-2,right:-2,width:14,height:14,borderRadius:"50%",background:"#ef4444",border:"2px solid #fff"}}/>}
                             </div>
                             <div>
