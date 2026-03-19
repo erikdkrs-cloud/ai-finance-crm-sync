@@ -210,6 +210,9 @@ export default function VacanciesPage(){
   var _so=useState("date"),sortBy=_so[0],setSortBy=_so[1];
   var _vs=useState(""),vacSearch=_vs[0],setVacSearch=_vs[1];
   var _modal=useState(null),modalResp=_modal[0],setModalResp=_modal[1];
+  var _rj=useState(null),rejectConfirm=_rj[0],setRejectConfirm=_rj[1];
+  var _rjt=useState(""),rejectText=_rjt[0],setRejectText=_rjt[1];
+  var _rjs=useState(false),rejecting=_rjs[0],setRejecting=_rjs[1];
   var _pr=useState([]),projects=_pr[0],setProjects=_pr[1];
   var fetchData=useCallback(function(){
     setLoading(true);
