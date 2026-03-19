@@ -232,8 +232,9 @@ export default function VacanciesPage(){
   function addAcc(e){e.preventDefault();fetch("/api/avito/accounts",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(accForm)}).then(function(r){return r.json();}).then(function(d){if(d.ok){setShowAdd(false);setAccForm({name:"",client_id:"",client_secret:""});fetchData();}});}
   function delAcc(id){if(!confirm(T.delconf))return;fetch("/api/avito/accounts?id="+id,{method:"DELETE"}).then(function(){fetchData();});}
 
-  function getAddr(r){if(r.vacancy_address&&r.vacancy_address.length>3)return r.vacancy_address;var v=vacancies.find(function(vv){return vv.id===r.vacancy_id;});if(v){if(v.raw_data&&v.raw_data.address)return v.raw_data.address;if(v.address)return v.address;if(v.city)return v.city;}return r.vacancy_city||"";}
-  function getVacTitle(r){if(r.vacancy_title&&r.vacancy_title.length>1)return r.vacancy_title;var v=vacancies.find(function(vv){return vv.id===r.vacancy_id;});return v?v.title:"-";}
+  function getAddr(r){if(r.vacancy_address&&r.vacancy_address.length>3)return r.vacancy_address;var v=vacancies.find(function(vv){return vv.id===r.vacancy_id||String(vv.avito_id)===String(r.avito_vacancy_id);});if(v){if(v.raw_data&&v.raw_data.address)return v.raw_data.address;if(v.address)return v.address;if(v.city)return v.city;}return r.vacancy_city||"";}
+  function getVacTitle(r){var v=vacancies.find(function(vv){return vv.id===r.vacancy_id||String(vv.avito_id)===String(r.avito_vacancy_id);});var title=r.vacancy_title&&r.vacancy_title.length>2?r.vacancy_title:(v?v.title:"-");return title;}
+  function getVacCode(r){var v=vacancies.find(function(vv){return vv.id===r.vacancy_id||String(vv.avito_id)===String(r.avito_vacancy_id);});if(v&&v.raw_data&&v.raw_data.vacancy_code)return v.raw_data.vacancy_code;if(v&&v.vacancy_code)return v.vacancy_code;return"";}
 
   var unread=responses.filter(function(r){return!r.is_read;}).length;
   var cNew=responses.filter(function(r){return r.status==="new"||!r.status;}).length;
@@ -321,7 +322,15 @@ export default function VacanciesPage(){
                     <div style={{width:42,height:42,borderRadius:14,background:"linear-gradient(135deg,#6366f1,#a78bfa)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:20,flexShrink:0,position:"relative"}}>{"👤"}{ur&&<div style={{position:"absolute",top:-3,right:-3,width:12,height:12,borderRadius:"50%",background:"#ef4444",border:"2px solid #fff"}}/>}</div>
                     <div style={{flex:1,minWidth:0}}>
                       <div style={{fontWeight:700,fontSize:14,color:"#1e293b",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{r.candidate_name||r.author_name||T.noname}</div>
-                      <div style={{fontSize:12,color:"#94a3b8",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{r.vacancy_title||"-"}</div>
+                                                                  <div style={{fontSize:12,color:"#6366f1",display:"flex",alignItems:"center",gap:6,fontWeight:700}}>
+                        <span style={{whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{"🏢 "+getVacTitle(r)}</span>
+                        {getVacCode(r)&&<span style={{padding:"1px 6px",borderRadius:4,background:"#f0fdf4",border:"1px solid #bbf7d0",fontSize:9,fontWeight:800,color:"#15803d"}}>{getVacCode(r)}</span>}
+                      </div>
+                      <div style={{display:"flex",gap:4,marginTop:3,flexWrap:"wrap"}}>
+                        {r.vacancy_city&&<span style={{fontSize:10,padding:"1px 8px",borderRadius:6,background:"#fef3c7",color:"#92400e",fontWeight:600}}>{"📍 "+r.vacancy_city}</span>}
+                        {r.candidate_age&&<span style={{fontSize:10,padding:"1px 8px",borderRadius:6,background:"#e0f2fe",color:"#0c4a6e",fontWeight:600}}>{r.candidate_age+" лет"}</span>}
+                        {r.phone&&<span style={{fontSize:10,padding:"1px 8px",borderRadius:6,background:"#dcfce7",color:"#166534",fontWeight:700}}>{"📞 "+r.phone}</span>}
+                      </div>
                     </div>
                     <div style={{textAlign:"right",flexShrink:0}}>
                       <div style={{padding:"3px 10px",borderRadius:8,fontSize:10,fontWeight:700,background:st.bg,color:st.color}}>{st.label}</div>
@@ -385,7 +394,10 @@ export default function VacanciesPage(){
                             <span style={{fontWeight:800,fontSize:16,color:"#0f172a"}}>{r.candidate_name||r.author_name||T.noname}</span>
                             {ur&&<span style={{fontSize:9,padding:"3px 10px",borderRadius:8,background:"linear-gradient(135deg,#fbbf24,#f97316)",color:"#fff",fontWeight:800,letterSpacing:0.5}}>{"NEW"}</span>}
                           </div>
-                                                    <div style={{fontSize:13,color:"#6366f1",marginBottom:6,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",fontWeight:700}}>{"🏢 "+getVacTitle(r)}</div>
+                                                                              <div style={{fontSize:13,color:"#6366f1",marginBottom:6,display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
+                            <span style={{fontWeight:700,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",maxWidth:300}}>{"🏢 "+getVacTitle(r)}</span>
+                            {getVacCode(r)&&<span style={{padding:"2px 8px",borderRadius:6,background:"#f0fdf4",border:"1px solid #bbf7d0",fontSize:10,fontWeight:800,color:"#15803d",letterSpacing:0.5}}>{getVacCode(r)}</span>}
+                          </div>
                           <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
                             {addr&&<span style={{padding:"3px 10px",borderRadius:8,background:"#fef3c7",fontSize:11,fontWeight:600,color:"#92400e"}}>{"📍 "+addr}</span>}
                             {r.candidate_age&&<span style={{padding:"3px 10px",borderRadius:8,background:"#e0f2fe",fontSize:11,fontWeight:600,color:"#0c4a6e"}}>{r.candidate_age+" "+T.years}</span>}
