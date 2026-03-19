@@ -189,6 +189,7 @@ function CandidateModal(props){
 }
 export default function VacanciesPage(){
   var _v=useState([]),vacancies=_v[0],setVacancies=_v[1];
+  var _pr=useState([]),projects=_pr[0],setProjects=_pr[1];
   var _r=useState([]),responses=_r[0],setResponses=_r[1];
   var _a=useState([]),accounts=_a[0],setAccounts=_a[1];
   var _tab=useState("dashboard"),tab=_tab[0],setTab=_tab[1];
@@ -203,13 +204,17 @@ export default function VacanciesPage(){
   var _so=useState("date"),sortBy=_so[0],setSortBy=_so[1];
   var _vs=useState(""),vacSearch=_vs[0],setVacSearch=_vs[1];
   var _modal=useState(null),modalResp=_modal[0],setModalResp=_modal[1];
-
+  var _pr=useState([]),projects=_pr[0],setProjects=_pr[1];
   var fetchData=useCallback(function(){
     setLoading(true);
     Promise.all([fetch("/api/avito/vacancies").then(function(r){return r.json();}),fetch("/api/avito/responses").then(function(r){return r.json();}),fetch("/api/avito/accounts").then(function(r){return r.json();})]).then(function(res){setVacancies(res[0].data||[]);setResponses(res[1].data||[]);setAccounts(res[2].data||[]);setLoading(false);}).catch(function(){setLoading(false);});
   },[]);
   useEffect(function(){fetchData();},[fetchData]);
-
+  useEffect(function(){
+    fetch("/api/avito/vacancy-project").then(function(r){return r.json();}).then(function(d){
+      if(d.ok)setProjects(d.projects||[]);
+    }).catch(function(){});
+  },[]);
   function doSync(syncMode){
     setSyncing(true);setXmsg(null);var sm=syncMode||"fast";
     fetch("/api/avito/sync?mode=items").then(function(r){return r.json();}).then(function(d1){
@@ -422,7 +427,7 @@ export default function VacanciesPage(){
               </div>)}
           </div>)}
         {/* VACANCIES TAB */}
-        {tab==="vacancies"&&(
+                {tab==="vacancies"&&(
           <div>
             <div style={{display:"flex",gap:10,marginBottom:16,padding:"14px 18px",background:"#fff",borderRadius:18,border:"1px solid #f1f5f9",alignItems:"center"}}>
               <div style={{flex:1,position:"relative"}}>
@@ -435,12 +440,12 @@ export default function VacanciesPage(){
               {vacancies.filter(function(v){if(!vacSearch)return true;var qq=vacSearch.toLowerCase();return(v.title||"").toLowerCase().indexOf(qq)!==-1||(v.city||"").toLowerCase().indexOf(qq)!==-1||String(v.avito_id).indexOf(qq)!==-1;}).map(function(v){
                 var rc=v.responses_count||0;
                 return(
-                  <div key={v.id} onClick={function(){setSelVac(v);setTab("responses");setSearch("");}}
-                    style={{background:"#fff",borderRadius:20,padding:"20px 24px",cursor:"pointer",border:"1px solid #f1f5f9",transition:"all 0.2s",position:"relative",overflow:"hidden"}}
-                    onMouseEnter={function(e){e.currentTarget.style.transform="translateY(-2px)";e.currentTarget.style.boxShadow="0 8px 30px rgba(0,0,0,0.06)";e.currentTarget.style.borderColor="#c7d2fe";}}
-                    onMouseLeave={function(e){e.currentTarget.style.transform="";e.currentTarget.style.boxShadow="none";e.currentTarget.style.borderColor="#f1f5f9";}}>
+                  <div key={v.id}
+                    style={{background:"#fff",borderRadius:20,padding:"20px 24px",border:"1px solid #f1f5f9",transition:"all 0.2s",position:"relative",overflow:"hidden"}}
+                    onMouseEnter={function(e){e.currentTarget.style.boxShadow="0 8px 30px rgba(0,0,0,0.06)";e.currentTarget.style.borderColor="#c7d2fe";}}
+                    onMouseLeave={function(e){e.currentTarget.style.boxShadow="none";e.currentTarget.style.borderColor="#f1f5f9";}}>
                     <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-                      <div style={{flex:1,minWidth:0}}>
+                      <div style={{flex:1,minWidth:0,cursor:"pointer"}} onClick={function(){setSelVac(v);setTab("responses");setSearch("");}}>
                         <div style={{fontWeight:700,fontSize:15,color:"#1e293b",marginBottom:6}}>{v.title}</div>
                         <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
                           {(v.address||v.city)&&<span style={{padding:"3px 10px",borderRadius:8,background:"#f8fafc",fontSize:11,fontWeight:600,color:"#64748b"}}>{"📍 "+(v.address||v.city)}</span>}
@@ -449,9 +454,27 @@ export default function VacanciesPage(){
                           {v.url&&<a href={v.url} target="_blank" rel="noreferrer" onClick={function(e){e.stopPropagation();}} style={{padding:"3px 10px",borderRadius:8,background:"#eef2ff",fontSize:11,fontWeight:700,color:"#6366f1",textDecoration:"none"}}>{"Avito ↗"}</a>}
                         </div>
                       </div>
-                      <div style={{width:56,height:56,borderRadius:16,background:rc>0?"linear-gradient(135deg,#6366f1,#818cf8)":"#f8fafc",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,boxShadow:rc>0?"0 4px 12px rgba(99,102,241,0.3)":"none"}}>
+                      <div style={{width:56,height:56,borderRadius:16,background:rc>0?"linear-gradient(135deg,#6366f1,#818cf8)":"#f8fafc",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,boxShadow:rc>0?"0 4px 12px rgba(99,102,241,0.3)":"none",cursor:"pointer"}} onClick={function(){setSelVac(v);setTab("responses");setSearch("");}}>
                         <span style={{fontSize:20,fontWeight:800,color:rc>0?"#fff":"#cbd5e1"}}>{rc}</span>
                       </div>
+                    </div>
+                    {/* Project selector */}
+                    <div style={{marginTop:12,paddingTop:12,borderTop:"1px solid #f1f5f9",display:"flex",alignItems:"center",gap:10}}>
+                      <span style={{fontSize:11,color:"#94a3b8",fontWeight:700,letterSpacing:0.5,flexShrink:0}}>{"📁 Проект:"}</span>
+                      <select
+                        value={v.project_id||""}
+                        onClick={function(e){e.stopPropagation();}}
+                        onChange={function(e){
+                          var pid=e.target.value?parseInt(e.target.value):null;
+                          fetch("/api/avito/vacancy-project",{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify({vacancy_id:v.id,project_id:pid})}).then(function(r){return r.json();}).then(function(d){
+                            if(d.ok){setVacancies(function(prev){return prev.map(function(vv){return vv.id===v.id?Object.assign({},vv,{project_id:pid,project_name:pid?projects.find(function(p){return p.id===pid;})?projects.find(function(p){return p.id===pid;}).name:"":""}):vv;});});}
+                          });
+                        }}
+                        style={{flex:1,padding:"8px 12px",borderRadius:10,border:"2px solid "+(v.project_id?"#c7d2fe":"#fecaca"),background:v.project_id?"#eef2ff":"#fff5f5",fontSize:12,fontWeight:600,cursor:"pointer",outline:"none",color:v.project_id?"#4f46e5":"#dc2626",transition:"all 0.2s"}}>
+                        <option value="">{"⚠️ Не назначен"}</option>
+                        {projects.map(function(p){return <option key={p.id} value={p.id}>{p.name}</option>;})}
+                      </select>
+                      {v.project_name&&<span style={{padding:"4px 10px",borderRadius:8,background:"#ecfdf5",fontSize:11,fontWeight:700,color:"#047857",flexShrink:0}}>{"✅"}</span>}
                     </div>
                   </div>);
               })}
