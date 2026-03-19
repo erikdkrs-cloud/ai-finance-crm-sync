@@ -296,7 +296,7 @@ export default function VacanciesPage(){
                         <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:10}}>
                           <div style={{display:"flex",alignItems:"center",gap:14}}>
                             <div style={{position:"relative",flexShrink:0}}>
-                              <div style={{width:48,height:48,borderRadius:"50%",background:ur?"linear-gradient(135deg,#f59e0b,#f97316)":"linear-gradient(135deg,#6366f1,#a78bfa)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:24}}>👤</div>
+                                                            <div style={{width:48,height:48,borderRadius:"50%",background:ur?"linear-gradient(135deg,#f59e0b,#f97316)":"linear-gradient(135deg,#6366f1,#a78bfa)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:24}}>{"👤"}</div>
                               {ur&&<div style={{position:"absolute",top:-2,right:-2,width:14,height:14,borderRadius:"50%",background:"#ef4444",border:"2px solid #fff"}}/>}
                             </div>
                             <div>
