@@ -10,22 +10,22 @@ export default async function handler(req, res) {
     if (role === "manager" && userId) {
       data = await sql`
 SELECT r.*,
-  COALESCE(NULLIF(r.vacancy_title,''), v.title) as vacancy_title,
-  COALESCE(NULLIF(r.vacancy_city,''), v.city) as vacancy_city,
-  COALESCE(NULLIF(r.vacancy_address,''), v.address) as vacancy_address,
+  COALESCE(NULLIF(r.vacancy_title,''), v.title, '—') as vacancy_title,
+  COALESCE(NULLIF(r.vacancy_city,''), v.city, '—') as vacancy_city,
+  COALESCE(NULLIF(r.vacancy_address,''), v.address, '—') as vacancy_address,
   a.name as account_name
 FROM avito_responses r
 LEFT JOIN avito_vacancies v ON CAST(v.avito_id AS TEXT) = CAST(r.vacancy_code AS TEXT)
 LEFT JOIN avito_accounts a ON a.id = r.account_id
-INNER JOIN user_projects up ON up.project_id = v.project_id AND up.user_id = ${userId}
+INNER JOIN user_projects up ON up.project_id = COALESCE(v.project_id, r.vacancy_id) AND up.user_id = ${userId}
 ORDER BY r.created_at DESC
       `;
     } else {
       data = await sql`
 SELECT r.*,
-  COALESCE(NULLIF(r.vacancy_title,''), v.title) as vacancy_title,
-  COALESCE(NULLIF(r.vacancy_city,''), v.city) as vacancy_city,
-  COALESCE(NULLIF(r.vacancy_address,''), v.address) as vacancy_address,
+  COALESCE(NULLIF(r.vacancy_title,''), v.title, '—') as vacancy_title,
+  COALESCE(NULLIF(r.vacancy_city,''), v.city, '—') as vacancy_city,
+  COALESCE(NULLIF(r.vacancy_address,''), v.address, '—') as vacancy_address,
   a.name as account_name
 FROM avito_responses r
 LEFT JOIN avito_vacancies v ON CAST(v.avito_id AS TEXT) = CAST(r.vacancy_code AS TEXT)
