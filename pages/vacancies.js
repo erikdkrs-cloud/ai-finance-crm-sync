@@ -145,7 +145,7 @@ function CandidateModal(props){
             {form.phone&&<div style={{display:"flex",gap:8}}>
               <button onClick={copyPhone} style={{flex:1,padding:"14px",background:copied?"#10b981":"#f8fafc",color:copied?"#fff":"#334155",border:"1px solid #e2e8f0",borderRadius:14,cursor:"pointer",fontWeight:700,fontSize:13,transition:"all 0.2s"}}>{copied?"✅ Скопировано":"📋 Копировать номер"}</button>
               <a href={"tel:"+form.phone} style={{flex:1,padding:"14px",background:"linear-gradient(135deg,#10b981,#34d399)",color:"#fff",borderRadius:14,textDecoration:"none",display:"flex",alignItems:"center",justifyContent:"center",fontWeight:700,fontSize:13}}>{"📞 Позвонить"}</a>
-              <a href={"https://wa.me/"+form.phone.replace(/[^0-9]/g,"")} target="_blank" rel="noreferrer" style={{flex:1,padding:"14px",background:"linear-gradient(135deg,#25d366,#128c7e)",color:"#fff",borderRadius:14,textDecoration:"none",display:"flex",alignItems:"center",justifyContent:"center",fontWeight:700,fontSize:13}}>{"💬 WhatsApp"}</a>
+                            <a href={"https://t.me/+"+form.phone.replace(/[^0-9]/g,"")} target="_blank" rel="noreferrer" style={{flex:1,padding:"14px",background:"linear-gradient(135deg,#0088cc,#33b5e5)",color:"#fff",borderRadius:14,textDecoration:"none",display:"flex",alignItems:"center",justifyContent:"center",fontWeight:700,fontSize:13}}>{"✈️ Telegram"}</a>
             </div>}
             <div style={{padding:20,background:"linear-gradient(135deg,#f8fafc,#f1f5f9)",borderRadius:20,border:"1px solid #e2e8f0"}}>
               <div style={{fontSize:11,color:"#94a3b8",fontWeight:700,letterSpacing:0.8,marginBottom:8}}>{"ВАКАНСИЯ"}</div>
@@ -351,6 +351,10 @@ export default function VacanciesPage(){
                   {tab==="all"&&<option value="hired">{T.hired+" ("+cHired+")"}</option>}
                   {tab==="all"&&<option value="rejected">{T.rejected+" ("+cRej+")"}</option>}
                 </select>)}
+               <select value={selVac?selVac.id:""} onChange={function(e){if(!e.target.value){setSelVac(null);}else{var found=vacancies.find(function(v){return v.id===e.target.value;});setSelVac(found||null);}}} style={{padding:"12px 16px",borderRadius:14,border:"2px solid #f1f5f9",fontSize:13,background:"#fff",cursor:"pointer",maxWidth:280}}>
+                <option value="">{"🏢 Все вакансии"}</option>
+                {vacancies.map(function(v){var rc=responses.filter(function(r){return r.vacancy_id===v.id;}).length;return <option key={v.id} value={v.id}>{v.title+" ("+rc+")"}</option>;})}
+              </select>
               <select value={sortBy} onChange={function(e){setSortBy(e.target.value);}} style={{padding:"12px 16px",borderRadius:14,border:"2px solid #f1f5f9",fontSize:13,background:"#fff",cursor:"pointer"}}>
                 <option value="date">{T.bydate}</option>
                 <option value="unread">{T.unrfirst}</option>
@@ -381,7 +385,7 @@ export default function VacanciesPage(){
                             <span style={{fontWeight:800,fontSize:16,color:"#0f172a"}}>{r.candidate_name||r.author_name||T.noname}</span>
                             {ur&&<span style={{fontSize:9,padding:"3px 10px",borderRadius:8,background:"linear-gradient(135deg,#fbbf24,#f97316)",color:"#fff",fontWeight:800,letterSpacing:0.5}}>{"NEW"}</span>}
                           </div>
-                          <div style={{fontSize:13,color:"#94a3b8",marginBottom:6,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{getVacTitle(r)}</div>
+                                                    <div style={{fontSize:13,color:"#6366f1",marginBottom:6,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",fontWeight:700}}>{"🏢 "+getVacTitle(r)}</div>
                           <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
                             {addr&&<span style={{padding:"3px 10px",borderRadius:8,background:"#fef3c7",fontSize:11,fontWeight:600,color:"#92400e"}}>{"📍 "+addr}</span>}
                             {r.candidate_age&&<span style={{padding:"3px 10px",borderRadius:8,background:"#e0f2fe",fontSize:11,fontWeight:600,color:"#0c4a6e"}}>{r.candidate_age+" "+T.years}</span>}
