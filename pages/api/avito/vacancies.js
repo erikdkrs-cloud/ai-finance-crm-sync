@@ -9,17 +9,19 @@ export default async function handler(req, res) {
     var data;
     if (role === "manager" && userId) {
       data = await sql`
-        SELECT v.*, a.name as account_name
+        SELECT v.*, a.name as account_name, p.name as project_name
         FROM avito_vacancies v
         LEFT JOIN avito_accounts a ON a.id = v.account_id
+        LEFT JOIN projects p ON p.id = v.project_id
         INNER JOIN user_projects up ON up.project_id = v.project_id AND up.user_id = ${userId}
         ORDER BY v.responses_count DESC NULLS LAST, v.created_at DESC
       `;
     } else {
       data = await sql`
-        SELECT v.*, a.name as account_name
+        SELECT v.*, a.name as account_name, p.name as project_name
         FROM avito_vacancies v
         LEFT JOIN avito_accounts a ON a.id = v.account_id
+        LEFT JOIN projects p ON p.id = v.project_id
         ORDER BY v.responses_count DESC NULLS LAST, v.created_at DESC
       `;
     }
