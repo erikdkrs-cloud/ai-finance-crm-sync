@@ -9,7 +9,11 @@ export default async function handler(req, res) {
     var data;
     if (role === "manager" && userId) {
       data = await sql`
-SELECT r.*, v.title as vacancy_title, v.city as vacancy_city, v.address as vacancy_address, a.name as account_name
+SELECT r.*,
+  COALESCE(NULLIF(r.vacancy_title,''), v.title) as vacancy_title,
+  COALESCE(NULLIF(r.vacancy_city,''), v.city) as vacancy_city,
+  COALESCE(NULLIF(r.vacancy_address,''), v.address) as vacancy_address,
+  a.name as account_name
 FROM avito_responses r
 LEFT JOIN avito_vacancies v ON CAST(v.avito_id AS TEXT) = CAST(r.vacancy_code AS TEXT)
 LEFT JOIN avito_accounts a ON a.id = r.account_id
@@ -18,7 +22,11 @@ ORDER BY r.created_at DESC
       `;
     } else {
       data = await sql`
-SELECT r.*, v.title as vacancy_title, v.city as vacancy_city, v.address as vacancy_address, a.name as account_name
+SELECT r.*,
+  COALESCE(NULLIF(r.vacancy_title,''), v.title) as vacancy_title,
+  COALESCE(NULLIF(r.vacancy_city,''), v.city) as vacancy_city,
+  COALESCE(NULLIF(r.vacancy_address,''), v.address) as vacancy_address,
+  a.name as account_name
 FROM avito_responses r
 LEFT JOIN avito_vacancies v ON CAST(v.avito_id AS TEXT) = CAST(r.vacancy_code AS TEXT)
 LEFT JOIN avito_accounts a ON a.id = r.account_id
