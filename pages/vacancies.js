@@ -194,6 +194,9 @@ export default function VacanciesPage(){
   var _a=useState([]),accounts=_a[0],setAccounts=_a[1];
   var _tab=useState("dashboard"),tab=_tab[0],setTab=_tab[1];
   var _ld=useState(true),loading=_ld[0],setLoading=_ld[1];
+  var _sel=useState({}),selected=_sel[0],setSelected=_sel[1];
+  var _fp=useState(""),filterProject=_fp[0],setFilterProject=_fp[1];
+  var _bp=useState(""),bulkProject=_bp[0],setBulkProject=_bp[1];
   var _sy=useState(false),syncing=_sy[0],setSyncing=_sy[1];
   var _msg=useState(null),xmsg=_msg[0],setXmsg=_msg[1];
   var _se=useState(""),search=_se[0],setSearch=_se[1];
@@ -427,31 +430,99 @@ export default function VacanciesPage(){
               </div>)}
           </div>)}
         {/* VACANCIES TAB */}
-                {tab==="vacancies"&&(
+                        {tab==="vacancies"&&(
           <div>
-            <div style={{display:"flex",gap:10,marginBottom:16,padding:"14px 18px",background:"#fff",borderRadius:18,border:"1px solid #f1f5f9",alignItems:"center"}}>
-              <div style={{flex:1,position:"relative"}}>
+            {/* Toolbar */}
+            <div style={{display:"flex",gap:10,marginBottom:16,padding:"14px 18px",background:"#fff",borderRadius:18,border:"1px solid #f1f5f9",alignItems:"center",flexWrap:"wrap"}}>
+              <div style={{flex:1,position:"relative",minWidth:180}}>
                 <span style={{position:"absolute",left:14,top:"50%",transform:"translateY(-50%)",fontSize:16}}>{"🔍"}</span>
                 <input placeholder={T.search} value={vacSearch} onChange={function(e){setVacSearch(e.target.value);}} style={{width:"100%",padding:"12px 14px 12px 42px",borderRadius:14,border:"2px solid #f1f5f9",fontSize:13,outline:"none",boxSizing:"border-box"}}/>
               </div>
+              <select value={filterProject} onChange={function(e){setFilterProject(e.target.value);}} style={{padding:"10px 14px",borderRadius:12,border:"2px solid #f1f5f9",fontSize:12,fontWeight:600,cursor:"pointer",outline:"none",minWidth:160}}>
+                <option value="">{"Все проекты"}</option>
+                <option value="none">{"⚠️ Без проекта"}</option>
+                {projects.map(function(p){return <option key={p.id} value={p.id}>{p.name}</option>;})}
+              </select>
               <span style={{fontSize:13,color:"#94a3b8",fontWeight:600,padding:"0 8px"}}>{T.total+": "+vacancies.length}</span>
             </div>
+
+            {/* Bulk assign bar */}
+            {Object.keys(selected).filter(function(k){return selected[k];}).length>0&&(
+              <div style={{display:"flex",gap:10,marginBottom:14,padding:"12px 18px",background:"linear-gradient(135deg,#eef2ff,#e0e7ff)",borderRadius:16,alignItems:"center",border:"2px solid #c7d2fe"}}>
+                <span style={{fontSize:13,fontWeight:700,color:"#4f46e5"}}>{"✅ Выбрано: "+Object.keys(selected).filter(function(k){return selected[k];}).length}</span>
+                <select value={bulkProject} onChange={function(e){setBulkProject(e.target.value);}} style={{padding:"8px 12px",borderRadius:10,border:"2px solid #c7d2fe",fontSize:12,fontWeight:600,cursor:"pointer",outline:"none",minWidth:160}}>
+                  <option value="">{"Выберите проект..."}</option>
+                  {projects.map(function(p){return <option key={p.id} value={p.id}>{p.name}</option>;})}
+                </select>
+                <button disabled={!bulkProject} onClick={function(){
+                  var ids=Object.keys(selected).filter(function(k){return selected[k];}).map(function(k){return parseInt(k);});
+                  var pid=parseInt(bulkProject);
+                  var assignments=ids.map(function(id){return{vacancy_id:id,project_id:pid};});
+                  fetch("/api/avito/vacancy-project",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({assignments:assignments})}).then(function(r){return r.json();}).then(function(d){
+                    if(d.ok){
+                      var pName=projects.find(function(p){return p.id===pid;});
+                      setVacancies(function(prev){return prev.map(function(vv){return selected[vv.id]?Object.assign({},vv,{project_id:pid,project_name:pName?pName.name:""}):vv;});});
+                      setSelected({});setBulkProject("");
+                    }
+                  });
+                }} style={{padding:"10px 20px",borderRadius:12,border:"none",background:bulkProject?"linear-gradient(135deg,#6366f1,#818cf8)":"#e2e8f0",color:bulkProject?"#fff":"#94a3b8",fontSize:13,fontWeight:700,cursor:bulkProject?"pointer":"default",transition:"all 0.2s"}}>
+                  {"📁 Назначить"}
+                </button>
+                <button onClick={function(){setSelected({});}} style={{padding:"10px 16px",borderRadius:12,border:"2px solid #e2e8f0",background:"#fff",fontSize:12,fontWeight:600,cursor:"pointer",color:"#64748b"}}>{"Снять всё"}</button>
+              </div>
+            )}
+
+            {/* Select all for filtered */}
+            <div style={{display:"flex",gap:10,marginBottom:10,alignItems:"center",padding:"0 4px"}}>
+              <label style={{display:"flex",alignItems:"center",gap:6,cursor:"pointer",fontSize:12,fontWeight:600,color:"#64748b"}}>
+                <input type="checkbox" onChange={function(e){
+                  var checked=e.target.checked;
+                  var filtered=vacancies.filter(function(v){
+                    if(filterProject==="none")return !v.project_id;
+                    if(filterProject)return v.project_id===parseInt(filterProject);
+                    return true;
+                  }).filter(function(v){
+                    if(!vacSearch)return true;
+                    var qq=vacSearch.toLowerCase();
+                    return(v.title||"").toLowerCase().indexOf(qq)!==-1||(v.city||"").toLowerCase().indexOf(qq)!==-1||String(v.avito_id).indexOf(qq)!==-1;
+                  });
+                  var newSel={};
+                  if(checked){for(var i=0;i<filtered.length;i++){newSel[filtered[i].id]=true;}}
+                  setSelected(newSel);
+                }} style={{width:16,height:16,cursor:"pointer"}}/>
+                {"Выбрать все отфильтрованные"}
+              </label>
+            </div>
+
+            {/* Vacancy cards */}
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
-              {vacancies.filter(function(v){if(!vacSearch)return true;var qq=vacSearch.toLowerCase();return(v.title||"").toLowerCase().indexOf(qq)!==-1||(v.city||"").toLowerCase().indexOf(qq)!==-1||String(v.avito_id).indexOf(qq)!==-1;}).map(function(v){
+              {vacancies.filter(function(v){
+                if(filterProject==="none")return !v.project_id;
+                if(filterProject)return v.project_id===parseInt(filterProject);
+                return true;
+              }).filter(function(v){
+                if(!vacSearch)return true;
+                var qq=vacSearch.toLowerCase();
+                return(v.title||"").toLowerCase().indexOf(qq)!==-1||(v.city||"").toLowerCase().indexOf(qq)!==-1||String(v.avito_id).indexOf(qq)!==-1;
+              }).map(function(v){
                 var rc=v.responses_count||0;
+                var isChecked=!!selected[v.id];
                 return(
                   <div key={v.id}
-                    style={{background:"#fff",borderRadius:20,padding:"20px 24px",border:"1px solid #f1f5f9",transition:"all 0.2s",position:"relative",overflow:"hidden"}}
-                    onMouseEnter={function(e){e.currentTarget.style.boxShadow="0 8px 30px rgba(0,0,0,0.06)";e.currentTarget.style.borderColor="#c7d2fe";}}
-                    onMouseLeave={function(e){e.currentTarget.style.boxShadow="none";e.currentTarget.style.borderColor="#f1f5f9";}}>
+                    style={{background:isChecked?"#eef2ff":"#fff",borderRadius:20,padding:"20px 24px",border:isChecked?"2px solid #818cf8":"1px solid #f1f5f9",transition:"all 0.2s",position:"relative",overflow:"hidden"}}
+                    onMouseEnter={function(e){if(!isChecked){e.currentTarget.style.boxShadow="0 8px 30px rgba(0,0,0,0.06)";e.currentTarget.style.borderColor="#c7d2fe";}}}
+                    onMouseLeave={function(e){if(!isChecked){e.currentTarget.style.boxShadow="none";e.currentTarget.style.borderColor="#f1f5f9";}}}>
                     <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-                      <div style={{flex:1,minWidth:0,cursor:"pointer"}} onClick={function(){setSelVac(v);setTab("responses");setSearch("");}}>
-                        <div style={{fontWeight:700,fontSize:15,color:"#1e293b",marginBottom:6}}>{v.title}</div>
-                        <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
-                          {(v.address||v.city)&&<span style={{padding:"3px 10px",borderRadius:8,background:"#f8fafc",fontSize:11,fontWeight:600,color:"#64748b"}}>{"📍 "+(v.address||v.city)}</span>}
-                          {v.salary_from&&<span style={{padding:"3px 10px",borderRadius:8,background:"#ecfdf5",fontSize:11,fontWeight:600,color:"#047857"}}>{fmt(v.salary_from)}</span>}
-                          <span style={{padding:"3px 10px",borderRadius:8,background:"#f8fafc",fontSize:11,color:"#94a3b8"}}>{"ID: "+v.avito_id}</span>
-                          {v.url&&<a href={v.url} target="_blank" rel="noreferrer" onClick={function(e){e.stopPropagation();}} style={{padding:"3px 10px",borderRadius:8,background:"#eef2ff",fontSize:11,fontWeight:700,color:"#6366f1",textDecoration:"none"}}>{"Avito ↗"}</a>}
+                      <div style={{display:"flex",alignItems:"center",gap:12,flex:1,minWidth:0}}>
+                        <input type="checkbox" checked={isChecked} onChange={function(){setSelected(function(prev){var n=Object.assign({},prev);if(n[v.id])delete n[v.id];else n[v.id]=true;return n;});}} onClick={function(e){e.stopPropagation();}} style={{width:18,height:18,cursor:"pointer",flexShrink:0}}/>
+                        <div style={{flex:1,minWidth:0,cursor:"pointer"}} onClick={function(){setSelVac(v);setTab("responses");setSearch("");}}>
+                          <div style={{fontWeight:700,fontSize:15,color:"#1e293b",marginBottom:6}}>{v.title}</div>
+                          <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+                            {(v.address||v.city)&&<span style={{padding:"3px 10px",borderRadius:8,background:"#f8fafc",fontSize:11,fontWeight:600,color:"#64748b"}}>{"📍 "+(v.address||v.city)}</span>}
+                            {v.salary_from&&<span style={{padding:"3px 10px",borderRadius:8,background:"#ecfdf5",fontSize:11,fontWeight:600,color:"#047857"}}>{fmt(v.salary_from)}</span>}
+                            <span style={{padding:"3px 10px",borderRadius:8,background:"#f8fafc",fontSize:11,color:"#94a3b8"}}>{"ID: "+v.avito_id}</span>
+                            {v.url&&<a href={v.url} target="_blank" rel="noreferrer" onClick={function(e){e.stopPropagation();}} style={{padding:"3px 10px",borderRadius:8,background:"#eef2ff",fontSize:11,fontWeight:700,color:"#6366f1",textDecoration:"none"}}>{"Avito ↗"}</a>}
+                          </div>
                         </div>
                       </div>
                       <div style={{width:56,height:56,borderRadius:16,background:rc>0?"linear-gradient(135deg,#6366f1,#818cf8)":"#f8fafc",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,boxShadow:rc>0?"0 4px 12px rgba(99,102,241,0.3)":"none",cursor:"pointer"}} onClick={function(){setSelVac(v);setTab("responses");setSearch("");}}>
@@ -467,7 +538,7 @@ export default function VacanciesPage(){
                         onChange={function(e){
                           var pid=e.target.value?parseInt(e.target.value):null;
                           fetch("/api/avito/vacancy-project",{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify({vacancy_id:v.id,project_id:pid})}).then(function(r){return r.json();}).then(function(d){
-                            if(d.ok){setVacancies(function(prev){return prev.map(function(vv){return vv.id===v.id?Object.assign({},vv,{project_id:pid,project_name:pid?projects.find(function(p){return p.id===pid;})?projects.find(function(p){return p.id===pid;}).name:"":""}):vv;});});}
+                            if(d.ok){setVacancies(function(prev){return prev.map(function(vv){if(vv.id!==v.id)return vv;var pn=pid?projects.find(function(p){return p.id===pid;}):null;return Object.assign({},vv,{project_id:pid,project_name:pn?pn.name:""});});});}
                           });
                         }}
                         style={{flex:1,padding:"8px 12px",borderRadius:10,border:"2px solid "+(v.project_id?"#c7d2fe":"#fecaca"),background:v.project_id?"#eef2ff":"#fff5f5",fontSize:12,fontWeight:600,cursor:"pointer",outline:"none",color:v.project_id?"#4f46e5":"#dc2626",transition:"all 0.2s"}}>
