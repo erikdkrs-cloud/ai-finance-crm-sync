@@ -63,7 +63,7 @@ export async function middleware(req) {
   if (pathname === "/register") return NextResponse.next();
 
   if (pathname.startsWith("/api/auth/")) return NextResponse.next();
-
+  if (pathname === "/api/avito/auto-sync") return NextResponse.next();
   var envToken = process.env.CRM_SYNC_TOKEN || "";
   var headerToken = req.headers.get("x-crm-sync-token") || "";
   if (envToken && headerToken && headerToken === envToken) {
