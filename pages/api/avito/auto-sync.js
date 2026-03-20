@@ -138,8 +138,23 @@ async function syncChats(sql, account) {
       var vacancyCode = context.value ? String(context.value.id || "") : "";
       var vacancyTitle = context.value ? (context.value.title || "") : "";
 
-      var existing = await sql`SELECT id FROM avito_responses WHERE avito_chat_id = ${chatId} AND account_id = ${account.id} LIMIT 1`;
-      if (existing.length > 0) continue;
+         var existing = await sql`SELECT id, message FROM avito_responses WHERE avito_chat_id = ${chatId} AND account_id = ${account.id} LIMIT 1`;
+      
+      if (existing.length > 0) {
+        // Update existing chat with latest message
+        if (lastMsg && lastMsg !== existing[0].message) {
+          await sql`
+            UPDATE avito_responses 
+            SET message = ${lastMsg}, 
+                raw_data = ${JSON.stringify(chat)},
+                is_read = ${chat.last_message && chat.last_message.direction === "in" ? chat.read === true : true},
+                updated_at = NOW()
+            WHERE avito_chat_id = ${chatId} AND account_id = ${account.id}
+          `;
+          count++;
+        }
+        continue;
+      }
 
       await sql`
         INSERT INTO avito_responses (avito_chat_id, account_id, vacancy_code, vacancy_title, candidate_name, message, created_at, raw_data, status, is_read)
