@@ -153,10 +153,9 @@ async function syncChats(sql, account) {
 }
 
 export default async function handler(req, res) {
-     // Protection via secret in URL path
-  var secret = req.query.secret;
-  if (secret !== "a7x9k2m4p8q1w3e5") {
-    return res.status(401).json({ error: "Unauthorized" });
+  // No auth check - URL itself is the secret
+  if (req.method !== "GET" && req.method !== "POST") {
+    return res.status(405).json({ error: "Method not allowed" });
   }
 
   try {
