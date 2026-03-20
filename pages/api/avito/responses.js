@@ -9,7 +9,12 @@ export default async function handler(req, res) {
     var data;
     if (role === "manager" && userId) {
       data = await sql`
-SELECT r.*,
+SELECT r.id, r.vacancy_id, r.account_id, r.avito_chat_id, 
+  r.author_name, r.author_phone, r.message, r.status,
+  r.manager_notes, r.created_at, r.raw_data, r.phone,
+  r.candidate_name, r.candidate_age, r.candidate_citizenship,
+  r.candidate_gender, r.is_read, r.notes, r.updated_at,
+  r.vacancy_code,
   COALESCE(NULLIF(r.vacancy_title,''), v.title, '—') as vacancy_title,
   COALESCE(NULLIF(r.vacancy_city,''), v.city, '—') as vacancy_city,
   COALESCE(NULLIF(r.vacancy_address,''), v.address, '—') as vacancy_address,
@@ -22,7 +27,12 @@ ORDER BY r.created_at DESC
       `;
     } else {
       data = await sql`
-SELECT r.*,
+SELECT r.id, r.vacancy_id, r.account_id, r.avito_chat_id,
+  r.author_name, r.author_phone, r.message, r.status,
+  r.manager_notes, r.created_at, r.raw_data, r.phone,
+  r.candidate_name, r.candidate_age, r.candidate_citizenship,
+  r.candidate_gender, r.is_read, r.notes, r.updated_at,
+  r.vacancy_code,
   COALESCE(NULLIF(r.vacancy_title,''), v.title, '—') as vacancy_title,
   COALESCE(NULLIF(r.vacancy_city,''), v.city, '—') as vacancy_city,
   COALESCE(NULLIF(r.vacancy_address,''), v.address, '—') as vacancy_address,
