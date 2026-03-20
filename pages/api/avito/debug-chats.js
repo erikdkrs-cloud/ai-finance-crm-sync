@@ -5,38 +5,23 @@ export default async function handler(req, res) {
     var sql = neon(process.env.DATABASE_URL);
     var accounts = await sql`SELECT * FROM avito_accounts LIMIT 1`;
     var account = accounts[0];
-    var token = account.access_token;
-    var userId = account.user_id;
     
-    // Test vacancies API (GET)
-    var vacRes = await fetch("https://api.avito.ru/job/v1/vacancies?per_page=1", {
-      headers: { Authorization: "Bearer " + token }
-    });
-    var vacText = await vacRes.text();
-    
-    // Test chats API (POST) 
-    var chatRes = await fetch("https://api.avito.ru/messenger/v2/accounts/" + userId + "/chats", {
+    // Try to refresh token
+    var refreshRes = await fetch("https://api.avito.ru/token", {
       method: "POST",
-      headers: { 
-        Authorization: "Bearer " + token,
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({ item_ids: [], chat_types: ["u2i"], limit: 2, offset: 0 })
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: "grant_type=refresh_token&refresh_token=" + account.refresh_token + "&client_id=" + account.client_id + "&client_secret=" + account.client_secret
     });
-    var chatText = await chatRes.text();
-
-    // Test chats API v1 (GET)
-    var chatRes2 = await fetch("https://api.avito.ru/messenger/v1/accounts/" + userId + "/chats?chat_type=u2i&limit=2", {
-      headers: { Authorization: "Bearer " + token }
-    });
-    var chatText2 = await chatRes2.text();
+    var refreshText = await refreshRes.text();
     
     return res.json({
-      vacancies_api: { status: vacRes.status, body: vacText.substring(0, 200) },
-      chats_v2_post: { status: chatRes.status, body: chatText.substring(0, 200) },
-      chats_v1_get: { status: chatRes2.status, body: chatText2.substring(0, 200) },
-      user_id: userId,
-      db_total: (await sql`SELECT COUNT(*) as cnt FROM avito_responses`)[0].cnt
+      refresh_status: refreshRes.status,
+      refresh_response: refreshText.substring(0, 500),
+      has_refresh_token: !!account.refresh_token,
+      has_client_id: !!account.client_id,
+      has_client_secret: !!account.client_secret,
+      token_updated_at: account.updated_at,
+      refresh_token_first_20: account.refresh_token ? account.refresh_token.substring(0, 20) + "..." : "NONE"
     });
   } catch(e) {
     return res.status(500).json({ error: e.message });
