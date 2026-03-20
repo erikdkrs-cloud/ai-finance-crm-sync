@@ -1,5 +1,5 @@
 import { neon } from "@neondatabase/serverless";
-
+ 
 var AVITO_API = "https://api.avito.ru";
 
 async function getAccessToken(sql, account) {
