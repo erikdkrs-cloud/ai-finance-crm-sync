@@ -1,4 +1,4 @@
-import neon from "@neondatabase/serverless";
+import { neon } from "@neondatabase/serverless";
 
 export default async function handler(req, res) {
   try {
