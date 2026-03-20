@@ -153,16 +153,10 @@ async function syncChats(sql, account) {
 }
 
 export default async function handler(req, res) {
-   // Verify cron secret
-  var authHeader = req.headers.authorization || "";
-  var cronSecret = process.env.CRON_SECRET;
-  if (cronSecret) {
-    var isVercelCron = req.headers["x-vercel-cron"];
-    var isValidSecret = authHeader === "Bearer " + cronSecret;
-    var hasQuerySecret = req.query.secret === cronSecret;
-    if (!isVercelCron && !isValidSecret && !hasQuerySecret) {
-      return res.status(401).json({ error: "Unauthorized" });
-    }
+     // Protection via secret in URL path
+  var secret = req.query.secret;
+  if (secret !== "a7x9k2m4p8q1w3e5") {
+    return res.status(401).json({ error: "Unauthorized" });
   }
 
   try {
