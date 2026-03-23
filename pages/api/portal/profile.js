@@ -45,6 +45,48 @@ export default async function handler(req, res) {
       return res.status(403).json({ error: "Нет прав" });
     }
 
-    await sql`
-      UPDATE users SET
-        first_
+    // Обновляем name если есть first/last
+    var nameUpdate = "";
+    if (first_name || last_name) {
+      var currentUser = await sql`SELECT first_name, last_name, middle_name FROM users WHERE id = ${targetId}`;
+      if (currentUser.length > 0) {
+        var fn = first_name || currentUser[0].first_name || "";
+        var ln = last_name || currentUser[0].last_name || "";
+        var mn = middle_name !== undefined ? middle_name : (currentUser[0].middle_name || "");
+        var fullName = ln + " " + fn + (mn ? " " + mn : "");
+
+        await sql`
+          UPDATE users SET
+            first_name = ${fn},
+            last_name = ${ln},
+            middle_name = ${mn},
+            name = ${fullName},
+            phone = COALESCE(${phone}, phone),
+            telegram = COALESCE(${telegram}, telegram),
+            birth_date = ${birth_date || null},
+            about = COALESCE(${about}, about),
+            hobbies = COALESCE(${hobbies}, hobbies),
+            photo_url = COALESCE(${photo_url}, photo_url),
+            updated_at = NOW()
+          WHERE id = ${targetId}
+        `;
+      }
+    } else {
+      await sql`
+        UPDATE users SET
+          phone = COALESCE(${phone}, phone),
+          telegram = COALESCE(${telegram}, telegram),
+          birth_date = ${birth_date || null},
+          about = COALESCE(${about}, about),
+          hobbies = COALESCE(${hobbies}, hobbies),
+          photo_url = COALESCE(${photo_url}, photo_url),
+          updated_at = NOW()
+        WHERE id = ${targetId}
+      `;
+    }
+
+    return res.json({ ok: true });
+  }
+
+  return res.status(405).json({ error: "Method not allowed" });
+}
