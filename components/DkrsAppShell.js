@@ -26,7 +26,7 @@ var DkrsAppShell = function (props) {
   var user = auth ? auth.user : null;
 
   var _dark = useState(false), dark = _dark[0], setDark = _dark[1];
-  var _portalOpen = useState(false), portalOpen = _portalOpen[0], setPortalOpen = _portalOpen[1];
+  var _portalOpen = useState(true), portalOpen = _portalOpen[0], setPortalOpen = _portalOpen[1];
 
   useEffect(function () {
     var saved = localStorage.getItem("dkrs-theme");
@@ -133,7 +133,7 @@ var DkrsAppShell = function (props) {
                 background: portalOpen ? "var(--sidebar-active-bg, rgba(59,130,246,0.15))" : "transparent",
                 border: "none",
                 borderRadius: 8,
-                color: portalOpen ? "var(--sidebar-active-color, #60a5fa)" : "var(--sidebar-color, rgba(255,255,255,0.7))",
+                color: portalOpen ? "var(--dkrs-primary, #00bfa6)" : "var(--dkrs-text-secondary, #64748b)",
                 cursor: "pointer",
                 fontSize: 13,
                 fontWeight: 600,
