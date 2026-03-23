@@ -178,9 +178,57 @@ var DkrsAppShell = function (props) {
                     </li>
                   );
                 })}
-              </ul>
-            )}
-          </div>
+                  </ul>
+          )}
+
+          {/* Разделитель */}
+          <div style={{
+            height: 1,
+            background: "var(--sidebar-border, rgba(255,255,255,0.1))",
+            margin: "12px 16px"
+          }}></div>
+
+          {/* Портал */}
+          <ul style={{ listStyle: "none", margin: 0, padding: 0 }}>
+            <li>
+              <button onClick={function () { setPortalOpen(!portalOpen); }} style={{
+                width: "calc(100% - 24px)",
+                display: "flex",
+                alignItems: "center",
+                gap: 10,
+                padding: "10px 12px",
+                margin: "0 12px",
+                background: portalOpen ? "var(--sidebar-active-bg, rgba(59,130,246,0.15))" : "transparent",
+                border: "none",
+                borderRadius: 8,
+                color: portalOpen ? "var(--sidebar-active-color, #60a5fa)" : "var(--sidebar-color, rgba(255,255,255,0.7))",
+                cursor: "pointer",
+                fontSize: 13,
+                fontWeight: 600,
+                textAlign: "left"
+              }}>
+                <span className="nav-icon"><PortalIcon /></span>
+                <span className="nav-text">Портал</span>
+                <span style={{
+                  marginLeft: "auto",
+                  transform: portalOpen ? "rotate(180deg)" : "rotate(0deg)",
+                  transition: "transform 0.2s",
+                  fontSize: 10
+                }}>▼</span>
+              </button>
+            </li>
+            {portalOpen && portalLinks.map(function (link) {
+              var isActive = router.pathname === link.href;
+              return (
+                <li key={link.href} className={isActive ? "active" : ""} style={{ paddingLeft: 12 }}>
+                  <Link href={link.href}>
+                    <span className="nav-icon">{link.icon}</span>
+                    <span className="nav-text">{link.label}</span>
+                  </Link>
+                </li>
+              );
+            })}
+          </ul>
         </nav>
       </aside>
 
