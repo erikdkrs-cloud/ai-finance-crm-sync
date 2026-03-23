@@ -94,24 +94,15 @@ var DkrsAppShell = function (props) {
       return rankOf(userRole) >= rankOf(link.minRole);
     });
   }
-    return React.createElement("div", { className: "app-shell" },
 
-    /* === PREMIUM SIDEBAR === */
+  return React.createElement("div", { className: "app-shell" },
     React.createElement("aside", { className: "sidebar" },
-
-      /* Logo */
       React.createElement("div", { className: "sidebar-logo" },
         React.createElement("div", { className: "sidebar-logo-icon" }, "D"),
         React.createElement("span", { className: "sidebar-logo-text" }, "DKRS")
       ),
-
-      /* Navigation */
       React.createElement("nav", { className: "sidebar-nav" },
-
-        /* Section: Main */
-        React.createElement("div", { className: "sidebar-section-title" }, "Основное"),
-
-        /* Main nav links */
+        React.createElement("div", { className: "sidebar-section-title" }, "\u041E\u0441\u043D\u043E\u0432\u043D\u043E\u0435"),
         navLinks.map(function (link) {
           var isActive = router.pathname === link.href;
           return React.createElement(Link, { key: link.href, href: link.href, legacyBehavior: true },
@@ -121,29 +112,17 @@ var DkrsAppShell = function (props) {
             )
           );
         }),
-
-        /* Section: Portal */
-        React.createElement("div", { className: "sidebar-section-title" }, "Портал"),
-
-        /* Portal toggle */
+        React.createElement("div", { className: "sidebar-section-title" }, "\u041F\u043E\u0440\u0442\u0430\u043B"),
         React.createElement("button", {
           className: "sidebar-item" + (router.pathname.startsWith("/portal") ? " active" : ""),
-          onClick: function () { setPortalOpen(!portalOpen); },
-          style: { cursor: "pointer" }
+          onClick: function () { setPortalOpen(!portalOpen); }
         },
           React.createElement("span", { className: "sidebar-item-icon" }, React.createElement(PortalIcon)),
-          React.createElement("span", { className: "sidebar-item-text" }, "Портал"),
+          React.createElement("span", { className: "sidebar-item-text" }, "\u041F\u043E\u0440\u0442\u0430\u043B"),
           React.createElement("span", {
-            style: {
-              marginLeft: "auto",
-              transform: portalOpen ? "rotate(180deg)" : "rotate(0deg)",
-              transition: "transform 0.3s ease",
-              display: "flex"
-            }
+            style: { marginLeft: "auto", transform: portalOpen ? "rotate(180deg)" : "rotate(0deg)", transition: "transform 0.3s ease", display: "flex" }
           }, React.createElement(ChevronIcon))
         ),
-
-        /* Portal submenu */
         portalOpen && React.createElement("div", { className: "sidebar-submenu" },
           portalLinks.map(function (link) {
             var isActive = router.pathname === link.href;
@@ -156,66 +135,24 @@ var DkrsAppShell = function (props) {
           })
         )
       ),
-
-      /* Sidebar Footer */
       React.createElement("div", { className: "sidebar-footer" },
-
-        /* Theme toggle */
-        React.createElement("button", {
-          className: "sidebar-item",
-          onClick: toggleTheme,
-          title: dark ? "Светлая тема" : "Тёмная тема"
-        },
-          React.createElement("span", { className: "sidebar-item-icon" },
-            dark ? React.createElement(SunIcon) : React.createElement(MoonIcon)
-          ),
-          React.createElement("span", { className: "sidebar-item-text" },
-            dark ? "Светлая тема" : "Тёмная тема"
-          )
+        React.createElement("button", { className: "sidebar-item", onClick: toggleTheme, title: dark ? "Светлая тема" : "Тёмная тема" },
+          React.createElement("span", { className: "sidebar-item-icon" }, dark ? React.createElement(SunIcon) : React.createElement(MoonIcon)),
+          React.createElement("span", { className: "sidebar-item-text" }, dark ? "Светлая тема" : "Тёмная тема")
         ),
-
-        /* User info */
-        React.createElement("div", {
-          className: "sidebar-item",
-          style: { cursor: "default", marginTop: "4px" }
-        },
-          React.createElement("div", {
-            className: "sidebar-item-icon",
-            style: {
-              width: "32px", height: "32px",
-              borderRadius: "10px",
-              background: "var(--dkrs-gradient-primary)",
-              display: "flex", alignItems: "center", justifyContent: "center",
-              color: "#fff", fontWeight: "700", fontSize: "12px",
-              flexShrink: 0
-            }
-          }, initials),
+        React.createElement("div", { className: "sidebar-item", style: { cursor: "default", marginTop: "4px" } },
+          React.createElement("div", { className: "sidebar-item-icon", style: { width: "32px", height: "32px", borderRadius: "10px", background: "var(--dkrs-gradient-primary)", display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontWeight: "700", fontSize: "12px", flexShrink: 0 } }, initials),
           React.createElement("div", { style: { display: "flex", flexDirection: "column", overflow: "hidden" } },
-            React.createElement("span", {
-              className: "sidebar-item-text",
-              style: { fontSize: "13px", fontWeight: "600", color: "#fff" }
-            }, userName),
-            React.createElement("span", {
-              className: "sidebar-item-text",
-              style: { fontSize: "11px", color: "rgba(255,255,255,0.4)", fontWeight: "500" }
-            }, userRole)
+            React.createElement("span", { className: "sidebar-item-text", style: { fontSize: "13px", fontWeight: "600", color: "#fff" } }, userName),
+            React.createElement("span", { className: "sidebar-item-text", style: { fontSize: "11px", color: "rgba(255,255,255,0.4)", fontWeight: "500" } }, userRole)
           )
         ),
-
-        /* Logout */
-        auth && React.createElement("button", {
-          className: "sidebar-item",
-          onClick: auth.logout,
-          title: "Выйти",
-          style: { marginTop: "4px" }
-        },
+        auth && React.createElement("button", { className: "sidebar-item", onClick: auth.logout, title: "Выйти", style: { marginTop: "4px" } },
           React.createElement("span", { className: "sidebar-item-icon" }, React.createElement(LogoutIcon)),
           React.createElement("span", { className: "sidebar-item-text" }, "Выйти")
         )
       )
     ),
-
-    /* === MAIN CONTENT === */
     React.createElement("main", { className: "main-content" }, children)
   );
 };
