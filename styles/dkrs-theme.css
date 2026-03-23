@@ -2160,3 +2160,25 @@ img { max-width: 100%; }
 [data-theme="dark"] .users-projects-header h4 { color: #f1f5f9; }
 [data-theme="dark"] .users-project-item { background: rgba(15,23,42,0.5); border-color: rgba(148,163,184,0.15); color: #94a3b8; }
 [data-theme="dark"] .users-project-item.checked { background: rgba(0,191,166,0.1); color: #f1f5f9; }
+/* Портал - скролл сайдбара */
+.sidebar {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.sidebar-nav {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding-bottom: 20px;
+}
+
+.sidebar-nav::-webkit-scrollbar {
+  width: 4px;
+}
+
+.sidebar-nav::-webkit-scrollbar-thumb {
+  background: rgba(255,255,255,0.15);
+  border-radius: 4px;
+}
