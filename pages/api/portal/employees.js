@@ -1,24 +1,25 @@
-import { supabase } from "../../../lib/supabase";
+import { neon } from "@neondatabase/serverless";
 
 export default async function handler(req, res) {
+  var sql = neon(process.env.DATABASE_URL);
+
   if (req.method === "GET") {
-    var { data, error } = await supabase.from("portal_employees").select("*").order("last_name");
-    if (error) return res.status(500).json({ error: error.message });
-    return res.json({ employees: data });
+    try {
+      var rows = await sql("SELECT * FROM portal_employees ORDER BY last_name");
+      return res.json({ employees: rows });
+    } catch (e) { return res.status(500).json({ error: e.message }); }
   }
+
   if (req.method === "PUT") {
     var { id, department_id, position_id, first_name, last_name, middle_name, phone, birth_date } = req.body;
-    var updates = {};
-    if (department_id !== undefined) updates.department_id = department_id || null;
-    if (position_id !== undefined) updates.position_id = position_id || null;
-    if (first_name !== undefined) updates.first_name = first_name;
-    if (last_name !== undefined) updates.last_name = last_name;
-    if (middle_name !== undefined) updates.middle_name = middle_name;
-    if (phone !== undefined) updates.phone = phone;
-    if (birth_date !== undefined) updates.birth_date = birth_date || null;
-    var { data, error } = await supabase.from("portal_employees").update(updates).eq("id", id).select().single();
-    if (error) return res.status(500).json({ error: error.message });
-    return res.json({ employee: data });
+    try {
+      var rows = await sql(
+        "UPDATE portal_employees SET department_id=$1, position_id=$2, first_name=COALESCE($3,first_name), last_name=COALESCE($4,last_name), middle_name=COALESCE($5,middle_name), phone=COALESCE($6,phone), birth_date=COALESCE($7,birth_date) WHERE id=$8 RETURNING *",
+        [department_id || null, position_id || null, first_name || null, last_name || null, middle_name || null, phone || null, birth_date || null, id]
+      );
+      return res.json({ employee: rows[0] });
+    } catch (e) { return res.status(500).json({ error: e.message }); }
   }
+
   res.status(405).json({ error: "Method not allowed" });
 }
